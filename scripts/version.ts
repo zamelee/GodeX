@@ -21,7 +21,9 @@ function writePkg(file: string, pkg: Record<string, unknown>) {
   writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
 }
 
-const version = process.argv[2];
+const args = process.argv.slice(2);
+const allowSameVersion = args.includes("--allow-same-version");
+const version = args.find((a) => !a.startsWith("--"));
 if (!version) {
   console.error("Usage: bun run version <version>");
   console.error("Example: bun run version 0.0.2");
@@ -34,7 +36,7 @@ if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
 }
 
 const currentPkg = readPkg(pkgPath);
-if (currentPkg.version === version) {
+if (currentPkg.version === version && !allowSameVersion) {
   console.error(`Already at version ${version}`);
   process.exit(1);
 }
