@@ -6,6 +6,7 @@ import { createBuiltinRoutes, startServer } from "../server";
 import type { ResponseSessionStore } from "../session";
 import { GODEX_VERSION } from "../version";
 import type { CliRuntime } from ".";
+import { formatStartupBanner } from "./banner";
 import type { CliOptions } from "./config";
 import { assertConfigReady, loadRuntimeConfig } from "./config";
 
@@ -16,6 +17,18 @@ export function serve(opts: CliOptions, runtime: CliRuntime): void {
 
 	const app = new ApplicationContext(config, registrar);
 
+	runtime.stdout?.write(
+		formatStartupBanner({
+			version: GODEX_VERSION,
+			env: isDevMode() ? "dev" : "prod",
+			host: config.server.host,
+			port: config.server.port,
+			configPath,
+			session: config.session,
+			providers: Object.keys(config.providers),
+		}),
+	);
+
 	const runServer = runtime.startServer ?? startServer;
 	const server = runServer({
 		config,
@@ -24,9 +37,6 @@ export function serve(opts: CliOptions, runtime: CliRuntime): void {
 		routes: createBuiltinRoutes(app),
 	});
 
-	runtime.stdout?.write(
-		`Godex v${GODEX_VERSION} [${isDevMode() ? "dev" : "prod"}] listening on http://${config.server.host}:${server.port}\n`,
-	);
 	registerShutdownHandlers(server, app.sessionStore, app.logger);
 }
 
