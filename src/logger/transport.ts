@@ -1,7 +1,19 @@
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { TransportTargetOptions } from "pino";
-import type { LoggingConfig } from "../config/schema";
+import { getFileSink } from "@logtape/file";
+import {
+	compareLogLevel,
+	configureSync,
+	getConsoleSink,
+	getJsonLinesFormatter,
+	type LogLevel as LogTapeLevel,
+	resetSync,
+	type Sink,
+	withFilter,
+} from "@logtape/logtape";
+import { getPrettyFormatter } from "@logtape/pretty";
+import type { LoggingConfig, LogLevel } from "../config/schema";
 
 function expandHomeDir(filepath: string): string {
 	if (filepath.startsWith("~/")) {
@@ -10,46 +22,71 @@ function expandHomeDir(filepath: string): string {
 	return filepath;
 }
 
-export function createTransports(
-	config: LoggingConfig,
-): TransportTargetOptions[] {
-	const transports: TransportTargetOptions[] = [];
+const TO_LOGTAPE_LEVEL: Record<LogLevel, LogTapeLevel> = {
+	trace: "trace",
+	debug: "debug",
+	info: "info",
+	warn: "warning",
+	error: "error",
+};
+
+export { resetSync };
+
+export function configureLogging(config: LoggingConfig): boolean {
+	type SinkId = "console" | "file";
+	const sinks: Partial<Record<SinkId, Sink>> = {};
+	const loggerSinkIds: SinkId[] = [];
+	let lowestLevel: LogTapeLevel = "fatal";
 
 	if (config.console?.enabled !== false) {
-		const consoleLevel = config.console?.level ?? config.level;
-		if (config.console?.pretty !== false) {
-			transports.push({
-				target: "pino-pretty",
-				level: consoleLevel,
-				options: {
-					colorize: true,
-					translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
-					messageKey: "event",
-				},
-			});
-		} else {
-			transports.push({
-				target: "pino/file",
-				level: consoleLevel,
-				options: { destination: 1 },
-			});
-		}
+		const consoleLevel =
+			TO_LOGTAPE_LEVEL[config.console?.level ?? config.level];
+		sinks.console = withFilter(
+			getConsoleSink({
+				formatter: getPrettyFormatter({
+					timestamp: "date-time",
+					properties: true,
+					align: false,
+					wordWrap: false,
+					inspectOptions: { compact: true },
+				}),
+			}),
+			consoleLevel,
+		);
+		loggerSinkIds.push("console");
+		lowestLevel = consoleLevel;
 	}
 
 	if (config.file?.enabled) {
-		const fileLevel = config.file.level ?? config.level;
+		const fileLevel = TO_LOGTAPE_LEVEL[config.file.level ?? config.level];
 		const dir = expandHomeDir(config.file.dir);
+		mkdirSync(dir, { recursive: true });
 		const filepath = path.join(dir, config.file.filename);
-
-		transports.push({
-			target: "pino/file",
-			level: fileLevel,
-			options: {
-				destination: filepath,
-				mkdir: true,
-			},
-		});
+		sinks.file = withFilter(
+			getFileSink(filepath, {
+				formatter: getJsonLinesFormatter({ properties: "flatten" }),
+			}),
+			fileLevel,
+		);
+		loggerSinkIds.push("file");
+		lowestLevel =
+			compareLogLevel(lowestLevel, fileLevel) <= 0 ? lowestLevel : fileLevel;
 	}
 
-	return transports;
+	if (loggerSinkIds.length === 0) return false;
+
+	configureSync({
+		reset: true,
+		sinks: sinks as Record<SinkId, Sink>,
+		loggers: [
+			{ category: [], lowestLevel, sinks: loggerSinkIds },
+			{
+				category: ["logtape", "meta"],
+				lowestLevel: "warning",
+				sinks: loggerSinkIds,
+			},
+		],
+	});
+
+	return true;
 }
