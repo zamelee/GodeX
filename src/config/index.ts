@@ -10,7 +10,21 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import yaml from "js-yaml";
-import type { GodexConfig, LogLevel, ProviderConfig } from "./schema";
+import type {
+	ConsoleLoggingConfig,
+	FileLoggingConfig,
+	GodexConfig,
+	LogLevel,
+	ProviderConfig,
+} from "./schema";
+
+const LOG_LEVELS: readonly LogLevel[] = [
+	"trace",
+	"debug",
+	"info",
+	"warn",
+	"error",
+];
 
 export function resolveEnvVars(value: string): string {
 	return value.replace(/\$\{(\w+)\}/g, (match, name: string) => {
@@ -165,13 +179,7 @@ export function buildConfig(
 		logging.level ??
 		process.env.GODEX_LOG_LEVEL ??
 		"info";
-	if (
-		typeof rawLevel !== "string" ||
-		!["trace", "debug", "info", "warn", "error"].includes(rawLevel)
-	) {
-		throw new Error(`Invalid log level: ${String(rawLevel)}`);
-	}
-	const level = rawLevel as LogLevel;
+	const level = validateLogLevel(rawLevel, "log");
 
 	const defaultProvider =
 		(typeof file.default_provider === "string" && file.default_provider
@@ -204,7 +212,11 @@ export function buildConfig(
 			backend: sessionBackend,
 			...(sqlitePath ? { sqlite: { path: sqlitePath } } : {}),
 		},
-		logging: { level },
+		logging: {
+			level,
+			console: parseConsoleLoggingConfig(logging),
+			file: parseFileLoggingConfig(logging),
+		},
 	};
 }
 
@@ -226,4 +238,54 @@ function validateHost(value: unknown): string {
 		throw new Error(`Invalid server host: ${String(value)}`);
 	}
 	return value;
+}
+
+function validateLogLevel(value: unknown, label: string): LogLevel {
+	if (typeof value !== "string" || !LOG_LEVELS.includes(value as LogLevel)) {
+		throw new Error(`Invalid ${label} level: ${String(value)}`);
+	}
+	return value as LogLevel;
+}
+
+function parseConsoleLoggingConfig(
+	logging: Record<string, unknown>,
+): ConsoleLoggingConfig | undefined {
+	const raw = logging.console;
+	if (typeof raw !== "object" || raw === null) return undefined;
+	const c = raw as Record<string, unknown>;
+	if (c.enabled !== true) return { enabled: false };
+	return {
+		enabled: true,
+		level:
+			c.level !== undefined
+				? validateLogLevel(c.level, "console log")
+				: undefined,
+		pretty: typeof c.pretty === "boolean" ? c.pretty : undefined,
+	};
+}
+
+function parseFileLoggingConfig(
+	logging: Record<string, unknown>,
+): FileLoggingConfig | undefined {
+	const raw = logging.file;
+	if (typeof raw !== "object" || raw === null) return undefined;
+	const f = raw as Record<string, unknown>;
+	if (f.enabled !== true) return undefined;
+	if (typeof f.dir !== "string" || f.dir.trim() === "") {
+		throw new Error(
+			"logging.file.dir is required when file logging is enabled",
+		);
+	}
+	if (typeof f.filename !== "string" || f.filename.trim() === "") {
+		throw new Error(
+			"logging.file.filename is required when file logging is enabled",
+		);
+	}
+	return {
+		enabled: true,
+		level:
+			f.level !== undefined ? validateLogLevel(f.level, "file log") : undefined,
+		dir: f.dir,
+		filename: f.filename,
+	};
 }

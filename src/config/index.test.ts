@@ -68,6 +68,71 @@ describe("buildConfig", () => {
 		);
 	});
 
+	test("throws for invalid console log level", () => {
+		expect(() =>
+			buildConfig(
+				{
+					...validFileConfig,
+					logging: {
+						level: "info",
+						console: { enabled: true, level: "verbose" },
+					},
+				},
+				{},
+			),
+		).toThrow("Invalid console log level: verbose");
+	});
+
+	test("throws for invalid file log level", () => {
+		expect(() =>
+			buildConfig(
+				{
+					...validFileConfig,
+					logging: {
+						level: "info",
+						file: {
+							enabled: true,
+							level: "verbose",
+							dir: "/var/log/godex",
+							filename: "godex.log",
+						},
+					},
+				},
+				{},
+			),
+		).toThrow("Invalid file log level: verbose");
+	});
+
+	test("throws when file logging is enabled without a directory", () => {
+		expect(() =>
+			buildConfig(
+				{
+					...validFileConfig,
+					logging: {
+						level: "info",
+						file: { enabled: true, filename: "godex.log" },
+					},
+				},
+				{},
+			),
+		).toThrow("logging.file.dir is required when file logging is enabled");
+	});
+
+	test("throws when file logging is enabled without a filename", () => {
+		expect(() =>
+			buildConfig(
+				{
+					...validFileConfig,
+					logging: {
+						level: "info",
+						file: { enabled: true, dir: "/var/log/godex" },
+					},
+				},
+				{},
+			),
+		).toThrow("logging.file.filename is required when file logging is enabled");
+	});
+
 	test("throws for invalid session backend", () => {
 		expect(() => buildConfig({ session: { backend: "redis" } }, {})).toThrow(
 			"Invalid session backend: redis",
@@ -112,5 +177,52 @@ describe("buildConfig", () => {
 				{},
 			),
 		).toThrow("Provider zhipu models.gpt-5 must be a string");
+	});
+
+	test("parses logging config with console and file", () => {
+		const config = buildConfig(
+			{
+				providers: {
+					zhipu: { api_key: "test-key", base_url: "https://example.test/api" },
+				},
+				logging: {
+					level: "debug",
+					console: { enabled: true, level: "info", pretty: false },
+					file: {
+						enabled: true,
+						level: "warn",
+						dir: "/var/log/godex",
+						filename: "godex.log",
+					},
+				},
+			},
+			{},
+		);
+		expect(config.logging.level).toBe("debug");
+		expect(config.logging.console).toEqual({
+			enabled: true,
+			level: "info",
+			pretty: false,
+		});
+		expect(config.logging.file).toEqual({
+			enabled: true,
+			level: "warn",
+			dir: "/var/log/godex",
+			filename: "godex.log",
+		});
+	});
+
+	test("logging console and file default to undefined when not set", () => {
+		const config = buildConfig(
+			{
+				providers: {
+					zhipu: { api_key: "test-key", base_url: "https://example.test/api" },
+				},
+			},
+			{},
+		);
+		expect(config.logging.level).toBe("info");
+		expect(config.logging.console).toBeUndefined();
+		expect(config.logging.file).toBeUndefined();
 	});
 });
