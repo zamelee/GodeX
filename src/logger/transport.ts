@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { getFileSink } from "@logtape/file";
+import { getRotatingFileSink } from "@logtape/file";
 import {
 	compareLogLevel,
 	configureSync,
@@ -63,7 +63,9 @@ export function configureLogging(config: LoggingConfig): boolean {
 		mkdirSync(dir, { recursive: true });
 		const filepath = path.join(dir, config.file.filename);
 		sinks.file = withFilter(
-			getFileSink(filepath, {
+			getRotatingFileSink(filepath, {
+				maxSize: (config.file.max_size ?? 10) * 1024 * 1024,
+				maxFiles: config.file.max_files ?? 5,
 				formatter: getJsonLinesFormatter({ properties: "flatten" }),
 			}),
 			fileLevel,
