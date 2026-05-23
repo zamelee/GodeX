@@ -7,8 +7,12 @@ import type { ResponseSessionStore, StoredResponseSession } from "../session";
 import type { Adapter } from "./adapter";
 import type { StreamState } from "./mapper/stream-state";
 import { ProviderEventToResponseTransformer } from "./transformers/provider-event-to-response-transformer";
+import { ResponseLogTransformer } from "./transformers/response-log-transformer";
 import { ResponseSessionPersistenceTransformer } from "./transformers/response-session-persistence-transformer";
-import { pipeTransform } from "./transformers/stream-utils";
+import {
+	ATTR_UPSTREAM_LATENCY_MILLIS,
+	pipeTransform,
+} from "./transformers/stream-utils";
 
 export class DefaultAdapter implements Adapter {
 	async request(ctx: ResponsesContext): Promise<ResponseObject> {
@@ -32,6 +36,7 @@ export class DefaultAdapter implements Adapter {
 			model: response.model,
 			outputCount: response.output.length,
 			durationMillis: Date.now() - ctx.createdAt * 1000,
+			usage: response.usage,
 		});
 		try {
 			await saveSession(ctx.app.sessionStore, response, ctx);
@@ -55,19 +60,32 @@ export class DefaultAdapter implements Adapter {
 			model: ctx.resolved.model,
 			stream: true,
 		});
+		const upstreamStart = Date.now();
 		const events = await chatClient.streamChat(req);
+		const upstreamLatencyMillis = Date.now() - upstreamStart;
+		ctx.logger.debug("provider.stream.connected", {
+			provider: ctx.resolved.provider,
+			model: ctx.resolved.model,
+			upstreamLatencyMillis,
+		});
+		ctx.attributes.set(ATTR_UPSTREAM_LATENCY_MILLIS, upstreamLatencyMillis);
 
 		const eventStream = pipeTransform(
 			events,
 			new ProviderEventToResponseTransformer(mapper.stream, ctx),
 		);
 
+		const logStream = pipeTransform(
+			eventStream,
+			new ResponseLogTransformer(ctx),
+		);
+
 		if (ctx.request.store === false) {
-			return eventStream;
+			return logStream;
 		}
 
 		return pipeTransform(
-			eventStream,
+			logStream,
 			new ResponseSessionPersistenceTransformer({
 				ctx,
 				saveSession,

@@ -23,11 +23,18 @@ export async function handleResponses(
 	let body: ResponseCreateRequest;
 	try {
 		body = (await req.json()) as ResponseCreateRequest;
-	} catch {
+	} catch (err) {
+		logger.debug("responses.request.invalid_json", {
+			error: String(err),
+		});
 		return jsonError(400, SERVER_REQUEST_INVALID_JSON, "Invalid JSON body");
 	}
 
 	if (body.previous_response_id && body.conversation) {
+		logger.debug("responses.request.parameter.conflict", {
+			previous_response_id: body.previous_response_id,
+			conversation: true,
+		});
 		return jsonError(
 			400,
 			SERVER_REQUEST_INVALID_PARAMETER,
@@ -40,7 +47,7 @@ export async function handleResponses(
 		const ctx = await ResponsesContext.create(app, body);
 		requestId = ctx.requestId;
 
-		logger.info("responses.request.received", {
+		ctx.logger.debug("responses.request.received", {
 			model: body.model,
 			resolved: ctx.resolved,
 			stream: body.stream,
@@ -51,6 +58,7 @@ export async function handleResponses(
 				: body.input
 					? 1
 					: 0,
+			tools_count: body.tools?.length ?? 0,
 			safety_identifier: body.safety_identifier,
 			prompt_cache_key: body.prompt_cache_key,
 			prompt_cache_retention: body.prompt_cache_retention,
@@ -83,7 +91,7 @@ export async function handleResponses(
 			});
 		}
 		if (err instanceof GodexError) {
-			logger.warn("responses.request.error", err.toLogEntry());
+			logger.info("responses.request.error", err.toLogEntry());
 			return jsonError(err.status, err.code, err.message, {
 				requestId,
 			});
