@@ -6,6 +6,7 @@ import type {
 } from "../../protocol/openai/responses";
 import type { ResponseSessionStore } from "../../session";
 import { StreamState } from "../mapper/stream-state";
+import { responseFromTerminalEvent } from "./stream-utils";
 
 export interface ResponseSessionPersistenceTransformerOptions {
 	ctx: ResponsesContext;
@@ -62,12 +63,6 @@ export class ResponseSessionPersistenceTransformer extends SafeTransformer<
 		if (this.persistenceAttempted) return;
 		this.persistenceAttempted = true;
 		const ctx = this.options.ctx;
-		ctx.logger.info("responses.stream.completed", {
-			status: responseObject.status,
-			model: responseObject.model,
-			outputCount: responseObject.output.length,
-			durationMillis: Date.now() - ctx.createdAt * 1000,
-		});
 		try {
 			await this.options.saveSession(ctx.app.sessionStore, responseObject, ctx);
 		} catch (err) {
@@ -77,17 +72,4 @@ export class ResponseSessionPersistenceTransformer extends SafeTransformer<
 			});
 		}
 	}
-}
-
-function responseFromTerminalEvent(
-	chunk: ResponseStreamEvent,
-): ResponseObject | null {
-	if (
-		chunk.type !== "response.completed" &&
-		chunk.type !== "response.incomplete" &&
-		chunk.type !== "response.failed"
-	) {
-		return null;
-	}
-	return chunk.response ?? null;
 }
