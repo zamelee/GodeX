@@ -1,0 +1,50 @@
+/* Dark-mode Mermaid overrides */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node polygon {
+  fill: #2d333b !important;
+  stroke: #6d5dfc !important;
+}
+.mermaid .edgeLabel {
+  background-color: #1c2333 !important;
+  color: #e6edf3 !important;
+}
+.mermaid text {
+  fill: #e6edf3 !important;
+}
+.mermaid .label {
+  color: #e6edf3 !important;
+}
+.mermaid .cluster rect {
+  fill: #161b22 !important;
+  stroke: #30363d !important;
+}
+.mermaid .actor {
+  fill: #2d333b !important;
+  stroke: #6d5dfc !important;
+}
+
+/* Mermaid zoom overlay */
+.mermaid-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.mermaid-zoom-content {
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
+  max-width: 95vw;
+  max-height: 95vh;
+  overflow: visible;
+}
+
+/* VitePress tweaks */
+:root {
+  --vp-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', monospace;
+}
