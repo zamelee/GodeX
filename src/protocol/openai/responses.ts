@@ -726,7 +726,9 @@ export interface ComputerUsePreviewTool {
 // --- Web Search Tool ---
 export interface WebSearchTool {
 	type: "web_search" | "web_search_2025_08_26";
+	external_web_access?: boolean;
 	filters?: { allowed_domains?: string[] };
+	search_content_types?: ("text" | "image")[];
 	search_context_size?: SearchContextSize;
 	user_location?: ApproximateLocation;
 }
