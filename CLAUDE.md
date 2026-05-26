@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GodeX is an OpenAI Responses API gateway that translates `/v1/responses` requests into upstream Chat Completions API calls. It exposes an OpenAI-compatible HTTP API while proxying to provider-specific backends (starting with Zhipu/智谱). Built with **Bun** and **TypeScript**, using the `@ahoo-wang/fetcher` ecosystem for HTTP clients and SSE streaming.
+GodeX is an OpenAI Responses API gateway that translates `/v1/responses` requests into upstream Chat Completions API calls. It exposes an OpenAI-compatible HTTP API while proxying to provider-specific backends (OpenAI, Zhipu/智谱). Built with **Bun** and **TypeScript**, using the `@ahoo-wang/fetcher` ecosystem for HTTP clients and SSE streaming.
 
 ## Commands
 
@@ -38,34 +38,63 @@ CLI (serve) → ApplicationContext → Bun HTTP server (Router)
     → Session chain resolved via previous_response_id
     → Registrar resolves Provider adapter
     → DefaultAdapter.request() or .stream()
-      → ProviderMapper.request maps to upstream request
-      → ChatClient calls upstream API
-      → ProviderMapper.response/stream maps back to Responses API shape
+      → CompatibilityNegotiator produces CompatibilityPlan
+      → ChatRequestMapper composes request from sub-mappers
+      → ProviderClient calls upstream API
+      → ChatResponseMapper / ChatStreamMapper composes response from sub-mappers
       → Session saved (unless store=false)
 ```
 
 ### Key abstractions
 
-- **`Provider`** (`src/adapter/provider.ts`): A named adapter that bundles a `ProviderMapper` (request/response/stream mapping), a `ChatClient` (HTTP calls), and a `ProviderCapabilities` declaration.
-- **`ProviderMapper`** (`src/adapter/mapper/contract.ts`): Three mapping functions — `RequestMapper` (ResponsesContext → upstream request), `ResponseMapper` (upstream response → ResponseObject), `StreamMapper` (upstream SSE chunks → ResponseStreamEvent[]).
-- **`ChatClient`** (`src/adapter/chatClient.ts`): Generic interface for `chat()` and `streamChat()` — the HTTP boundary to upstream providers.
-- **`Adapter`** (`src/adapter/adapter.ts`): Orchestrates mapper + chatClient calls, session persistence, and stream pipeline assembly.
+- **`Provider`** (`src/adapter/provider.ts`): Bundles a `ProviderMapper` (request/response/stream mapping) and a `ProviderClient` (HTTP calls).
+- **`ProviderMapper`** (`src/adapter/mapper/contract.ts`): Three stable public contracts — `RequestMapper`, `ResponseMapper`, `StreamMapper`. Internally composed from sub-responsibility interfaces in `src/adapter/mapper/chat/contract.ts`.
+- **`ProviderClient`** (`src/adapter/provider.ts`): Generic interface for `request()` and `stream()` — the HTTP boundary to upstream providers. Implemented by `ChatProviderClient` (`src/providers/shared/chat-provider-client.ts`).
+- **`Adapter`** (`src/adapter/adapter.ts`): Orchestrates mapper + client calls, session persistence, and stream pipeline assembly.
 - **`ModelResolver`** (`src/resolver/index.ts`): Parses `model` selectors (`"provider/model"` or bare `"model"` using default_provider) and applies per-provider model name mappings.
 - **`Registrar`** (`src/providers/registrar.ts`): Registry of `ProviderFactory` functions. Built once, resolves provider instances for each request.
 - **`ResponsesContext`** (`src/context/responses-context.ts`): Per-request context carrying the parsed body, resolved model, selected provider, session snapshot, and a scoped logger.
 
-### Provider implementation (Zhipu)
+### Mapper composition
 
-`src/providers/zhipu/` is the reference provider implementation. It follows this pattern:
+The `ProviderMapper` is assembled from focused sub-responsibility interfaces defined in `src/adapter/mapper/chat/contract.ts`:
 
-- `provider.ts` — assembles mapper + client + capabilities
-- `request.ts` — builds Zhipu ChatCompletionTextRequest from ResponsesContext
-- `response.ts` — maps ChatCompletionResponse → ResponseObject
-- `stream.ts` — `ZhipuStreamMapper` implements StreamMapper, tracks `StreamState`
-- `chat-client.ts` — `ZhipuChatClient` wraps Fetcher for upstream HTTP calls
-- `messages.ts` — input item → chat message conversion
-- `tools.ts` — OpenAI tool definitions → Zhipu tool format
-- `protocol/` — Zhipu-specific request/response type definitions
+**Request:** `CompatibilityNegotiator` → `ChatRequestFactory` → `ChatMessageMapper` → `ChatToolMapper` → `ChatToolChoiceMapper` → `ChatRequestOptionsMapper`
+
+**Response:** `ChatResponseAccessor` → `ChatResponseOutputMapper` + `ChatUsageMapper` + `ChatFinishReasonMapper` → `ResponseObject`
+
+**Stream:** `ChatStreamDeltaMapper` + `ChatFinishReasonMapper` + `ChatToolCallMapper` + `ChatToolCallIdentityResolver` → `StreamResponseState` → SSE events
+
+These are composed by `ChatRequestMapper`, `ChatResponseMapper`, and `ChatStreamMapper` in `src/adapter/mapper/chat/`.
+
+### Compatibility negotiation
+
+Each provider declares `ProviderCapabilities` (supported parameters, tools, tool choices, response formats, reasoning, streaming). The `CompatibilityNegotiator` produces a `CompatibilityPlan` per request — rejecting unsupported features, degrading with diagnostics, or passing through with effective values. The plan drives all downstream mapper decisions. Diagnostics flow through `ResponsesContext` to the existing compatibility logging path.
+
+### Provider structure
+
+Each provider under `src/providers/<name>/` follows this pattern:
+
+```
+provider/
+├── provider.ts             # Provider class
+├── provider-client.ts      # HTTP client (extends ChatProviderClient)
+├── factory.ts              # createXxxProvider(config)
+├── index.ts                # Barrel re-export
+├── protocol/               # Provider-specific types (Zhipu only)
+└── mapper/
+    ├── index.ts            # createXxxMapper() + barrel exports
+    ├── capabilities.ts     # ProviderCapabilities declaration
+    ├── compatibility.ts    # CompatibilityNegotiator implementation
+    ├── messages.ts         # ChatMessageMapper implementation
+    ├── tools.ts            # ChatToolMapper + ChatToolChoiceMapper
+    ├── request-options.ts  # ChatRequestFactory + ChatRequestOptionsMapper
+    ├── response-output.ts  # ChatResponseAccessor + ChatResponseOutputMapper
+    ├── usage.ts            # ChatUsageMapper
+    ├── finish-reason.ts    # ChatFinishReasonMapper
+    ├── stream-delta.ts     # ChatStreamDeltaMapper
+    └── tool-calls.ts       # ChatToolCallMapper + ChatToolCallIdentityResolver
+```
 
 ### Stream pipeline
 
@@ -97,4 +126,4 @@ Sessions track `previous_response_id` chains for multi-turn conversations. Chain
 
 ### Testing
 
-Tests use Bun's built-in test runner. E2E tests in `src/e2e/` mock upstream via Fetcher's decorator-based HTTP client pattern. Live Zhipu tests require `ZHIPU_API_KEY` and are gated behind `ZHIPU_LIVE_TESTS=1`. CI only runs live Zhipu tests on push to main (not PRs).
+Tests use Bun's built-in test runner. E2E tests in `src/e2e/` mock upstream via Fetcher's decorator-based HTTP client pattern. Provider conformance tests in `src/providers/provider-conformance.test.ts` validate mapper structural contracts. Live Zhipu tests require `ZHIPU_API_KEY` and are gated behind `ZHIPU_LIVE_TESTS=1`. CI only runs live Zhipu tests on push to main (not PRs).
