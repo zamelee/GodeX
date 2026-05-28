@@ -10,6 +10,7 @@ import type {
 	ResponseInputContent,
 	ResponseItem,
 } from "../../protocol/openai/responses";
+import { flattenToolName } from "./tool-identity";
 
 export type UnsupportedMode = "skip" | "throw";
 
@@ -56,7 +57,7 @@ export function responseFunctionCallPayload(
 ): ChatToolCallPayload {
 	return {
 		callId: item.call_id,
-		name: item.name,
+		name: flattenToolName(item),
 		argumentsValue: item.arguments,
 	};
 }
@@ -114,7 +115,7 @@ export function downgradedResponseToolCallPayload(
 		case "custom_tool_call":
 			return {
 				callId: item.call_id,
-				name: item.name,
+				name: flattenToolName(item),
 				argumentsValue: { input: item.input },
 			};
 		case "tool_search_call":

@@ -357,13 +357,46 @@ describe("buildZhipuRequest", () => {
 		expect("top_logprobs" in result).toBe(false);
 	});
 
-	test("maps response_format json_schema to response_format json_object", () => {
-		const result = mapRequest(
-			ctx({
-				text: { format: { type: "json_schema", name: "person", schema: {} } },
+	test("degrades json_schema to json_object with diagnostic and schema constraint message", () => {
+		const c = ctx({
+			text: {
+				format: {
+					type: "json_schema",
+					name: "person",
+					description: "A person payload.",
+					schema: {
+						type: "object",
+						properties: { name: { type: "string" } },
+						required: ["name"],
+					},
+				},
+			},
+		});
+		const result = mapRequest(c);
+
+		expect(result.response_format).toEqual({ type: "json_object" });
+		expect(c.diagnostics).toContainEqual(
+			expect.objectContaining({
+				path: "text.format",
+				action: "degraded",
 			}),
 		);
-		expect(result.response_format).toEqual({ type: "json_object" });
+		const schemaMessage = result.messages.at(-1);
+		expect(schemaMessage?.role).toBe("user");
+		expect(schemaMessage?.content).toEqual(
+			expect.stringContaining(
+				"Return only JSON that conforms to the JSON Schema below.",
+			),
+		);
+		expect(schemaMessage?.content).toEqual(
+			expect.stringContaining("Schema name: person"),
+		);
+		expect(schemaMessage?.content).toEqual(
+			expect.stringContaining("Schema description: A person payload."),
+		);
+		expect(schemaMessage?.content).toEqual(
+			expect.stringContaining('"required":["name"]'),
+		);
 	});
 
 	test("maps response_format json_object to response_format json_object", () => {
@@ -789,5 +822,36 @@ describe("buildZhipuRequest", () => {
 			"image_generation",
 			"computer_use_preview",
 		]);
+	});
+
+	test("records degraded diagnostics for custom tools mapped to functions", () => {
+		const testCtx = ctx({
+			input: "Hi",
+			tools: [
+				{
+					type: "custom",
+					name: "raw_sql",
+					format: {
+						type: "grammar",
+						syntax: "lark",
+						definition: "start: /.+/",
+					},
+				},
+			],
+		});
+
+		const result = mapRequest(testCtx);
+
+		expect(result.tools?.[0]).toMatchObject({
+			type: "function",
+			function: { name: "raw_sql" },
+		});
+		expect(testCtx.diagnostics).toContainEqual(
+			expect.objectContaining({
+				code: "adapter.tool.degraded",
+				path: "tools[type=custom]",
+				action: "degraded",
+			}),
+		);
 	});
 });

@@ -15,6 +15,11 @@ import type {
 	ResponseToolChoice,
 } from "../../../protocol/openai/responses";
 import { getBuiltinFunctionToolDefinition } from "../../../tools";
+import {
+	degradedCustomToolDescription,
+	degradedCustomToolParameters,
+} from "../../shared/custom-tool-degradation";
+import { flattenToolName } from "../../shared/tool-identity";
 import { toDeepSeekFunctionName } from "../function-names";
 import type { DeepSeekTool, DeepSeekToolChoice } from "../protocol/completions";
 import { DEEPSEEK_PROVIDER_NAME } from "../provider";
@@ -24,19 +29,10 @@ type UnsupportedToolMode = "throw" | "skip";
 interface MapToolsOptions {
 	unsupported?: UnsupportedToolMode;
 	onUnsupported?: (type: string) => void;
+	onDegraded?: (type: string, effectiveType: string) => void;
 	supportedToolTypes?: ReadonlySet<string>;
+	degradedToolTypes?: ReadonlyMap<string, string>;
 }
-
-const INPUT_STRING_PARAMETERS = {
-	type: "object",
-	properties: {
-		input: {
-			type: "string",
-			description: "Input for the custom tool.",
-		},
-	},
-	required: ["input"],
-} satisfies Record<string, unknown>;
 
 const TOOL_SEARCH_PARAMETERS = {
 	type: "object",
@@ -80,6 +76,8 @@ function mapTool(
 			options,
 		);
 	}
+	const degradedTarget = options.degradedToolTypes?.get(tool.type);
+	if (degradedTarget) options.onDegraded?.(tool.type, degradedTarget);
 
 	switch (tool.type) {
 		case "function":
@@ -96,9 +94,8 @@ function mapTool(
 		case "custom":
 			return functionTool(
 				tool.name,
-				tool.description ??
-					"Call this custom tool with a string input when it best matches the user request.",
-				INPUT_STRING_PARAMETERS,
+				degradedCustomToolDescription(tool),
+				degradedCustomToolParameters(tool),
 			);
 		case "tool_search":
 			return functionTool(
@@ -109,7 +106,10 @@ function mapTool(
 			);
 		case "namespace":
 			return tool.tools.map((nestedTool) => {
-				const name = `${tool.name}__${nestedTool.name}`;
+				const name = flattenToolName({
+					namespace: tool.name,
+					name: nestedTool.name,
+				});
 				const description =
 					nestedTool.description ?? `${tool.description} (${nestedTool.name})`;
 				if (nestedTool.type === "function") {
@@ -125,7 +125,11 @@ function mapTool(
 							: undefined,
 					);
 				}
-				return functionTool(name, description, INPUT_STRING_PARAMETERS);
+				return functionTool(
+					name,
+					degradedCustomToolDescription(nestedTool, description),
+					degradedCustomToolParameters(nestedTool),
+				);
 			});
 		default:
 			return handleUnsupportedTool(
@@ -254,6 +258,18 @@ export function mapDeepSeekToolChoice(
 			function: { name: toDeepSeekFunctionName(choice.name) },
 		};
 	}
+	if (typeof choice === "object" && choice.type === "custom") {
+		return {
+			type: "function",
+			function: { name: toDeepSeekFunctionName(choice.name) },
+		};
+	}
+	if (typeof choice === "object" && choice.type === "shell") {
+		return { type: "function", function: { name: "shell" } };
+	}
+	if (typeof choice === "object" && choice.type === "apply_patch") {
+		return { type: "function", function: { name: "apply_patch" } };
+	}
 	return "auto";
 }
 
@@ -267,6 +283,7 @@ export class DeepSeekToolMapper implements ChatToolMapper<DeepSeekTool[]> {
 			? []
 			: mapDeepSeekTools(ctx.request.tools, {
 					supportedToolTypes: plan.capabilities.tools.supported,
+					degradedToolTypes: plan.capabilities.tools.degraded,
 					unsupported: "skip",
 					onUnsupported: (type) => {
 						ctx.addDiagnostic({
@@ -276,6 +293,22 @@ export class DeepSeekToolMapper implements ChatToolMapper<DeepSeekTool[]> {
 							action: "ignored",
 							message: `Tool type '${type}' is not supported, skipping.`,
 							metadata: { toolType: type },
+						});
+					},
+					onDegraded: (type, effectiveType) => {
+						const message = `DeepSeek maps Responses tool '${type}' to ${effectiveType}; provider-native tool semantics may not be enforced.`;
+						ctx.addDiagnostic({
+							code: "adapter.tool.degraded",
+							severity: "warn",
+							path: `tools[type=${type}]`,
+							action: "degraded",
+							message,
+							metadata: { toolType: type, effectiveToolType: effectiveType },
+						});
+						plan.tools.set(type, {
+							action: "degraded",
+							reason: message,
+							effectiveValue: { type: effectiveType },
 						});
 					},
 				});
@@ -316,7 +349,7 @@ export class DeepSeekToolChoiceMapper
 				path: "tool_choice",
 				action: "degraded",
 				message:
-					"DeepSeek Chat Completions does not support this Responses tool_choice; downgraded to auto.",
+					"DeepSeek Chat Completions does not support this Responses tool_choice directly; downgraded to a provider-compatible tool_choice.",
 				metadata: {
 					parameter: "tool_choice",
 					value: requestedToolChoice,
