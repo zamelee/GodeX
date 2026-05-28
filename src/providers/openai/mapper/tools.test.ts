@@ -113,16 +113,40 @@ describe("mapOpenAITools", () => {
 				type: "function",
 				function: {
 					name: "mcp__demo____raw",
-					description: "Raw input",
+					description: expect.stringContaining("Input format: text."),
 					parameters: {
 						type: "object",
-						properties: { input: { type: "string" } },
+						properties: {
+							input: {
+								type: "string",
+								description: expect.stringContaining("Input format: text."),
+							},
+						},
 						required: ["input"],
 					},
 				},
 			},
 		]);
 		expect(result.webSearchOptions).toBeUndefined();
+	});
+
+	test("rejects duplicate function names after tool degradation", () => {
+		expect(() =>
+			mapOpenAITools([
+				{
+					type: "function",
+					name: "workspace__raw",
+					parameters: { type: "object" },
+					strict: true,
+				},
+				{
+					type: "namespace",
+					name: "workspace",
+					description: "Workspace tools",
+					tools: [{ type: "custom", name: "raw", format: { type: "text" } }],
+				},
+			]),
+		).toThrow("Multiple tools map to the same OpenAI function name");
 	});
 
 	test("skips file_search and MCP tools", () => {
@@ -222,20 +246,78 @@ describe("mapOpenAIToolChoice", () => {
 		});
 	});
 
+	test("maps downgraded built-in tool choices to named function choices", () => {
+		expect(mapOpenAIToolChoice({ type: "shell" })).toEqual({
+			type: "function",
+			function: { name: "shell" },
+		});
+		expect(mapOpenAIToolChoice({ type: "apply_patch" })).toEqual({
+			type: "function",
+			function: { name: "apply_patch" },
+		});
+	});
+
 	test("maps allowed_tools tool choice", () => {
 		const result = mapOpenAIToolChoice({
 			type: "allowed_tools",
 			mode: "auto",
-			tools: [{ type: "function", name: "get_weather" }],
+			tools: [
+				{ type: "function", name: "get_weather" },
+				{ type: "custom", name: "raw" },
+				{ type: "shell" },
+				{ type: "apply_patch" },
+			],
 		});
 
 		expect(result).toEqual({
 			type: "allowed_tools",
 			allowed_tools: {
 				mode: "auto",
-				tools: [{ type: "function", name: "get_weather" }],
+				tools: [
+					{ type: "function", function: { name: "get_weather" } },
+					{ type: "custom", custom: { name: "raw" } },
+					{ type: "function", function: { name: "shell" } },
+					{ type: "function", function: { name: "apply_patch" } },
+				],
 			},
 		});
+	});
+
+	test("passes through provider-shaped allowed_tools entries", () => {
+		const result = mapOpenAIToolChoice({
+			type: "allowed_tools",
+			mode: "required",
+			tools: [
+				{ type: "function", function: { name: "get_weather" } },
+				{ type: "custom", custom: { name: "raw" } },
+			],
+		});
+
+		expect(result).toEqual({
+			type: "allowed_tools",
+			allowed_tools: {
+				mode: "required",
+				tools: [
+					{ type: "function", function: { name: "get_weather" } },
+					{ type: "custom", custom: { name: "raw" } },
+				],
+			},
+		});
+	});
+
+	test("omits unsupported allowed_tools entries", () => {
+		const skipped: unknown[] = [];
+		const result = mapOpenAIToolChoice(
+			{
+				type: "allowed_tools",
+				mode: "auto",
+				tools: ["bad", { type: "web_search" }] as never,
+			},
+			{ onUnsupportedAllowedTool: (tool) => skipped.push(tool) },
+		);
+
+		expect(result).toBeUndefined();
+		expect(skipped).toEqual(["bad", { type: "web_search" }]);
 	});
 
 	test("maps unknown tool choice to auto", () => {

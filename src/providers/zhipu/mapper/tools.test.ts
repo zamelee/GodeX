@@ -4,11 +4,11 @@ import { AdapterError } from "../../../error";
 import { mapZhipuToolChoice, mapZhipuTools } from "./tools";
 
 describe("mapZhipuTools", () => {
-	test("maps function tool (internal → external tagging)", () => {
+	test("maps function tool names to provider-compatible names", () => {
 		const result = mapZhipuTools([
 			{
 				type: "function",
-				name: "get_weather",
+				name: "weather.now",
 				parameters: {
 					type: "object",
 					properties: { city: { type: "string" } },
@@ -23,7 +23,7 @@ describe("mapZhipuTools", () => {
 			{
 				type: "function",
 				function: {
-					name: "get_weather",
+					name: "weather_now",
 					parameters: {
 						type: "object",
 						properties: { city: { type: "string" } },
@@ -204,6 +204,36 @@ describe("mapZhipuTools", () => {
 		expect(applyPatch.function.description).toContain(
 			"Prefer this over shell commands",
 		);
+	});
+
+	test("describes custom tool input format when downgraded to function", () => {
+		const [tool] = mapZhipuTools([
+			{
+				type: "custom",
+				name: "raw-sql",
+				description: "Run a SQL statement",
+				format: {
+					type: "grammar",
+					syntax: "lark",
+					definition: "start: /.+/",
+				},
+			},
+		]);
+
+		expect(tool).toMatchObject({
+			type: "function",
+			function: {
+				name: "raw_sql",
+				description: expect.stringContaining("Input format: grammar (lark)"),
+				parameters: {
+					properties: {
+						input: {
+							description: expect.stringContaining("start: /.+/"),
+						},
+					},
+				},
+			},
+		});
 	});
 
 	test("rejects function name collisions after Zhipu sanitization", () => {

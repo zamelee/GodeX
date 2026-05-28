@@ -6,6 +6,7 @@ export interface ParameterCapabilities {
 
 export interface ToolCapabilities {
 	supported: ReadonlySet<string>;
+	degraded?: ReadonlyMap<string, string>;
 	maxTools?: number;
 }
 
@@ -15,6 +16,7 @@ export interface ToolChoiceCapabilities {
 
 export interface ResponseFormatCapabilities {
 	supported: ReadonlySet<string>;
+	degraded?: ReadonlyMap<string, string>;
 }
 
 export interface ReasoningCapabilities {

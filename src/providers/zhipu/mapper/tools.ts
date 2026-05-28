@@ -17,6 +17,11 @@ import type {
 	ResponseToolChoice,
 } from "../../../protocol/openai/responses";
 import { getBuiltinFunctionToolDefinition } from "../../../tools";
+import {
+	degradedCustomToolDescription,
+	degradedCustomToolParameters,
+} from "../../shared/custom-tool-degradation";
+import { flattenToolName } from "../../shared/tool-identity";
 import { toZhipuFunctionName } from "../function-names";
 import type {
 	ChatTool,
@@ -30,7 +35,9 @@ type UnsupportedToolMode = "throw" | "skip";
 interface MapToolsOptions {
 	unsupported?: UnsupportedToolMode;
 	onUnsupported?: (type: string) => void;
+	onDegraded?: (type: string, effectiveType: string) => void;
 	supportedToolTypes?: ReadonlySet<string>;
+	degradedToolTypes?: ReadonlyMap<string, string>;
 }
 
 export function mapZhipuTools(
@@ -64,12 +71,14 @@ function mapTool(
 			options,
 		);
 	}
+	const degradedTarget = options.degradedToolTypes?.get(tool.type);
+	if (degradedTarget) options.onDegraded?.(tool.type, degradedTarget);
 	switch (tool.type) {
 		case "function": {
 			return {
 				type: "function",
 				function: {
-					name: tool.name,
+					name: toZhipuFunctionName(tool.name),
 					parameters: { type: "object" as const, ...tool.parameters },
 					description: tool.description ?? "",
 				},
@@ -125,16 +134,8 @@ function mapTool(
 		case "custom":
 			return codexFunctionTool(
 				tool.name,
-				tool.description ??
-					"Call this custom tool with a string input when it best matches the user request.",
-				{
-					input: {
-						type: "string",
-						description:
-							"Input for the custom tool. Keep it concise and valid for the tool name.",
-					},
-				},
-				["input"],
+				degradedCustomToolDescription(tool),
+				degradedCustomToolParameters(tool),
 			);
 		case "tool_search":
 			return codexFunctionTool(
@@ -155,23 +156,32 @@ function mapTool(
 						},
 			);
 		case "namespace":
-			return tool.tools.map((nestedTool) =>
-				codexFunctionTool(
-					`${tool.name}__${nestedTool.name}`,
-					nestedTool.description ?? `${tool.description} (${nestedTool.name})`,
-					nestedTool.type === "function" &&
+			return tool.tools.map((nestedTool) => {
+				const fallbackDescription = `${tool.description} (${nestedTool.name})`;
+				const name = flattenToolName({
+					namespace: tool.name,
+					name: nestedTool.name,
+				});
+				if (nestedTool.type === "function") {
+					return codexFunctionTool(
+						name,
+						nestedTool.description ?? fallbackDescription,
+						nestedTool.parameters && isRecord(nestedTool.parameters)
+							? nestedTool.parameters
+							: { input: { type: "string" } },
 						nestedTool.parameters &&
-						isRecord(nestedTool.parameters)
-						? nestedTool.parameters
-						: { input: { type: "string" } },
-					nestedTool.type === "function" &&
-						nestedTool.parameters &&
-						isRecord(nestedTool.parameters) &&
-						isStringArray(nestedTool.parameters.required)
-						? nestedTool.parameters.required
-						: undefined,
-				),
-			);
+							isRecord(nestedTool.parameters) &&
+							isStringArray(nestedTool.parameters.required)
+							? nestedTool.parameters.required
+							: undefined,
+					);
+				}
+				return codexFunctionTool(
+					name,
+					degradedCustomToolDescription(nestedTool, fallbackDescription),
+					degradedCustomToolParameters(nestedTool),
+				);
+			});
 		default:
 			return handleUnsupportedTool(
 				tool.type,
@@ -313,6 +323,7 @@ export class ZhipuToolMapper implements ChatToolMapper<ChatTool[]> {
 			? []
 			: mapZhipuTools(ctx.request.tools, {
 					supportedToolTypes: plan.capabilities.tools.supported,
+					degradedToolTypes: plan.capabilities.tools.degraded,
 					unsupported: "skip",
 					onUnsupported: (type) => {
 						ctx.addDiagnostic({
@@ -322,6 +333,22 @@ export class ZhipuToolMapper implements ChatToolMapper<ChatTool[]> {
 							action: "ignored",
 							message: `Tool type '${type}' is not supported, skipping.`,
 							metadata: { toolType: type },
+						});
+					},
+					onDegraded: (type, effectiveType) => {
+						const message = `Zhipu maps Responses tool '${type}' to ${effectiveType}; provider-native tool semantics may not be enforced.`;
+						ctx.addDiagnostic({
+							code: "adapter.tool.degraded",
+							severity: "warn",
+							path: `tools[type=${type}]`,
+							action: "degraded",
+							message,
+							metadata: { toolType: type, effectiveToolType: effectiveType },
+						});
+						plan.tools.set(type, {
+							action: "degraded",
+							reason: message,
+							effectiveValue: { type: effectiveType },
 						});
 					},
 				});

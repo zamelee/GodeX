@@ -5,6 +5,7 @@ import type {
 } from "../../../adapter/mapper/chat/contract";
 import { isRecord } from "../../../adapter/utils";
 import type { ResponsesContext } from "../../../context/responses-context";
+import { ADAPTER_REQUEST_UNSUPPORTED_TOOL, AdapterError } from "../../../error";
 import type {
 	ChatCompletionCustomTool,
 	ChatCompletionFunctionTool,
@@ -20,6 +21,12 @@ import type {
 } from "../../../protocol/openai/responses";
 import type { SearchContextSize } from "../../../protocol/openai/shared";
 import { getBuiltinFunctionToolDefinition } from "../../../tools";
+import {
+	degradedCustomToolDescription,
+	degradedCustomToolParameters,
+} from "../../shared/custom-tool-degradation";
+import { flattenToolName } from "../../shared/tool-identity";
+import { OPENAI_PROVIDER_NAME } from "../provider";
 
 export interface OpenAIMappedTools {
 	tools: ChatCompletionTool[];
@@ -28,8 +35,9 @@ export interface OpenAIMappedTools {
 
 interface MapOpenAIToolsOptions {
 	supportedToolTypes?: ReadonlySet<string>;
+	degradedToolTypes?: ReadonlyMap<string, string>;
 	onUnsupported?: (type: string) => void;
-	onDegraded?: (type: string) => void;
+	onDegraded?: (type: string, effectiveType?: string) => void;
 }
 
 const OPENAI_MAPPED_TOOLS_ATTRIBUTE = "openai.mapped-tools";
@@ -46,6 +54,7 @@ export function getOpenAIMappedTools(
 			? { tools: [], webSearchOptions: undefined }
 			: mapOpenAITools(ctx.request.tools, {
 					supportedToolTypes: plan.capabilities.tools.supported,
+					degradedToolTypes: plan.capabilities.tools.degraded,
 					onUnsupported: (type) => {
 						ctx.addDiagnostic({
 							code: "adapter.tool.unsupported",
@@ -56,14 +65,21 @@ export function getOpenAIMappedTools(
 							metadata: { toolType: type },
 						});
 					},
-					onDegraded: (type) => {
+					onDegraded: (type, effectiveType) => {
+						const effective = effectiveType ?? "web_search_options";
+						const message = `Responses tool '${type}' was mapped to OpenAI Chat Completions ${effective}.`;
 						ctx.addDiagnostic({
 							code: "adapter.tool.degraded",
 							severity: "warn",
 							path: `tools[type=${type}]`,
 							action: "degraded",
-							message: `Responses tool '${type}' was mapped to OpenAI Chat Completions web_search_options.`,
+							message,
 							metadata: { toolType: type },
+						});
+						plan.tools.set(type, {
+							action: "degraded",
+							reason: message,
+							effectiveValue: { type: effective },
 						});
 					},
 				});
@@ -88,6 +104,9 @@ export function mapOpenAITools(
 			options.onUnsupported?.(type);
 			continue;
 		}
+		const degradedTarget = options.degradedToolTypes?.get(type);
+		const reportedDegradation = degradedTarget !== undefined;
+		if (degradedTarget) options.onDegraded?.(type, degradedTarget);
 		switch (type) {
 			case "function": {
 				mappedTools.push({
@@ -128,13 +147,13 @@ export function mapOpenAITools(
 			case "web_search":
 			case "web_search_2025_08_26": {
 				webSearchOptions = mapWebSearchOptionsFromTool(tool);
-				options.onDegraded?.(type);
+				if (!reportedDegradation) options.onDegraded?.(type);
 				break;
 			}
 			case "web_search_preview":
 			case "web_search_preview_2025_03_11": {
 				webSearchOptions = mapWebSearchOptionsFromTool(tool);
-				options.onDegraded?.(type);
+				if (!reportedDegradation) options.onDegraded?.(type);
 				break;
 			}
 			case "local_shell":
@@ -161,11 +180,15 @@ export function mapOpenAITools(
 			}
 			case "namespace": {
 				for (const nestedTool of tool.tools) {
+					const name = flattenToolName({
+						namespace: tool.name,
+						name: nestedTool.name,
+					});
 					if (nestedTool.type === "function") {
 						mappedTools.push({
 							type: "function",
 							function: {
-								name: `${tool.name}__${nestedTool.name}`,
+								name,
 								description:
 									nestedTool.description ??
 									`${tool.description} (${nestedTool.name})`,
@@ -179,18 +202,18 @@ export function mapOpenAITools(
 							},
 						});
 					} else if (nestedTool.type === "custom") {
+						const fallbackDescription =
+							nestedTool.description ??
+							`${tool.description} (${nestedTool.name})`;
 						mappedTools.push({
 							type: "function",
 							function: {
-								name: `${tool.name}__${nestedTool.name}`,
-								description:
-									nestedTool.description ??
-									`${tool.description} (${nestedTool.name})`,
-								parameters: {
-									type: "object",
-									properties: { input: { type: "string" } },
-									required: ["input"],
-								},
+								name,
+								description: degradedCustomToolDescription(
+									nestedTool,
+									fallbackDescription,
+								),
+								parameters: degradedCustomToolParameters(nestedTool),
 							},
 						});
 					}
@@ -203,6 +226,7 @@ export function mapOpenAITools(
 		}
 	}
 
+	assertNoFunctionNameCollisions(mappedTools);
 	return { tools: mappedTools, webSearchOptions };
 }
 
@@ -269,6 +293,9 @@ function mapWebSearchOptionsFromTool(tool: {
 
 export function mapOpenAIToolChoice(
 	choice: ResponseToolChoice | undefined,
+	options: {
+		onUnsupportedAllowedTool?: (tool: unknown) => void;
+	} = {},
 ): ChatCompletionToolChoiceOption | undefined {
 	if (choice === undefined) return undefined;
 	if (typeof choice === "string") {
@@ -289,21 +316,130 @@ export function mapOpenAIToolChoice(
 				custom: { name: choice.name },
 			} satisfies ChatCompletionNamedToolChoiceCustom;
 		}
+		if (choice.type === "shell") {
+			return {
+				type: "function",
+				function: { name: "shell" },
+			} satisfies ChatCompletionNamedToolChoice;
+		}
+		if (choice.type === "apply_patch") {
+			return {
+				type: "function",
+				function: { name: "apply_patch" },
+			} satisfies ChatCompletionNamedToolChoice;
+		}
 		if (
 			choice.type === "allowed_tools" &&
 			"mode" in choice &&
 			"tools" in choice
 		) {
+			const allowedTools = mapOpenAIAllowedToolChoiceTools(
+				Array.isArray((choice as { tools: unknown }).tools)
+					? (choice as { tools: unknown[] }).tools
+					: [],
+				options,
+			);
+			if (allowedTools.length === 0) return undefined;
 			return {
 				type: "allowed_tools",
 				allowed_tools: {
 					mode: choice.mode as "auto" | "required",
-					tools: (choice as { tools: Record<string, unknown>[] }).tools,
+					tools: allowedTools,
 				},
 			};
 		}
 	}
 	return "auto";
+}
+
+function mapOpenAIAllowedToolChoiceTools(
+	tools: unknown[],
+	options: {
+		onUnsupportedAllowedTool?: (tool: unknown) => void;
+	},
+): Record<string, unknown>[] {
+	const mappedTools: Record<string, unknown>[] = [];
+	for (const tool of tools) {
+		const mapped = mapOpenAIAllowedToolChoiceTool(tool);
+		if (mapped === null) {
+			options.onUnsupportedAllowedTool?.(tool);
+			continue;
+		}
+		if (Array.isArray(mapped)) {
+			mappedTools.push(...mapped);
+		} else {
+			mappedTools.push(mapped);
+		}
+	}
+	return mappedTools;
+}
+
+function mapOpenAIAllowedToolChoiceTool(
+	tool: unknown,
+): Record<string, unknown> | Record<string, unknown>[] | null {
+	if (!isRecord(tool) || typeof tool.type !== "string") return null;
+	if (tool.type === "function") {
+		if (isRecord(tool.function) && typeof tool.function.name === "string") {
+			return tool;
+		}
+		return typeof tool.name === "string"
+			? { type: "function", function: { name: tool.name } }
+			: null;
+	}
+	if (tool.type === "custom") {
+		if (isRecord(tool.custom) && typeof tool.custom.name === "string") {
+			return tool;
+		}
+		return typeof tool.name === "string"
+			? { type: "custom", custom: { name: tool.name } }
+			: null;
+	}
+	if (tool.type === "tool_search") {
+		return { type: "function", function: { name: "tool_search" } };
+	}
+	const builtinDefinition = getBuiltinFunctionToolDefinition(tool.type);
+	if (builtinDefinition) {
+		return { type: "function", function: { name: builtinDefinition.name } };
+	}
+	if (
+		tool.type === "namespace" &&
+		typeof tool.name === "string" &&
+		Array.isArray(tool.tools)
+	) {
+		const mappedTools: Record<string, unknown>[] = [];
+		for (const nestedTool of tool.tools) {
+			if (!isRecord(nestedTool) || typeof nestedTool.name !== "string") {
+				continue;
+			}
+			mappedTools.push({
+				type: "function",
+				function: {
+					name: flattenToolName({
+						namespace: tool.name,
+						name: nestedTool.name,
+					}),
+				},
+			});
+		}
+		return mappedTools.length > 0 ? mappedTools : null;
+	}
+	return null;
+}
+
+function assertNoFunctionNameCollisions(tools: ChatCompletionTool[]): void {
+	const seen = new Set<string>();
+	for (const tool of tools) {
+		if (tool.type !== "function") continue;
+		const name = tool.function.name;
+		if (seen.has(name)) {
+			throw new AdapterError(
+				ADAPTER_REQUEST_UNSUPPORTED_TOOL,
+				`Unsupported Responses tool for OpenAI: function_name_collision. Multiple tools map to the same OpenAI function name: ${name}.`,
+				{ provider: OPENAI_PROVIDER_NAME, model: "unknown" },
+			);
+		}
+		seen.add(name);
+	}
 }
 
 export class OpenAIToolMapper implements ChatToolMapper<ChatCompletionTool[]> {
@@ -355,7 +491,7 @@ export class OpenAIToolChoiceMapper
 				path: "tool_choice",
 				action: "degraded",
 				message:
-					"OpenAI Chat Completions does not support this Responses tool_choice shape; downgraded to auto.",
+					"OpenAI Chat Completions does not support this Responses tool_choice shape directly; downgraded to a provider-compatible tool_choice.",
 				metadata: {
 					parameter: "tool_choice",
 					value: ctx.request.tool_choice,
@@ -364,6 +500,22 @@ export class OpenAIToolChoiceMapper
 		}
 		return mapOpenAIToolChoice(
 			ctx.request.tool_choice as ResponseToolChoice | undefined,
+			{
+				onUnsupportedAllowedTool: (tool) => {
+					ctx.addDiagnostic({
+						code: "adapter.param.unsupported",
+						severity: "warn",
+						path: "tool_choice.allowed_tools.tools",
+						action: "ignored",
+						message:
+							"OpenAI Chat Completions does not support this allowed_tools entry; omitted from upstream tool_choice.",
+						metadata: {
+							parameter: "tool_choice",
+							value: tool,
+						},
+					});
+				},
+			},
 		);
 	}
 }
