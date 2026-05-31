@@ -11,6 +11,7 @@ OpenAI 兼容的 Responses API 网关，让 Codex、CLI 工具和开发者 Agent
 [![Bun](https://img.shields.io/badge/runtime-bun-f9f1e0?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/lang-typescript-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
+[**English Documentation**](https://godex.ahoo.me/) · [**中文文档**](https://godex.ahoo.me/zh/)
 </div>
 
 GodeX 让使用 OpenAI Responses API 的客户端，可以通过一个本地网关调用 DeepSeek、Xiaomi、MiniMax、智谱等只提供 Chat Completions API 的模型提供商。
