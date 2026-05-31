@@ -39,89 +39,11 @@ GodeX lets clients that speak the OpenAI Responses API use providers such as Dee
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  Client["Client<br>Codex, SDK, CLI, IDE"] --> Routes["Bun server routes<br>/health<br>/v1/models<br>/v1/responses"]
-  Routes --> Ctx["ResponsesContext<br>request id, response id, resolved model,<br>provider, session, diagnostics"]
-
-  Ctx --> Resolver["ModelResolver<br>alias and provider/model selection"]
-  Ctx --> Session["ResponseSessionStore<br>memory or SQLite<br>previous_response_id chains"]
-  Ctx --> Registrar["Registrar<br>built-in ProviderEdge factories"]
-  Ctx --> Runtime["ResponsesBridgeRuntime"]
-
-  Runtime --> Sync["SyncRequestPipeline"]
-  Runtime --> Stream["StreamPipeline"]
-  Sync --> Exchange["ProviderExchange"]
-  Stream --> Exchange
-
-  Exchange --> Builder["bridge/request<br>buildChatCompletionRequest"]
-  Builder --> Compat["bridge/compatibility<br>parameter and response-format decisions"]
-  Builder --> Tools["bridge/tools<br>tool declarations, tool_choice,<br>identity restoration"]
-  Builder --> Output["bridge/output<br>structured-output contract"]
-
-  Exchange --> Edge["ProviderEdge<br>ProviderSpec + hooks"]
-  Edge --> ClientHttp["ChatProviderClient<br>Fetcher HTTP boundary"]
-  ClientHttp --> Upstream["Chat Completions upstream<br>DeepSeek, Xiaomi, MiniMax, Zhipu, custom"]
-
-  Upstream --> SyncRecon["bridge/response<br>reconstructResponseObject"]
-  Upstream --> StreamRecon["bridge/stream<br>ResponseStreamStateMachine"]
-  SyncRecon --> ResponseJson["ResponseObject JSON"]
-  StreamRecon --> StreamTransforms["stream transforms<br>validate, trace, log, persist, diagnostics"]
-  StreamTransforms --> Sse["Responses SSE"]
-
-  Ctx --> Trace["trace recorder<br>request, usage, event, error rows"]
-  Ctx --> Logger["structured logger"]
-```
+![GodeX architecture](docs/assets/godex-architecture-branded.png)
 
 ## Component Interaction
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor Client
-  participant Server as /v1/responses route
-  participant Context as ResponsesContext factory
-  participant Resolver as ModelResolver
-  participant Store as ResponseSessionStore
-  participant Registrar
-  participant Runtime as ResponsesBridgeRuntime
-  participant Exchange as ProviderExchange
-  participant Bridge as bridge/request
-  participant Provider as ProviderEdge
-  participant Upstream as Chat Completions API
-
-  Client->>Server: POST /v1/responses
-  Server->>Server: parse and validate JSON envelope
-  Server->>Context: create(app, body)
-  Context->>Resolver: resolve(body.model)
-  Resolver-->>Context: provider + upstream model
-  opt previous_response_id
-    Context->>Store: resolveChain(previous_response_id)
-    Store-->>Context: ordered session snapshot
-  end
-  Context->>Registrar: resolve(provider)
-  Registrar-->>Context: ProviderEdge
-  Server->>Runtime: request(ctx) or stream(ctx)
-  Runtime->>Exchange: build and send provider request
-  Exchange->>Bridge: buildChatCompletionRequest(ctx)
-  Bridge-->>Exchange: chat request + compatibility/tool/output plans
-  Exchange->>Provider: request(body) or stream(body)
-  Provider->>Upstream: POST /chat/completions
-  Upstream-->>Provider: JSON response or SSE chunks
-  alt sync
-    Provider-->>Exchange: provider response
-    Exchange-->>Runtime: provider response + plans
-    Runtime->>Store: save completed response unless store=false
-    Runtime-->>Server: ResponseObject
-    Server-->>Client: JSON
-  else stream
-    Provider-->>Exchange: provider SSE stream
-    Exchange-->>Runtime: stream + plans
-    Runtime->>Runtime: bridge deltas, validate output, trace, log, persist
-    Runtime-->>Server: ResponseStreamEvent stream
-    Server-->>Client: text/event-stream
-  end
-```
+![GodeX component interaction](docs/assets/godex-component-interaction-branded.png)
 
 ## Install
 
