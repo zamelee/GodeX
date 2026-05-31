@@ -37,89 +37,11 @@ GodeX 让使用 OpenAI Responses API 的客户端，可以通过一个本地网�
 
 ## 架构图
 
-```mermaid
-flowchart TB
-  Client["客户端<br>Codex, SDK, CLI, IDE"] --> Routes["Bun 路由<br>/health<br>/v1/models<br>/v1/responses"]
-  Routes --> Ctx["ResponsesContext<br>request id, response id, resolved model,<br>provider, session, diagnostics"]
-
-  Ctx --> Resolver["ModelResolver<br>别名与 provider/model 解析"]
-  Ctx --> Session["ResponseSessionStore<br>内存或 SQLite<br>previous_response_id 链"]
-  Ctx --> Registrar["Registrar<br>内置 ProviderEdge 工厂"]
-  Ctx --> Runtime["ResponsesBridgeRuntime"]
-
-  Runtime --> Sync["SyncRequestPipeline"]
-  Runtime --> Stream["StreamPipeline"]
-  Sync --> Exchange["ProviderExchange"]
-  Stream --> Exchange
-
-  Exchange --> Builder["bridge/request<br>buildChatCompletionRequest"]
-  Builder --> Compat["bridge/compatibility<br>参数与 response-format 决策"]
-  Builder --> Tools["bridge/tools<br>工具声明, tool_choice,<br>身份恢复"]
-  Builder --> Output["bridge/output<br>结构化输出契约"]
-
-  Exchange --> Edge["ProviderEdge<br>ProviderSpec + hooks"]
-  Edge --> ClientHttp["ChatProviderClient<br>Fetcher HTTP 边界"]
-  ClientHttp --> Upstream["Chat Completions 上游<br>DeepSeek, Xiaomi, MiniMax, 智谱, 自定义"]
-
-  Upstream --> SyncRecon["bridge/response<br>reconstructResponseObject"]
-  Upstream --> StreamRecon["bridge/stream<br>ResponseStreamStateMachine"]
-  SyncRecon --> ResponseJson["ResponseObject JSON"]
-  StreamRecon --> StreamTransforms["stream transforms<br>validate, trace, log, persist, diagnostics"]
-  StreamTransforms --> Sse["Responses SSE"]
-
-  Ctx --> Trace["trace recorder<br>request, usage, event, error rows"]
-  Ctx --> Logger["structured logger"]
-```
+![GodeX 架构图](docs/assets/godex-architecture-branded.png)
 
 ## 组件交互图
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor Client as 客户端
-  participant Server as /v1/responses route
-  participant Context as ResponsesContext factory
-  participant Resolver as ModelResolver
-  participant Store as ResponseSessionStore
-  participant Registrar
-  participant Runtime as ResponsesBridgeRuntime
-  participant Exchange as ProviderExchange
-  participant Bridge as bridge/request
-  participant Provider as ProviderEdge
-  participant Upstream as Chat Completions API
-
-  Client->>Server: POST /v1/responses
-  Server->>Server: 解析并校验 JSON envelope
-  Server->>Context: create(app, body)
-  Context->>Resolver: resolve(body.model)
-  Resolver-->>Context: provider + upstream model
-  opt previous_response_id
-    Context->>Store: resolveChain(previous_response_id)
-    Store-->>Context: 有序 session snapshot
-  end
-  Context->>Registrar: resolve(provider)
-  Registrar-->>Context: ProviderEdge
-  Server->>Runtime: request(ctx) 或 stream(ctx)
-  Runtime->>Exchange: 构建并发送 provider request
-  Exchange->>Bridge: buildChatCompletionRequest(ctx)
-  Bridge-->>Exchange: chat request + compatibility/tool/output plans
-  Exchange->>Provider: request(body) 或 stream(body)
-  Provider->>Upstream: POST /chat/completions
-  Upstream-->>Provider: JSON response 或 SSE chunks
-  alt sync
-    Provider-->>Exchange: provider response
-    Exchange-->>Runtime: provider response + plans
-    Runtime->>Store: 保存 completed response，除非 store=false
-    Runtime-->>Server: ResponseObject
-    Server-->>Client: JSON
-  else stream
-    Provider-->>Exchange: provider SSE stream
-    Exchange-->>Runtime: stream + plans
-    Runtime->>Runtime: 桥接 delta、校验输出、trace、log、persist
-    Runtime-->>Server: ResponseStreamEvent stream
-    Server-->>Client: text/event-stream
-  end
-```
+![GodeX 组件交互图](docs/assets/godex-component-interaction-branded.png)
 
 ## 安装
 
