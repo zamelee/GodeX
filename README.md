@@ -11,9 +11,12 @@ OpenAI-compatible Responses API gateway for Codex, CLI tools and developer agent
 [![Bun](https://img.shields.io/badge/runtime-bun-f9f1e0?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/lang-typescript-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
+[**English Documentation**](https://godex.ahoo.me/) · [**中文文档**](https://godex.ahoo.me/zh/)
 </div>
 
 GodeX lets clients that speak the OpenAI Responses API use providers such as DeepSeek, Xiaomi, MiniMax, and Zhipu through one local server.
+
+
 
 ## Highlights
 
