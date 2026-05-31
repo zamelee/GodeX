@@ -348,10 +348,11 @@ model_provider = "godex"
 name = "GodeX"
 base_url = "http://127.0.0.1:5678/v1"
 wire_api = "responses"
+requires_openai_auth = false
 supports_websockets = false
 ```
 
-Model aliases (`gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, etc.) are resolved by GodeX using the `models.aliases` map in `godex.yaml` — Codex itself only needs the alias name. See [Codex 集成配置](docs/references/codex/configuration.md) for the full setup guide.
+Model aliases (`gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, etc.) are resolved by GodeX using the `models.aliases` map in `godex.yaml` — Codex itself only needs the alias name.
 
 
 ## Provider Bridge Behavior
