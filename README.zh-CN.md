@@ -354,10 +354,11 @@ model_provider = "godex"
 name = "GodeX"
 base_url = "http://127.0.0.1:5678/v1"
 wire_api = "responses"
+requires_openai_auth = false
 supports_websockets = false
 ```
 
-模型别名（`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini` 等）由 GodeX 根据 `godex.yaml` 中的 `models.aliases` 解析——Codex 只需知道别名。完整配置指南见 [Codex 集成配置](docs/references/codex/configuration.md)。
+模型别名（`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini` 等）由 GodeX 根据 `godex.yaml` 中的 `models.aliases` 解析——Codex 只需知道别名。
 
 
 ## Provider 桥接行为
