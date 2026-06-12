@@ -11,6 +11,7 @@ import type {
 	ResponseCreateRequest,
 	ResponseItem,
 } from "../../protocol/openai/responses";
+import { isValidFunctionArguments } from "../../providers/shared/tool-arguments";
 import type { ToolPlan } from "../tools";
 
 export type NormalizedChatMessage = ChatCompletionMessageParam;
@@ -52,7 +53,70 @@ export function normalizeResponseItems(
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext = {},
 ): NormalizedChatMessage[] {
-	return normalizeInputItems(items, request, context);
+	return normalizeInputItems(dropUnpairedToolCalls(items), request, context);
+}
+
+function dropUnpairedToolCalls(
+	items: readonly ResponseItem[],
+): readonly ResponseItem[] {
+	return items.filter((item) => !isOrphanToolOutput(item, items));
+}
+
+function isOrphanToolOutput(
+	item: ResponseItem,
+	items: readonly ResponseItem[],
+): boolean {
+	if (!isToolOutput(item)) return false;
+	const outputId = item.call_id;
+	for (const candidate of items) {
+		if (isToolCall(candidate) && candidate.call_id === outputId) {
+			return false;
+		}
+	}
+	return true;
+}
+
+type ToolCallItem = Extract<
+	ResponseItem,
+	{
+		type:
+			| "function_call"
+			| "shell_call"
+			| "local_shell_call"
+			| "apply_patch_call"
+			| "custom_tool_call";
+	}
+>;
+type ToolOutputItem = Extract<
+	ResponseItem,
+	{
+		type:
+			| "function_call_output"
+			| "shell_call_output"
+			| "local_shell_call_output"
+			| "apply_patch_call_output"
+			| "custom_tool_call_output";
+	}
+>;
+
+function isToolCall(item: ResponseItem): item is ToolCallItem {
+	return (
+		item.type === "function_call" ||
+		item.type === "shell_call" ||
+		item.type === "local_shell_call" ||
+		item.type === "apply_patch_call" ||
+		item.type === "custom_tool_call"
+	);
+}
+
+function isToolOutput(item: ResponseItem): item is ToolOutputItem {
+	return (
+		item.type === "function_call_output" ||
+		item.type === "shell_call_output" ||
+		item.type === "local_shell_call_output" ||
+		item.type === "apply_patch_call_output" ||
+		item.type === "custom_tool_call_output"
+	);
 }
 
 function normalizeInputItems(
@@ -106,13 +170,12 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "function_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "function", toolName(item)),
-				item.arguments,
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "function", toolName(item)),
+			item.arguments,
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "function_call_output") {
 		return [
@@ -126,13 +189,12 @@ function normalizeInputItem(
 		return [];
 	}
 	if (item.type === "shell_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "shell", "shell"),
-				JSON.stringify(item.action),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "shell", "shell"),
+			JSON.stringify(item.action),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "shell_call_output") {
 		return [
@@ -151,35 +213,33 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "local_shell_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "local_shell", "local_shell"),
-				JSON.stringify({
-					command: item.action.command,
-					env: item.action.env,
-					...(item.action.timeout_ms !== undefined
-						? { timeout_ms: item.action.timeout_ms }
-						: {}),
-					...(item.action.user !== undefined ? { user: item.action.user } : {}),
-					...(item.action.working_directory !== undefined
-						? { working_directory: item.action.working_directory }
-						: {}),
-				}),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "local_shell", "local_shell"),
+			JSON.stringify({
+				command: item.action.command,
+				env: item.action.env,
+				...(item.action.timeout_ms !== undefined
+					? { timeout_ms: item.action.timeout_ms }
+					: {}),
+				...(item.action.user !== undefined ? { user: item.action.user } : {}),
+				...(item.action.working_directory !== undefined
+					? { working_directory: item.action.working_directory }
+					: {}),
+			}),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "local_shell_call_output") {
 		return [toolOutputMessage(item.call_id, item.output)];
 	}
 	if (item.type === "apply_patch_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "apply_patch", "apply_patch"),
-				JSON.stringify({ operation: item.operation }),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "apply_patch", "apply_patch"),
+			JSON.stringify({ operation: item.operation }),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "apply_patch_call_output") {
 		return [
@@ -190,13 +250,12 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "custom_tool_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "custom", toolName(item)),
-				JSON.stringify({ input: item.input }),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "custom", toolName(item)),
+			JSON.stringify({ input: item.input }),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "custom_tool_call_output") {
 		return [
@@ -214,7 +273,8 @@ function assistantToolCallMessage(
 	callId: string,
 	name: string,
 	argumentsValue: string,
-): NormalizedChatMessage {
+): NormalizedChatMessage | undefined {
+	if (!isValidFunctionArguments(argumentsValue)) return undefined;
 	return {
 		role: "assistant",
 		content: "",

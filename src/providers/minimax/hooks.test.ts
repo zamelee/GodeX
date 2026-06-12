@@ -116,6 +116,70 @@ describe("minimaxPatchRequest", () => {
 		expect(toRecord(result).max_completion_tokens).toBe(100);
 		expect("max_tokens" in result).toBe(false);
 	});
+
+	test("canonicalizes assistant tool_call arguments", () => {
+		const result = minimaxPatchRequest(
+			bridgeRequest({
+				messages: [
+					{ role: "user", content: "lookup" },
+					{
+						role: "assistant",
+						content: "",
+						tool_calls: [
+							{
+								id: "call_x",
+								type: "function",
+								function: {
+									name: "lookup",
+									arguments: '{ "city" : "Hangzhou" , "unit" :  "c" }',
+								},
+							},
+						],
+					} as never,
+				],
+			} as unknown as BridgeRequest),
+		);
+
+		const assistant = toRecord(result.messages[1]);
+		const toolCalls = assistant.tool_calls as Array<Record<string, unknown>>;
+		expect(toolCalls[0]).toBeDefined();
+		const toolCall = toolCalls[0] as Record<string, unknown>;
+		const fn = toolCall.function as Record<string, unknown>;
+		expect(JSON.parse(fn.arguments as string)).toEqual({
+			city: "Hangzhou",
+			unit: "c",
+		});
+		expect((fn.arguments as string).includes("  ")).toBe(false);
+	});
+
+	test("keeps non-function tool call types untouched", () => {
+		const result = minimaxPatchRequest(
+			bridgeRequest({
+				messages: [
+					{ role: "user", content: "x" },
+					{
+						role: "assistant",
+						content: "",
+						tool_calls: [
+							{
+								id: "call_x",
+								type: "custom",
+								custom: { name: "raw" },
+								function: { name: "raw", arguments: "{not-json" },
+							},
+						],
+					} as never,
+				],
+			} as unknown as BridgeRequest),
+		);
+
+		const assistant = toRecord(result.messages[1]);
+		const toolCalls = assistant.tool_calls as Array<Record<string, unknown>>;
+		expect(toolCalls[0]).toBeDefined();
+		const toolCall = toolCalls[0] as Record<string, unknown>;
+		const fn = toolCall.function as Record<string, unknown>;
+		expect(fn.arguments).toBe("{not-json");
+	});
 });
 
 describe("minimaxStreamDeltas", () => {

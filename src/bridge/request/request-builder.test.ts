@@ -1681,3 +1681,68 @@ function captureBridgeError(action: () => unknown): BridgeError {
 	}
 	throw new Error("Expected BridgeError.");
 }
+
+describe("buildChatCompletionRequest - orphan tool outputs", () => {
+	test("drops role:tool messages whose tool_call_id is not in any assistant tool_calls", () => {
+		const result = buildChatCompletionRequest({
+			provider: "minimax",
+			model: "MiniMax-M3",
+			capabilities,
+			profile: toolProfile,
+			request: request({
+				input: [
+					{
+						type: "message",
+						role: "assistant",
+						content: "thinking...",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_orphan",
+						output: "ignored",
+					} as never,
+					{ type: "message", role: "user", content: "continue" },
+				],
+			}),
+		});
+
+		const toolMessages = result.request.messages.filter(
+			(m) => m.role === "tool",
+		);
+		expect(toolMessages).toEqual([]);
+	});
+
+	test("keeps role:tool messages whose tool_call_id matches an assistant tool_call", () => {
+		const result = buildChatCompletionRequest({
+			provider: "minimax",
+			model: "MiniMax-M3",
+			capabilities,
+			profile: toolProfile,
+			request: request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_real",
+						name: "lookup",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_real",
+						output: "Sunny.",
+					} as never,
+				],
+			}),
+		});
+
+		const toolMessages = result.request.messages.filter(
+			(m) => m.role === "tool",
+		);
+		expect(toolMessages).toHaveLength(1);
+		expect(toolMessages[0]).toMatchObject({
+			role: "tool",
+			tool_call_id: "call_real",
+			content: "Sunny.",
+		});
+	});
+});
