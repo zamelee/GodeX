@@ -6,3 +6,4 @@ export * from "./input-compatibility";
 export * from "./reasoning-content";
 export * from "./stream-delta-mapper";
 export * from "./stream-result-extractor";
+export * from "./tool-arguments";

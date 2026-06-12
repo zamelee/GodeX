@@ -111,7 +111,24 @@ function chatMessages(
 	if (output.jsonSchemaInstruction) {
 		appendFinalInstruction(messages, output.jsonSchemaInstruction);
 	}
-	return buildChatMessages(messages);
+	return buildChatMessages(dropOrphanToolOutputs(messages));
+}
+
+function dropOrphanToolOutputs(
+	messages: readonly NormalizedChatMessage[],
+): NormalizedChatMessage[] {
+	const knownCallIds = new Set<string>();
+	for (const message of messages) {
+		if (message.role !== "assistant") continue;
+		for (const call of message.tool_calls ?? []) {
+			if (call.id) knownCallIds.add(call.id);
+		}
+	}
+	return messages.filter((message) => {
+		if (message.role !== "tool") return true;
+		if (!message.tool_call_id) return true;
+		return knownCallIds.has(message.tool_call_id);
+	});
 }
 
 function appendFinalInstruction(
