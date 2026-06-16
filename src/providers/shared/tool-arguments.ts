@@ -1,5 +1,7 @@
+const EMPTY_ARGUMENTS_OBJECT = "{}";
+
 export function canonicalizeFunctionArguments(argumentsValue: string): string {
-	if (argumentsValue === "") return argumentsValue;
+	if (argumentsValue === "") return EMPTY_ARGUMENTS_OBJECT;
 	try {
 		return JSON.stringify(JSON.parse(argumentsValue));
 	} catch {

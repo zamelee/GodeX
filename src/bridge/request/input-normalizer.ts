@@ -11,7 +11,10 @@ import type {
 	ResponseCreateRequest,
 	ResponseItem,
 } from "../../protocol/openai/responses";
-import { isValidFunctionArguments } from "../../providers/shared/tool-arguments";
+import {
+	canonicalizeFunctionArguments,
+	isValidFunctionArguments,
+} from "../../providers/shared/tool-arguments";
 import type { ToolPlan } from "../tools";
 
 export type NormalizedChatMessage = ChatCompletionMessageParam;
@@ -282,7 +285,10 @@ function assistantToolCallMessage(
 			{
 				id: callId,
 				type: "function",
-				function: { name, arguments: argumentsValue },
+				function: {
+					name,
+					arguments: canonicalizeFunctionArguments(argumentsValue),
+				},
 			},
 		],
 	};

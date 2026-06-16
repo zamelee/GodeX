@@ -5,8 +5,8 @@ import {
 } from "./tool-arguments";
 
 describe("canonicalizeFunctionArguments", () => {
-	test("returns empty string unchanged", () => {
-		expect(canonicalizeFunctionArguments("")).toBe("");
+	test("coerces empty string to an empty object literal for MiniMax compatibility", () => {
+		expect(canonicalizeFunctionArguments("")).toBe("{}");
 	});
 
 	test("rewrites non-canonical JSON in canonical form", () => {

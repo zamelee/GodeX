@@ -118,6 +118,33 @@ describe("normalizeCurrentInput - tool call argument sanitization", () => {
 		});
 	});
 
+	test("coerces empty arguments to an empty object literal", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_empty_args",
+						name: "shell_command",
+						arguments: "",
+					} as never,
+				],
+			}),
+		);
+
+		expect(messages).toHaveLength(1);
+		expect(messages[0]).toMatchObject({
+			role: "assistant",
+			tool_calls: [
+				{
+					id: "call_empty_args",
+					type: "function",
+					function: { name: "shell_command", arguments: "{}" },
+				},
+			],
+		});
+	});
+
 	test("preserves function_call output when its function_call was dropped", () => {
 		const messages = normalizeCurrentInput(
 			request({
