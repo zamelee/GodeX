@@ -460,3 +460,172 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		expect(messages[2]?.role).toBe("user");
 	});
 });
+
+describe("normalizeCurrentInput - tool media reordering for parallel tool calls", () => {
+	const ctx = { provider: "minimax", supportsImageInput: true };
+
+	test("moves image user message out of the middle of parallel tool results", () => {
+		// The assistant made two parallel tool calls (view_image + shell_command).
+		// The first returns an image, the second returns text. The split produces:
+		//   tool(view_image) -> user(image) -> tool(shell_command)
+		// MiniMax rejects tool result not immediately following the tool call, so
+		// the user(image) must be hoisted to after the tool(shell_command).
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_view_1",
+						name: "view_image",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call",
+						call_id: "call_shell_1",
+						name: "shell_command",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_view_1",
+						output: [
+							{
+								type: "input_image",
+								image_url: "https://example.com/shot.png",
+							},
+						],
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_shell_1",
+						output: "ls\nfile.txt",
+					} as never,
+				],
+			}),
+			ctx,
+		);
+		// 2 assistant + 2 tool results (in call order) + 1 hoisted user with image
+		expect(messages).toHaveLength(5);
+		expect(messages[2]?.role).toBe("tool");
+		expect(messages[3]?.role).toBe("tool");
+		expect(messages[4]?.role).toBe("user");
+		// The image user message must carry the first call's id in the prefix
+		const lastContent = messages[4]?.content as Array<{
+			type: string;
+			text?: string;
+		}>;
+		expect(lastContent[0]?.text).toBe(
+			"[Attached media from tool result call_view_1]",
+		);
+	});
+
+	test("hoists multiple media user messages out of a tool run", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_a",
+						name: "view_image",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call",
+						call_id: "call_b",
+						name: "view_image",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call",
+						call_id: "call_c",
+						name: "shell_command",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_a",
+						output: [{ type: "input_image", image_url: "u1" }],
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_b",
+						output: [{ type: "input_image", image_url: "u2" }],
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_c",
+						output: "ok",
+					} as never,
+				],
+			}),
+			ctx,
+		);
+		// 3 assistant + 3 tool results + 2 hoisted user with image
+		expect(messages).toHaveLength(8);
+		expect(messages.slice(3, 6).map((m) => m.role)).toEqual([
+			"tool",
+			"tool",
+			"tool",
+		]);
+		expect(messages[6]?.role).toBe("user");
+		expect(messages[7]?.role).toBe("user");
+	});
+
+	test("does not reorder a media user message when it is not between tool results", () => {
+		// If the user message is not sandwiched between tool messages, leave it.
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_x",
+						name: "view_image",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_x",
+						output: [{ type: "input_image", image_url: "u" }],
+					} as never,
+					{
+						type: "message",
+						role: "user",
+						content: [{ type: "input_text", text: "explain" }],
+					} as never,
+				],
+			}),
+			ctx,
+		);
+		// assistant + tool + user(media) + user(text)
+		expect(messages).toHaveLength(4);
+		expect(messages[2]?.role).toBe("user");
+		expect(messages[3]?.role).toBe("user");
+		// Text-only content normalizes to a plain string, not a content-part array.
+		expect(messages[3]?.content).toBe("explain");
+	});
+
+	test("keeps single-image tool output in place when no parallel tool follows", () => {
+		// No parallel tool call, so the media user message stays adjacent to its tool.
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_solo",
+						name: "view_image",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_solo",
+						output: [{ type: "input_image", image_url: "u" }],
+					} as never,
+				],
+			}),
+			ctx,
+		);
+		expect(messages).toHaveLength(3);
+		expect(messages[1]?.role).toBe("tool");
+		expect(messages[2]?.role).toBe("user");
+	});
+});
