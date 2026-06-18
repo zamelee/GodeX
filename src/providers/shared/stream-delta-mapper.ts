@@ -1,12 +1,12 @@
 import type { ProviderStreamDelta } from "../../bridge/stream";
 
 export interface ChatStreamToolCallDeltaLike {
-	readonly index?: number;
-	readonly id?: string;
-	readonly type?: string;
+	readonly index?: number | null;
+	readonly id?: string | null;
+	readonly type?: string | null;
 	readonly function?: {
-		readonly name?: string;
-		readonly arguments?: string;
+		readonly name?: string | null;
+		readonly arguments?: string | null;
 	};
 }
 
@@ -24,13 +24,13 @@ export function mapCommonChatStreamDelta(
 	}
 	for (const toolCall of delta.tool_calls ?? []) {
 		const providerToolCall = {
-			...(toolCall.index !== undefined ? { index: toolCall.index } : {}),
-			...(toolCall.id !== undefined ? { id: toolCall.id } : {}),
-			...(toolCall.type !== undefined ? { type: toolCall.type } : {}),
-			...(toolCall.function?.name !== undefined
+			...(toolCall.index != null ? { index: toolCall.index } : {}),
+			...(toolCall.id != null ? { id: toolCall.id } : {}),
+			...(toolCall.type != null ? { type: toolCall.type } : {}),
+			...(toolCall.function?.name != null
 				? { name: toolCall.function.name }
 				: {}),
-			...(toolCall.function?.arguments !== undefined
+			...(toolCall.function?.arguments != null
 				? { arguments: toolCall.function.arguments }
 				: {}),
 		};
