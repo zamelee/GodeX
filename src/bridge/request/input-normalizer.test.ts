@@ -290,3 +290,173 @@ describe("normalizeResponseItems - session history pairing", () => {
 		expect(messages).toEqual([]);
 	});
 });
+
+describe("normalizeCurrentInput - tool output media splitting", () => {
+	test("function_call_output with image parts splits into tool + user messages", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_screenshot_1",
+						name: "browser.screenshot",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_screenshot_1",
+						output: [
+							{ type: "input_text", text: "Screenshot captured" },
+							{
+								type: "input_image",
+								image_url: "data:image/png;base64,iVBORw0KGgo=",
+								detail: "high",
+							},
+						],
+					} as never,
+				],
+			}),
+			{ provider: "minimax", supportsImageInput: true },
+		);
+		expect(messages).toHaveLength(3);
+		expect(messages[0]).toMatchObject({
+			role: "assistant",
+			tool_calls: [{ id: "call_screenshot_1" }],
+		});
+		expect(messages[1]).toEqual({
+			role: "tool",
+			tool_call_id: "call_screenshot_1",
+			content: "Screenshot captured",
+		});
+		expect(messages[2]).toEqual({
+			role: "user",
+			content: [
+				{
+					type: "text",
+					text: "[Attached media from tool result call_screenshot_1]",
+				},
+				{
+					type: "image_url",
+					image_url: {
+						url: "data:image/png;base64,iVBORw0KGgo=",
+						detail: "high",
+					},
+				},
+			],
+		});
+	});
+
+	test("function_call_output with only text stays as a single tool message", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call_output",
+						call_id: "call_text_1",
+						output: [{ type: "input_text", text: "plain result" }],
+					} as never,
+				],
+			}),
+		);
+		expect(messages).toEqual([
+			{
+				role: "tool",
+				tool_call_id: "call_text_1",
+				content: "plain result",
+			},
+		]);
+	});
+
+	test("function_call_output string content stays as a single tool message", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "function_call_output",
+						call_id: "call_str_1",
+						output: "string result",
+					} as never,
+				],
+			}),
+		);
+		expect(messages).toEqual([
+			{
+				role: "tool",
+				tool_call_id: "call_str_1",
+				content: "string result",
+			},
+		]);
+	});
+
+	test("custom_tool_call_output with image parts splits into tool + user messages", () => {
+		const messages = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						type: "custom_tool_call",
+						call_id: "call_custom_1",
+						name: "render",
+						input: "{}",
+					} as never,
+					{
+						type: "custom_tool_call_output",
+						call_id: "call_custom_1",
+						output: [
+							{
+								type: "input_image",
+								image_url: "https://example.com/img.png",
+							},
+						],
+					} as never,
+				],
+			}),
+			{ provider: "minimax", supportsImageInput: true },
+		);
+		expect(messages).toHaveLength(3);
+		expect(messages[1]).toEqual({
+			role: "tool",
+			tool_call_id: "call_custom_1",
+			content: "",
+		});
+		expect(messages[2]?.role).toBe("user");
+		const content = messages[2]?.content as Array<{ type: string }>;
+		expect(content[0]).toMatchObject({ type: "text" });
+		expect(content[1]).toMatchObject({
+			type: "image_url",
+			image_url: { url: "https://example.com/img.png" },
+		});
+	});
+
+	test("normalizeResponseItems passes images from session tool outputs through to a user message", () => {
+		const messages = normalizeResponseItems(
+			[
+				{
+					type: "function_call",
+					call_id: "call_session_1",
+					name: "browser.screenshot",
+					arguments: "{}",
+				},
+				{
+					type: "function_call_output",
+					call_id: "call_session_1",
+					output: [
+						{ type: "input_text", text: "ok" },
+						{
+							type: "input_image",
+							image_url: "https://example.com/s.png",
+						},
+					],
+				},
+			] as never,
+			request({ input: undefined }),
+			{ provider: "minimax", supportsImageInput: true },
+		);
+		expect(messages).toHaveLength(3);
+		expect(messages[1]).toEqual({
+			role: "tool",
+			tool_call_id: "call_session_1",
+			content: "ok",
+		});
+		expect(messages[2]?.role).toBe("user");
+	});
+});
