@@ -152,7 +152,49 @@ function normalizeInputItems(
 		}
 		messages.push(...itemMessages);
 	}
-	return messages;
+	return reorderToolMediaMessages(messages);
+}
+
+function reorderToolMediaMessages(
+	messages: readonly NormalizedChatMessage[],
+): NormalizedChatMessage[] {
+	// Move any user messages that carry tool media (inserted by tool-output
+	// splitting) out of the middle of a consecutive tool message run so that
+	// Chat Completions providers see assistant → tool → tool → ... before any
+	// user turn. Some upstreams (e.g. minimax) reject sequences where a tool
+	// result is followed by a non-tool message and then another tool result.
+	const result: NormalizedChatMessage[] = [];
+	const deferred: NormalizedChatMessage[] = [];
+	let inToolRun = false;
+	for (const msg of messages) {
+		if (msg.role === "tool") {
+			inToolRun = true;
+			result.push(msg);
+			continue;
+		}
+		if (inToolRun && isMediaUserMessage(msg)) {
+			deferred.push(msg);
+			continue;
+		}
+		if (deferred.length > 0) {
+			result.push(...deferred);
+			deferred.length = 0;
+		}
+		inToolRun = false;
+		result.push(msg);
+	}
+	if (deferred.length > 0) result.push(...deferred);
+	return result;
+}
+
+function isMediaUserMessage(msg: NormalizedChatMessage): boolean {
+	if (msg.role !== "user") return false;
+	if (typeof msg.content === "string" || !Array.isArray(msg.content)) {
+		return false;
+	}
+	const first = msg.content[0];
+	if (!isRecord(first) || typeof first.text !== "string") return false;
+	return first.text.startsWith("[Attached media from tool result");
 }
 
 function appendReasoningText(
