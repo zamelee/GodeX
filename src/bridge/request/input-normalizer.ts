@@ -19,6 +19,11 @@ import type { ToolPlan } from "../tools";
 
 export type NormalizedChatMessage = ChatCompletionMessageParam;
 
+interface NormalizedToolOutput {
+	readonly text: string;
+	readonly extras: readonly ChatCompletionContentPart[];
+}
+
 export interface InputNormalizerContext {
 	readonly provider?: string;
 	readonly model?: string;
@@ -181,12 +186,14 @@ function normalizeInputItem(
 		return call ? [call] : [];
 	}
 	if (item.type === "function_call_output") {
-		return [
-			toolOutputMessage(
-				item.call_id,
-				outputText(item.output, request, context),
-			),
+		const { text, extras } = outputText(item.output, request, context);
+		const messages: NormalizedChatMessage[] = [
+			toolOutputMessage(item.call_id, text),
 		];
+		if (extras.length > 0) {
+			messages.push(toolExtrasUserMessage(extras, item.call_id));
+		}
+		return messages;
 	}
 	if (item.type === "web_search_call") {
 		return [];
@@ -261,12 +268,14 @@ function normalizeInputItem(
 		return call ? [call] : [];
 	}
 	if (item.type === "custom_tool_call_output") {
-		return [
-			toolOutputMessage(
-				item.call_id,
-				outputText(item.output, request, context),
-			),
+		const { text, extras } = outputText(item.output, request, context);
+		const messages: NormalizedChatMessage[] = [
+			toolOutputMessage(item.call_id, text),
 		];
+		if (extras.length > 0) {
+			messages.push(toolExtrasUserMessage(extras, item.call_id));
+		}
+		return messages;
 	}
 
 	throw unsupportedInputItemError(item, request, context);
@@ -299,6 +308,19 @@ function toolOutputMessage(
 	content: string,
 ): NormalizedChatMessage {
 	return { role: "tool", tool_call_id: callId, content };
+}
+
+function toolExtrasUserMessage(
+	extras: readonly ChatCompletionContentPart[],
+	callId: string,
+): NormalizedChatMessage {
+	return {
+		role: "user",
+		content: [
+			{ type: "text", text: `[Attached media from tool result ${callId}]` },
+			...extras,
+		],
+	};
 }
 
 function normalizeMessageContent(
@@ -468,14 +490,24 @@ function outputText(
 	output: string | readonly unknown[],
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): string {
-	if (typeof output === "string") return output;
-	const normalized = normalizeMessageContent(output, request, {
-		...context,
-		supportsImageInput: false,
-		supportsVideoInput: false,
-	});
-	return normalized;
+): NormalizedToolOutput {
+	if (typeof output === "string") {
+		return { text: output, extras: [] };
+	}
+	const normalized = normalizeMessageContent(output, request, context);
+	if (typeof normalized === "string") {
+		return { text: normalized, extras: [] };
+	}
+	const textParts: string[] = [];
+	const extras: ChatCompletionContentPart[] = [];
+	for (const part of normalized) {
+		if (part.type === "text") {
+			textParts.push(part.text);
+		} else {
+			extras.push(part);
+		}
+	}
+	return { text: textParts.join(""), extras };
 }
 
 function toolName(item: { name: string; namespace?: string }): string {
