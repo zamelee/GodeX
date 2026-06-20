@@ -20,8 +20,30 @@ export interface LegacyProviderFactoryConfig {
 	timeout_ms?: number;
 }
 
+export interface ModelCapabilities {
+	text?: boolean;
+	image_input?: boolean;
+	audio_input?: boolean;
+	video_input?: boolean;
+	image_output?: boolean;
+	audio_output?: boolean;
+	tool_use?: boolean;
+	stream?: boolean;
+}
+
+export interface EnabledModel {
+	provider: string;
+	model: string;
+	context_window?: number;
+	max_tokens?: number;
+	multimodal?: boolean;
+	capabilities?: ModelCapabilities;
+	note?: string;
+}
+
 export interface ModelsConfig {
 	aliases?: Record<string, string>;
+	enabled?: EnabledModel[];
 }
 
 export interface SessionConfig {
