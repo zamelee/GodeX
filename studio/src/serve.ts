@@ -1,25 +1,27 @@
 // GodeX Studio — Layer 4 UI Server
 
-import { spawn as cp_spawn, execSync } from "node:child_process";
 import {
 	existsSync,
 	readFileSync as fs_read,
 	writeFileSync as fs_write,
 } from "node:fs";
 import { resolve } from "node:path";
+import {
+	killGodex,
+	startGodex,
+	pushLog,
+	getRecentLogs,
+	subscribe,
+	isGodexRunning,
+	getGodexPid,
+	getGodexConfig,
+	getGodexBinary,
+} from "./log-stream";
 
 const GODEX_BASE = process.env.GODEX_BASE ?? "http://127.0.0.1:5678";
 const PORT = Number(process.env.STUDIO_PORT ?? "56791");
-const TRACE_DB_PATH =
-	process.env.GODEX_TRACE_DB ??
-	(process.env.GODEX_DATA
-		? resolve(process.env.GODEX_DATA, "trace.db")
-		: "C:\\Users\\Bliss\\.godex\\data\\trace.db");
-const GODEX_CONFIG =
-	process.env.GODEX_CONFIG ?? "C:\\Users\\Bliss\\.godex\\config.yaml";
-const GODEX_BINARY =
-	process.env.GODEX_BINARY ??
-	"D:\\Documents\\VibeCoding\\GodeX\\platforms\\win32-x64\\bin\\godex2.exe";
+const GODEX_CONFIG = getGodexConfig();
+const GODEX_BINARY = getGodexBinary();
 
 const CORS = {
 	"Access-Control-Allow-Origin": "*",
@@ -28,32 +30,6 @@ const CORS = {
 };
 const JSON_H = { "Content-Type": "application/json", ...CORS };
 const HTML_H = { "Content-Type": "text/html; charset=utf-8", ...CORS };
-
-interface TraceRow {
-	created_at: number;
-	event_name: string;
-	request_id: string;
-	provider?: string;
-	model?: string;
-	message?: string;
-}
-
-async function queryTraceLogs(limit = 60): Promise<TraceRow[]> {
-	try {
-		const { DatabaseSync } = await import("bun");
-		if (!existsSync(TRACE_DB_PATH)) return [];
-		const db = new DatabaseSync(TRACE_DB_PATH);
-		const rows = db
-			.query(
-				"SELECT created_at, event_name, request_id, provider, model, message FROM trace_events ORDER BY created_at DESC LIMIT ?",
-			)
-			.all(limit) as TraceRow[];
-		db.close();
-		return rows;
-	} catch {
-		return [];
-	}
-}
 
 async function proxyToGodex(path: string, timeoutMs = 5000): Promise<Response> {
 	try {
@@ -69,42 +45,28 @@ async function proxyToGodex(path: string, timeoutMs = 5000): Promise<Response> {
 	}
 }
 
-// Parse existing aliases from config.yaml (simple regex parser)
-function readExistingAliases(): Record<string, string> {
-	const out: Record<string, string> = {};
-	if (!existsSync(GODEX_CONFIG)) return out;
-	try {
-		const raw = fs_read(GODEX_CONFIG, "utf-8");
-		const m = raw.match(/aliases:\s*\n([\s\S]*?)(?:\n[a-z]|$)/);
-		if (m) {
-			for (const line of m[1].split("\n")) {
-				const am = line.match(/^\s+['"]([^'"]+)['"]\s*:\s*(\S+)\s*$/);
-				if (am) out[am[1]] = am[2];
-			}
-		}
-	} catch {}
-	return out;
+interface EnabledModelYaml {
+	provider: string;
+	model: string;
+	context_window?: number;
+	max_tokens?: number;
+	multimodal?: boolean;
+	capabilities?: Record<string, boolean>;
+	note?: string;
 }
 
-function readAllProviders(): Array<{
-	name: string;
-	spec: string;
-	api_key: string;
-	base_url: string;
-	timeout_ms: number;
-}> {
-	const out = [];
+function readAllProviders(): Array<{ name: string; spec: string; base_url: string; api_key: string; timeout_ms: number; }> {
+	const out: Array<{ name: string; spec: string; base_url: string; api_key: string; timeout_ms: number; }> = [];
 	if (!existsSync(GODEX_CONFIG)) return out;
 	try {
 		const raw = fs_read(GODEX_CONFIG, "utf-8");
 		const pm = raw.match(/providers:\s*\n([\s\S]*?)(?:\n[a-zA-Z]|$)/);
-		if (!pm) return out;
+		if (!pm || !pm[1]) return out;
 		const body = pm[1];
-		// Split blocks at lines starting with two spaces + name + colon
-		const blocks = body.split(/\n(?= {2}[A-Za-z0-9_-]+:\s*\n)/);
+		const blocks = body.split(/\n(?= {2}[A-Za-z0-9_.\-/]+:\s*\n)/);
 		for (const block of blocks) {
-			const nm = block.match(/^ {2}([A-Za-z0-9_-]+):\s*\n/);
-			if (!nm) continue;
+			const nm = block.match(/^ {2}([A-Za-z0-9_.\-/]+):\s*\n/);
+			if (!nm || !nm[1]) continue;
 			const name = nm[1];
 			const specM = block.match(/spec:\s*(\S+)/);
 			const baseM = block.match(/base_url:\s*(\S+)/);
@@ -112,23 +74,17 @@ function readAllProviders(): Array<{
 			const apiKeyM = block.match(/api_key:\s*(\S+)/);
 			out.push({
 				name,
-				spec: specM ? specM[1] : name,
-				base_url: baseM ? baseM[1] : "",
-				timeout_ms: timeoutM ? parseInt(timeoutM[1], 10) : 120000,
-				api_key: apiKeyM ? apiKeyM[1] : "",
+				spec: specM && specM[1] ? specM[1] : name,
+				base_url: baseM && baseM[1] ? baseM[1] : "",
+				timeout_ms: timeoutM && timeoutM[1] ? parseInt(timeoutM[1], 10) : 120000,
+				api_key: apiKeyM && apiKeyM[1] ? apiKeyM[1] : "",
 			});
 		}
 	} catch {}
 	return out;
 }
 
-function upsertProvider(
-	name: string,
-	baseUrl: string,
-	apiKey: string,
-	timeoutMs: number,
-	spec: string,
-): void {
+function upsertProvider(name: string, baseUrl: string, apiKey: string, timeoutMs: number, spec: string): void {
 	let raw = existsSync(GODEX_CONFIG) ? fs_read(GODEX_CONFIG, "utf-8") : "";
 	if (!raw || !/^server:/m.test(raw)) {
 		raw = [
@@ -139,7 +95,7 @@ function upsertProvider(
 			"providers:",
 			"",
 			"models:",
-			"  aliases:",
+			"  enabled: []",
 			"",
 			"session:",
 			"  backend: sqlite",
@@ -151,27 +107,17 @@ function upsertProvider(
 		].join("\n");
 	}
 	const newBlock =
-		"  " +
-		name +
-		":\n" +
-		"    spec: " +
-		(spec || name) +
-		"\n" +
+		"  " + name + ":\n" +
+		"    spec: " + (spec || name) + "\n" +
 		"    credentials:\n" +
-		"      api_key: " +
-		(apiKey || "") +
-		"\n" +
+		"      api_key: " + (apiKey || "") + "\n" +
 		"    endpoint:\n" +
-		"      base_url: " +
-		(baseUrl || "https://api.example.com/v1") +
-		"\n" +
-		"    timeout_ms: " +
-		(timeoutMs || 120000) +
-		"\n";
+		"      base_url: " + (baseUrl || "https://api.example.com/v1") + "\n" +
+		"    timeout_ms: " + (timeoutMs || 120000) + "\n";
 
 	const nameEsc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	const re = new RegExp(
-		"( {2}" + nameEsc + ":\\n[\\s\\S]*?)(?=\\n {2}[^\\s]|\\n[a-zA-Z]|\\Z)",
+		"( {2}" + nameEsc + ":\n[\\s\\S]*?)(?=\\n {2}[^\\s]|\\n[a-zA-Z]|\\Z)",
 	);
 	if (re.test(raw)) {
 		raw = raw.replace(re, newBlock);
@@ -182,108 +128,114 @@ function upsertProvider(
 	}
 	if (!/default_provider:\s*\S+/.test(raw)) {
 		raw = raw.replace(
-			/^(server:[\s\S]*?\n)/,
-			"$1default_provider: " + name + "\n",
-		);
+		/^(server:[\s\S]*?\n)/,
+		"$1default_provider: " + name + "\n",
+	);
 	} else {
 		raw = raw.replace(/default_provider:\s*\S+/, "default_provider: " + name);
 	}
 	fs_write(GODEX_CONFIG, raw, "utf-8");
 }
 
-function writeConfigYaml(
-	provider: string,
-	baseUrl: string,
-	apiKey: string,
-	timeoutMs: number,
-	aliases: Record<string, string>,
-): void {
-	// Preserve existing providers and only upsert the active one.
-	upsertProvider(provider, baseUrl, apiKey, timeoutMs, provider);
-	// Then merge aliases on top.
-	let raw = fs_read(GODEX_CONFIG, "utf-8");
-	const aliasesYaml = Object.entries(aliases)
-		.map(([k, v]) => '    "' + k + '": ' + v)
-		.join("\n");
-	const aliasBlock =
-		"models:\n  aliases:\n" + (aliasesYaml ? aliasesYaml + "\n" : "");
-	if (/models:\s*\n {2}aliases:/.test(raw)) {
-		raw = raw.replace(
-			/models:\s*\n {2}aliases:\n[\s\S]*?(?=\n[a-zA-Z]|Z)/,
-			aliasBlock,
-		);
+function yamlValue(v: unknown): string {
+	if (typeof v === "string") return JSON.stringify(v);
+	if (typeof v === "number" && Number.isFinite(v)) return String(v);
+	if (typeof v === "boolean") return v ? "true" : "false";
+	return JSON.stringify(v);
+}
+
+function enabledToYaml(items: EnabledModelYaml[]): string {
+	if (!items.length) return "  enabled: []\n";
+	const lines = ["  enabled:"];
+	for (const it of items) {
+		lines.push("    - provider: " + it.provider);
+		lines.push("      model: " + it.model);
+		if (it.context_window !== undefined) lines.push("      context_window: " + it.context_window);
+		if (it.max_tokens !== undefined) lines.push("      max_tokens: " + it.max_tokens);
+		if (it.multimodal !== undefined) lines.push("      multimodal: " + (it.multimodal ? "true" : "false"));
+		if (it.capabilities) {
+			const cap = it.capabilities;
+			const keys = Object.keys(cap);
+			if (keys.length > 0) {
+				lines.push("      capabilities:");
+				for (const k of keys) {
+					lines.push("        " + k + ": " + (cap[k] ? "true" : "false"));
+				}
+			}
+		}
+		if (it.note !== undefined && it.note !== "") lines.push("      note: " + JSON.stringify(it.note));
+	}
+	return lines.join("\n") + "\n";
+}
+
+function writeEnabledModels(items: EnabledModelYaml[]): void {
+	let raw = existsSync(GODEX_CONFIG) ? fs_read(GODEX_CONFIG, "utf-8") : "";
+	const enabledYaml = enabledToYaml(items);
+	if (/models:\s*\n {2}enabled:/.test(raw)) {
+		raw = raw.replace(/models:\s*\n {2}enabled:[\s\S]*?(?=\n[a-zA-Z]|\Z)/, enabledYaml.trimEnd());
+	} else if (/models:[\s\S]*?\n {2}aliases:/.test(raw)) {
+		raw = raw.replace(/models:([\s\S]*?\n {2}aliases:[\s\S]*?)(?=\n[a-zA-Z]|\Z)/, function(_m, mid) {
+			return "models:\n" + enabledYaml + mid.replace(/^\n+/, "");
+		});
+	} else if (/models:/.test(raw)) {
+		raw = raw.replace(/models:[\s\S]*?(?=\n[a-zA-Z]|\Z)/, function(_m) {
+			return "models:\n" + enabledYaml;
+		});
 	} else {
-		raw = raw.replace(
-			/(providers:\s*\n[\s\S]*?)(?=\n[a-zA-Z]|Z)/,
-			"$1\n" + aliasBlock,
-		);
+		raw = raw.replace(/^(default_provider:[\s\S]*?\n)/, "$1models:\n" + enabledYaml);
 	}
 	fs_write(GODEX_CONFIG, raw, "utf-8");
 }
 
-function killExistingGodex(): void {
-	const port = new URL(GODEX_BASE).port || "5678";
+function readEnabledModels(): EnabledModelYaml[] {
+	if (!existsSync(GODEX_CONFIG)) return [];
 	try {
-		const out = execSync(
-			'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ' +
-				port +
-				' -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1"',
-			{ encoding: "utf-8" },
-		).trim();
-		if (out && /^\d+$/.test(out)) {
-			try {
-				execSync("taskkill /F /PID " + out, { stdio: "ignore" });
-			} catch {}
+		const raw = fs_read(GODEX_CONFIG, "utf-8");
+		const m = raw.match(/models:\s*\n {2}enabled:([\s\S]*?)(?=\n[a-zA-Z]|\Z)/);
+		if (!m || !m[1]) return [];
+		const body = m[1];
+		const out: EnabledModelYaml[] = [];
+		const itemRe = / {4}-\s+provider:\s*(\S+)\s*\n {6}model:\s*(\S+)([\s\S]*?)(?=\n {4}-|\Z)/g;
+		let im: RegExpExecArray | null;
+		while ((im = itemRe.exec(body)) !== null) {
+			if (!im[1] || !im[2]) continue;
+			const provider = im[1];
+			const model = im[2];
+			const tail = im[3] || "";
+			const item: EnabledModelYaml = { provider, model };
+			const cwM = tail.match(/context_window:\s*(\d+)/);
+			if (cwM && cwM[1]) item.context_window = parseInt(cwM[1], 10);
+			const mtM = tail.match(/max_tokens:\s*(\d+)/);
+			if (mtM && mtM[1]) item.max_tokens = parseInt(mtM[1], 10);
+			const mmM = tail.match(/multimodal:\s*(true|false)/);
+			if (mmM && mmM[1]) item.multimodal = mmM[1] === "true";
+			const capM = tail.match(/capabilities:\s*\n([\s\S]*?)(?=\n {4,6}[a-z]|\n {4}-|\Z)/);
+			if (capM && capM[1]) {
+				const cap: Record<string, boolean> = {};
+				for (const cm of capM[1].matchAll(/ {8}([a-z_]+):\s*(true|false)/g)) {
+					if (cm[1]) cap[cm[1]] = cm[2] === "true";
+				}
+				if (Object.keys(cap).length > 0) item.capabilities = cap;
+			}
+			const noteM = tail.match(/note:\s*("[^"]*"|\S+)/);
+			if (noteM && noteM[1]) item.note = noteM[1].replace(/^"|"$/g, "");
+			out.push(item);
 		}
-	} catch {}
+		return out;
+	} catch {
+		return [];
+	}
 }
 
-function startNewGodex(): number | undefined {
-	if (!existsSync(GODEX_BINARY))
-		throw new Error("binary not found: " + GODEX_BINARY);
-	const child = cp_spawn(GODEX_BINARY, [], {
-		detached: true,
-		stdio: "ignore",
-		windowsHide: true,
-	});
-	child.unref();
-	return child.pid;
-}
-
-async function applyConfig(body: {
-	provider?: string;
-	base_url?: string;
-	api_key?: string;
-	timeout_ms?: number;
-	alias_default?: string;
-	alias_target?: string;
-}) {
-	const provider = body.provider || "minimax";
-	const baseUrl = body.base_url || "https://api.example.com/v1";
-	const apiKey = body.api_key || "";
-	const timeoutMs = body.timeout_ms || 60000;
-	const aliasDefault = body.alias_default || provider + "-model";
-	const aliasTarget = body.alias_target || provider + "/Model";
-
-	const aliases = readExistingAliases();
-	aliases[aliasDefault] = aliasTarget;
-	if (!aliases["*"]) aliases["*"] = aliasTarget;
-
-	try {
-		writeConfigYaml(provider, baseUrl, apiKey, timeoutMs, aliases);
-	} catch (e: unknown) {
-		return { ok: false, error: "write failed: " + (e as Error).message };
+// Restart godex by killing any listener on its port and spawning a fresh child.
+// Both steps are delegated to ./log-stream so log capture stays consistent.
+function restartGodexProcess(): { ok: boolean; pid?: number; error?: string } {
+	killGodex();
+	const result = startGodex();
+	if (!result.ok) {
+		return { ok: false, error: result.error };
 	}
-
-	killExistingGodex();
-	await new Promise((r) => setTimeout(r, 1500));
-
-	try {
-		const pid = startNewGodex();
-		return { ok: true, pid, config_path: GODEX_CONFIG };
-	} catch (e: unknown) {
-		return { ok: false, error: "start failed: " + (e as Error).message };
-	}
+	return { ok: true, pid: result.pid };
 }
 
 const server = Bun.serve({
@@ -299,28 +251,114 @@ const server = Bun.serve({
 			return proxyToGodex("/health", 3000);
 		if (path === "/api/v1/models" || path === "/v1/models")
 			return proxyToGodex("/v1/models", 8000);
-		if (path === "/api/logs" && req.method === "GET")
-			return new Response(JSON.stringify(await queryTraceLogs(60)), {
-				headers: JSON_H,
+		// GET /api/logs - recent lines from the in-memory ring buffer (godex + studio).
+		if (path === "/api/logs" && req.method === "GET") {
+			const limitRaw = url.searchParams.get("limit");
+			const limit = limitRaw ? Math.min(2000, Math.max(1, Number(limitRaw))) : 200;
+			return new Response(JSON.stringify(getRecentLogs(limit)), { headers: JSON_H });
+		}
+
+		// GET /api/logs/stream - Server-Sent Events stream from the ring buffer.
+		// Replays the existing buffer first, then pushes live lines.
+		if (path === "/api/logs/stream" && req.method === "GET") {
+			const encoder = new TextEncoder();
+			let unsubscribe: (() => void) | null = null;
+			const stream = new ReadableStream({
+				start(controller) {
+					const send = (event: string, payload: unknown): void => {
+						try {
+							controller.enqueue(
+								encoder.encode("event: " + event + "\ndata: " + JSON.stringify(payload) + "\n\n"),
+							);
+						} catch {}
+					};
+					send("ready", { ts: Date.now() });
+					for (const line of getRecentLogs(200)) send("line", line);
+					unsubscribe = subscribe((line) => send("line", line));
+				},
+				cancel() {
+					if (unsubscribe) {
+						try { unsubscribe(); } catch {}
+						unsubscribe = null;
+					}
+				},
 			});
-		if (path === "/api/config" && req.method === "POST") {
+			return new Response(stream, {
+				headers: {
+					"Content-Type": "text/event-stream",
+					"Cache-Control": "no-cache, no-transform",
+					Connection: "keep-alive",
+					...CORS,
+				},
+			});
+		}
+
+		// GET /api/status - godex health + process info + config presence
+		if (path === "/api/status" && req.method === "GET") {
+			let health: unknown = null;
 			try {
-				const body = (await req.json()) as Record<string, unknown>;
-				const result = await applyConfig(
-					body as {
-						provider?: string;
-						base_url?: string;
-						api_key?: string;
-						timeout_ms?: number;
-						alias_default?: string;
-						alias_target?: string;
-					},
-				);
-				return new Response(JSON.stringify(result), { headers: JSON_H });
+				const r = await fetch(GODEX_BASE + "/health", { signal: AbortSignal.timeout(3000) });
+				health = { status: r.status, body: await r.text() };
+			} catch (e) {
+				health = { error: String((e as Error).message) };
+			}
+			return new Response(
+				JSON.stringify({
+					godex_base: GODEX_BASE,
+					godex_health: health,
+					running: isGodexRunning(),
+					pid: getGodexPid(),
+					binary: getGodexBinary(),
+					config: getGodexConfig(),
+				}),
+				{ headers: JSON_H },
+			);
+		}
+
+		// POST /api/save-config - persist `models.enabled[]` only; never restarts godex.
+		if (path === "/api/save-config" && req.method === "POST") {
+			try {
+				const body = (await req.json()) as { enabled?: EnabledModelYaml[] };
+				if (!Array.isArray(body.enabled)) {
+					return new Response(
+						JSON.stringify({ ok: false, error: "enabled[] required" }),
+						{ status: 400, headers: JSON_H },
+					);
+				}
+				writeEnabledModels(body.enabled);
+				pushLog("[studio] saved models.enabled[] (" + body.enabled.length + " items)", "studio", "info");
+				return new Response(JSON.stringify({ ok: true, count: body.enabled.length }), { headers: JSON_H });
 			} catch (e: unknown) {
 				return new Response(
 					JSON.stringify({ ok: false, error: (e as Error).message }),
 					{ status: 400, headers: JSON_H },
+				);
+			}
+		}
+
+		// POST /api/restart - kill + spawn godex; godex streams its own stdout into /api/logs/stream
+		if (path === "/api/restart" && req.method === "POST") {
+			const r = restartGodexProcess();
+			if (!r.ok) {
+				return new Response(JSON.stringify({ ok: false, error: r.error }), { status: 500, headers: JSON_H });
+			}
+			return new Response(JSON.stringify({ ok: true, pid: r.pid }), { headers: JSON_H });
+		}
+
+		// GET /api/enabled-models - reflect what godex parsed (so Studio can sync current state)
+		if (path === "/api/enabled-models" && req.method === "GET") {
+			try {
+				const r = await fetch(GODEX_BASE + "/admin/enabled-models", {
+					signal: AbortSignal.timeout(5000),
+				});
+				return new Response(await r.text(), {
+					status: r.status,
+					headers: JSON_H,
+				});
+			} catch (e: unknown) {
+				return new Response(
+					JSON.stringify({ error: String((e as Error).message) }),
+					{ status: 502, headers: JSON_H },
 				);
 			}
 		}
@@ -341,7 +379,7 @@ const server = Bun.serve({
 		// POST /api/providers
 		if (path === "/api/providers" && req.method === "POST") {
 			try {
-				const body = await req.json();
+				const body = (await req.json()) as { name?: string; base_url?: string; api_key?: string; spec?: string; timeout_ms?: number };
 				const name = body.name;
 				if (!name)
 					return new Response(
@@ -488,7 +526,7 @@ const server = Bun.serve({
 						status: 400,
 						headers: JSON_H,
 					});
-				const headers = {};
+				const headers: Record<string, string> = {};
 				if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
 				const r = await fetch(baseUrl.replace(/[\\/]+\$/, "") + "/models", {
 					headers: headers,
@@ -515,22 +553,33 @@ const server = Bun.serve({
 
 console.log("GodeX Studio listening on http://127.0.0.1:" + PORT);
 console.log("  -> GodeX:     " + GODEX_BASE);
-console.log("  -> Trace DB:  " + TRACE_DB_PATH);
 console.log("  -> Config:    " + GODEX_CONFIG);
 console.log("  -> Binary:    " + GODEX_BINARY);
 
-const HTML_PATH = resolve(import.meta.dirname ?? ".", "../public/index.html");
-let _htmlCache: string | null = null;
+// Locate public/index.html relative to the running executable (or source in dev).
+function locateHtmlPath(): string {
+	const candidates: string[] = [];
+	if (process.execPath) candidates.push(resolve(process.execPath, "..", "public", "index.html"));
+	if (process.argv[1]) candidates.push(resolve(process.argv[1], "..", "..", "public", "index.html"));
+	if (import.meta.dirname) candidates.push(resolve(import.meta.dirname, "../public/index.html"));
+	candidates.push(resolve(process.cwd(), "studio", "public", "index.html"));
+	candidates.push(resolve(process.cwd(), "public", "index.html"));
+	for (const p of candidates) {
+		try { if (existsSync(p)) return p; } catch {}
+	}
+	return candidates.find((p): p is string => typeof p === "string") ?? resolve(process.cwd(), "public", "index.html");
+}
+const HTML_PATH = locateHtmlPath();
+let _htmlCache: string | undefined;
 function loadHTML(): string {
-	if (_htmlCache) return _htmlCache;
+	if (_htmlCache !== undefined) return _htmlCache;
 	try {
 		_htmlCache = fs_read(HTML_PATH, "utf-8");
-		// Substitute __GODEX_BASE__ and __STUDIO_PORT__
 		_htmlCache = _htmlCache
 			.replace(/__GODEX_BASE__/g, GODEX_BASE)
 			.replace(/__STUDIO_PORT__/g, String(PORT));
-	} catch {
-		_htmlCache = "<h1>Failed to load UI</h1>";
+	} catch (e) {
+		_htmlCache = "<h1>Failed to load UI from " + HTML_PATH + ": " + String((e as Error).message) + "</h1>";
 	}
 	return _htmlCache;
 }
