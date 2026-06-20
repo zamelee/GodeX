@@ -1,0 +1,5 @@
+# GodexStudio model profiles
+#
+# Layer 4 will populate this with per-model parameter presets.
+# For now this is a placeholder so the file exists.
+models: {}

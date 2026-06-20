@@ -1,0 +1,13 @@
+{
+  "name": "@zamelee/godex-studio",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/plugin.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
