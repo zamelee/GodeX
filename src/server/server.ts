@@ -4,6 +4,7 @@ import type { ApplicationContext } from "../context/application-context";
 import type { Logger } from "../logger";
 import { GODEX_VERSION } from "../version";
 import { jsonError } from "./errors";
+import { handleEnabledModels } from "./routes/enabled-models";
 import { handleHealth } from "./routes/health";
 import { handleModels } from "./routes/models";
 import { handleResponses } from "./routes/responses";
@@ -22,6 +23,7 @@ export function createBuiltinRoutes(app: ApplicationContext): RouteMap {
 	return {
 		"/health": () => handleHealth(app),
 		"/v1/models": () => handleModels(app),
+		"/admin/enabled-models": () => handleEnabledModels(app),
 		"/v1/responses": (req) => handleResponses(req, app),
 	};
 }
