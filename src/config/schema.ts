@@ -59,6 +59,10 @@ export interface TraceConfig {
 	payload_max_bytes: number;
 }
 
+export interface PluginsConfig {
+	paths: string[];
+}
+
 export interface GodeXConfig {
 	server: ServerConfig;
 	default_provider: string;
@@ -67,4 +71,5 @@ export interface GodeXConfig {
 	session: SessionConfig;
 	logging: LoggingConfig;
 	trace: TraceConfig;
+	plugins?: PluginsConfig;
 }

@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../../bridge/plugins";
 import type { ProviderRuntimeConfig } from "../../bridge/provider-spec";
 import { createProviderEdge } from "../../bridge/provider-spec";
 import { ChatProviderClient } from "../shared/chat-provider-client";
@@ -8,7 +9,10 @@ import type {
 } from "./protocol";
 import { MINIMAX_PROVIDER_SPEC } from "./spec";
 
-export function createMiniMaxProviderEdge(config: ProviderRuntimeConfig) {
+export function createMiniMaxProviderEdge(
+	config: ProviderRuntimeConfig,
+	plugins?: readonly GodexPlugin[],
+) {
 	const client = new ChatProviderClient<
 		ChatCompletionRequest,
 		ChatCompletion,
@@ -25,6 +29,7 @@ export function createMiniMaxProviderEdge(config: ProviderRuntimeConfig) {
 	return createProviderEdge({
 		spec: MINIMAX_PROVIDER_SPEC,
 		config,
+		plugins,
 		request: client.request.bind(client),
 		stream: client.stream.bind(client),
 	});

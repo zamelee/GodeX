@@ -1,3 +1,4 @@
+import { loadPlugins } from "../bridge/plugins";
 import { EnvVars } from "../config";
 import { ApplicationContext } from "../context/application-context";
 import type { Logger } from "../logger";
@@ -17,13 +18,17 @@ export async function serve(
 	const registrar = createBuiltinRegistrar();
 	assertConfigReady(config, registrar);
 
-	const app = new ApplicationContext(config, registrar);
+	const pluginPaths = config.plugins?.paths ?? [];
+	const plugins = await loadPlugins(pluginPaths);
+
+	const app = new ApplicationContext(config, registrar, plugins);
 
 	app.logger.info("config.loaded", () => ({
 		path: configPath,
 		default_provider: config.default_provider,
 		providers: Object.keys(config.providers),
 		session_backend: config.session.backend,
+		plugins: plugins.map((p) => p.name),
 	}));
 
 	const runServer = runtime.startServer ?? startServer;

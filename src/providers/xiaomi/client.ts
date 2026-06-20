@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../../bridge/plugins";
 import type { ProviderRuntimeConfig } from "../../bridge/provider-spec";
 import { createProviderEdge } from "../../bridge/provider-spec";
 import { ChatProviderClient } from "../shared/chat-provider-client";
@@ -8,7 +9,10 @@ import type {
 } from "./protocol";
 import { XIAOMI_PROVIDER_SPEC } from "./spec";
 
-export function createXiaomiProviderEdge(config: ProviderRuntimeConfig) {
+export function createXiaomiProviderEdge(
+	config: ProviderRuntimeConfig,
+	plugins?: readonly GodexPlugin[],
+) {
 	const client = new ChatProviderClient<
 		ChatCompletionRequest,
 		ChatCompletion,
@@ -24,6 +28,7 @@ export function createXiaomiProviderEdge(config: ProviderRuntimeConfig) {
 	return createProviderEdge({
 		spec: XIAOMI_PROVIDER_SPEC,
 		config,
+		plugins,
 		request: client.request.bind(client),
 		stream: client.stream.bind(client),
 	});

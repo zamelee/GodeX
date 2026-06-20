@@ -24,7 +24,7 @@ export interface ProviderStreamExchangeResult {
 
 export class ProviderExchange {
 	async request(ctx: ResponsesContext): Promise<ProviderRequestExchangeResult> {
-		const built = buildProviderRequest(ctx, false);
+		const built = await buildProviderRequest(ctx, false);
 		const providerRequest = built.request;
 		ctx.logger.debug("provider.request.sending", () => ({
 			provider: ctx.resolved.provider,
@@ -52,7 +52,7 @@ export class ProviderExchange {
 	}
 
 	async stream(ctx: ResponsesContext): Promise<ProviderStreamExchangeResult> {
-		const built = buildProviderRequest(ctx, true);
+		const built = await buildProviderRequest(ctx, true);
 		const providerRequest = built.request;
 		ctx.logger.debug("provider.request.sending", () => ({
 			provider: ctx.resolved.provider,
@@ -80,11 +80,11 @@ export class ProviderExchange {
 	}
 }
 
-function buildProviderRequest(
+async function buildProviderRequest(
 	ctx: ResponsesContext,
 	stream: boolean,
-): BuildChatCompletionRequestResult {
-	const built = buildChatCompletionRequest({
+): Promise<BuildChatCompletionRequestResult> {
+	const built = await buildChatCompletionRequest({
 		request: stream ? { ...ctx.request, stream: true } : ctx.request,
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
@@ -95,6 +95,7 @@ function buildProviderRequest(
 			toProviderName: ctx.provider.spec.toolName.toProviderName,
 		}),
 		session: ctx.session,
+		plugins: ctx.app.plugins,
 	});
 	for (const diagnostic of built.compatibility.diagnostics) {
 		ctx.addDiagnostic(diagnostic);
