@@ -1,70 +1,607 @@
 <!DOCTYPE html>
-<html lang=zh>
-<head><meta charset=utf-8><title>GodeX Studio</title><style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;}
-header{background:#161b22;border-bottom:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:13px;}
-h1{color:#58a6ff;font-weight:600;font-size:14px;}
-.status{font-size:12px;}
-.cols{display:flex;flex:1;overflow:hidden;}
-.col{border-right:1px solid #21262d;display:flex;flex-direction:column;min-width:180px;}
-.col:last-child{border-right:none;}
-.col-head{background:#161b22;border-bottom:1px solid #21262d;padding:6px 12px;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;}
-.body{flex:1;overflow-y:auto;padding:8px;}
-.card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;font-size:12px;}
-.card:hover{border-color:#388bfd;}
-.card.active{border-color:#58a6ff;background:rgba(88,166,255,.06);}
-.card .n{font-weight:600;color:#e6edf3;}
-.card .s{font-size:11px;color:#8b949e;margin-top:2px;}
-.grid{display:grid;grid-template-columns:80px 1fr;gap:4px 8px;padding:8px;font-size:12px;}
-.grid label{color:#8b949e;display:flex;align-items:center;}
-input,select,option{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:4px 8px;font-size:12px;width:100%;}
-.btn-row{display:flex;gap:8px;padding:0 8px 8px;}
-button{background:#238636;border:none;border-radius:4px;color:#fff;padding:6px 14px;font-size:12px;cursor:pointer;}
-button:hover{background:#2ea043;}
-button.info{background:#6e40c9;}
-button.info:hover{background:#8957e5;}
-.logs{height:160px;border-top:1px solid #30363d;display:flex;flex-direction:column;flex-shrink:0;}
-.log-head{background:#161b22;padding:4px 12px;display:flex;align-items:center;gap:8px;font-size:11px;color:#8b949e;}
-#logs{flex:1;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11px;white-space:nowrap;}
-.log{overflow:hidden;text-overflow:ellipsis;padding:2px 12px;border-bottom:1px solid #161b22;}
-.log.err{background:rgba(248,81,73,.06);border-left:3px solid #f85149;padding-left:9px;}
-.log.ok{border-left:3px solid #3fb950;padding-left:9px;}
-.log.warn{border-left:3px solid #d29922;padding-left:9px;}
-</style></head>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<title>GodeX Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#c9d1d9;--text2:#8b949e;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--purple:#8957e5}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px}
+h1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;vertical-align:middle;margin-right:6px}
+.dot.ok{background:var(--green)}
+.layout{display:flex;flex:1;overflow:hidden;min-height:0}
+.col-left{width:220px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.col-center{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.col-right{width:260px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column}
+.sec{background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 12px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
+.provider-list{padding:8px;flex:1;overflow-y:auto}
+.provider-item{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:13px;font-weight:600}
+.provider-item:hover{border-color:var(--blue)}
+.provider-item.active{border-color:var(--blue);background:rgba(88,166,255,.1);color:var(--blue)}
+.provider-item .sub{font-size:11px;color:var(--text2);font-weight:400;margin-top:2px;word-break:break-all}
+.provider-item .del{position:absolute;top:6px;right:8px;font-size:16px;color:var(--text2);cursor:pointer;opacity:0;transition:opacity .15s;line-height:1;padding:0 4px}
+.provider-item:hover .del{opacity:1}
+.provider-item .del:hover{color:var(--red)}
+.add-btn{background:var(--bg2);border:1px dashed var(--border);border-radius:6px;padding:7px 10px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--text2);text-align:center}
+.add-btn:hover{border-color:var(--blue);color:var(--blue)}
+.forms-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:130px 1fr;gap:0}
+.form-row{display:contents}
+.form-row label{padding:7px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;border-bottom:1px solid rgba(48,54,61,.5)}
+.form-row label .req{color:var(--red);margin-left:2px}
+input,select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-size:12px;width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--blue)}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:600}
+.preset-hint{padding:4px 12px;font-size:11px;color:var(--text2);background:rgba(255,255,255,.02);border-top:1px solid rgba(48,54,61,.5)}
+.action-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+.btn{background:#238636;border:none;border-radius:5px;color:#fff;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600}
+.btn:hover{background:#2ea043}
+.btn.purple{background:#6e40c9}
+.btn.purple:hover{background:var(--purple)}
+.btn.gray{background:var(--bg3);color:var(--text)}
+.btn.gray:hover{background:#3a3f47}
+.btn.danger{background:#b62324}
+.btn.danger:hover{background:#d1242f}
+.msg{font-size:12px;margin-left:8px}
+.msg.ok{color:var(--green)}
+.msg.err{color:var(--red)}
+.model-list{flex:1;overflow-y:auto;padding:8px}
+.model-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:5px;cursor:pointer}
+.model-card:hover{border-color:var(--blue)}
+.model-card.active{border-color:var(--blue);background:rgba(88,166,255,.08)}
+.model-card .name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+.model-card.active .name{color:var(--blue)}
+.model-card .preset{font-size:10px;color:var(--green);margin-top:2px}
+.model-card .hint{font-size:10px;color:var(--yellow);margin-top:2px}
+.model-card .ptag{font-size:9px;color:var(--text2);background:var(--bg3);padding:1px 5px;border-radius:3px;font-weight:400}
+.bottom{height:180px;flex-shrink:0;border-top:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg)}
+.bottom-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.bottom-header span{font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase}
+.bottom-body{flex:1;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11px}
+.log-line{padding:2px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px}
+.log-line:hover{background:rgba(255,255,255,.02)}
+.log-line .ts{color:#6e7681;flex-shrink:0}
+.log-line .msg{color:var(--text);word-break:break-all}
+.log-line.error{background:rgba(248,81,73,.06);border-left:3px solid var(--red)}
+.log-line.error .msg{color:var(--red)}
+.log-line.warn{border-left:3px solid var(--yellow)}
+.log-line.warn .msg{color:var(--yellow)}
+.log-line.ok{border-left:3px solid var(--green)}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:340px}
+.modal-box h3{margin-bottom:6px;color:var(--blue);font-size:14px}
+.modal-box .desc{font-size:11px;color:var(--text2);margin-bottom:12px}
+.modal-box .row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.modal-box .row label{font-size:11px;color:var(--text2)}
+.modal-box .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+</style>
+</head>
 <body>
-<header><h1>GodeX Studio</h1><span class=status id=godex>godex: ...</span></header>
-<div class=cols>
-<div class=col style=min-width:200px><div class=col-head>Models</div><div class=body id=ml></div></div>
-<div class=col style=flex:1>
-<div class=col-head>Parameters</div>
-<div class=body><div class=grid>
-<label>Temperature</label><input id=temp type=number min=0 max=2 step=.1 value=.7>
-<label>Top P</label><input id=topp type=number min=0 max=1 step=.05 value=1.0>
-<label>Max Output</label><input id=maxo type=number min=1 max=65536 value=16384>
-<label>Stream</label><select id=strm><option value=true>stream</option><option value=false>sync</option></select>
-</div><div class=btn-row><button onclick=save()>Save</button><button class=info onclick=reset()>Reset</button></div>
-<div id=msg></div>
-</div></div>
-<div class=col style=min-width:220px><div class=col-head>Active</div><div class=body id=info><div class=log>No model selected</div></div></div></div>
-<div class=logs><div class=log-head><span>Logs</span><button onclick=reload()>Reload</button></div><div id=logs></div></div>
+
+<header>
+  <h1>GodeX Studio</h1>
+  <span class="dot" id="dot"></span><span id="status-text" style="font-size:12px;color:var(--text2)">checking...</span>
+  <div class="header-right">
+    <span>Studio :__STUDIO_PORT__</span><span>&rarr;</span><span>__GODEX_BASE__</span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="col-left">
+    <div class="sec">Provider</div>
+    <div class="provider-list">
+      <div id="provider-items"></div>
+      <div class="add-btn" id="add-provider-btn" onclick="toggleAddProvider()">+ 添加 Provider</div>
+      <div id="add-provider-form" style="display:none">
+        <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:11px;color:var(--text2);font-weight:600">新建 Provider</div>
+          <input id="np-name" type="text" placeholder="名称 (e.g. minimax-2)"/>
+          <input id="np-url" type="text" placeholder="Base URL (https://api.proxy.com/v1)"/>
+          <input id="np-key" type="password" placeholder="API Key"/>
+          <select id="np-spec">
+            <option value="minimax">spec: minimax</option>
+            <option value="deepseek">spec: deepseek</option>
+            <option value="openai">spec: openai</option>
+            <option value="zhipu">spec: zhipu</option>
+          </select>
+          <input id="np-timeout" type="number" placeholder="Timeout (ms)" value="120000"/>
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="flex:1;padding:5px;font-size:12px" onclick="addProvider()">保存</button>
+            <button class="btn gray" style="flex:1;padding:5px;font-size:12px" onclick="toggleAddProvider()">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-center">
+    <div class="forms-area">
+      <div class="form-section">
+        <div class="form-section-head">当前 Provider 连接设置</div>
+        <div class="form-grid">
+          <div class="form-row"><label>Provider</label>
+            <input id="f-provider-name" type="text" readonly value="(none)"/>
+          </div>
+          <div class="form-row"><label>Base URL</label>
+            <input id="f-base_url" type="text" placeholder="https://api.example.com/v1"/>
+          </div>
+          <div class="form-row"><label>API Key</label>
+            <input id="f-api_key" type="password" placeholder="sk-..."/>
+          </div>
+          <div class="form-row"><label>Timeout (ms)</label>
+            <input id="f-timeout" type="number" min="5000" max="300000" step="5000" value="120000"/>
+          </div>
+          <div class="form-row"><label>Spec</label>
+            <select id="f-spec">
+              <option value="minimax">minimax</option>
+              <option value="deepseek">deepseek</option>
+              <option value="openai">openai</option>
+              <option value="zhipu">zhipu</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">模型参数 (点击右侧模型自动填入)</div>
+        <div class="form-grid">
+          <div class="form-row"><label>Context Window</label>
+            <input id="f-context" type="number" min="1024" max="2000000" step="1024" placeholder="点击右侧模型自动填入"/>
+          </div>
+          <div class="form-row"><label>Max Output</label>
+            <input id="f-max_output" type="number" min="1" max="65536" value="16384"/>
+          </div>
+          <div class="form-row"><label>Temperature</label>
+            <input id="f-temperature" type="number" min="0" max="2" step="0.1" value="0.7"/>
+          </div>
+          <div class="form-row"><label>Top P</label>
+            <input id="f-top_p" type="number" min="0" max="1" step="0.05" value="1.0"/>
+          </div>
+          <div class="form-row"><label>Top K</label>
+            <input id="f-top_k" type="number" min="1" max="100" placeholder="不限制"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">高级参数</div>
+        <div class="form-grid">
+          <div class="form-row"><label>Thinking</label>
+            <select id="f-thinking">
+              <option value="disabled">disabled</option>
+              <option value="adaptive" selected>adaptive</option>
+              <option value="enabled">enabled</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Reasoning Effort</label>
+            <select id="f-reasoning_effort">
+              <option value="">默认</option>
+              <option value="low">low</option>
+              <option value="medium" selected>medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Seed</label>
+            <input id="f-seed" type="number" min="1" max="9999999999" placeholder="随机"/>
+          </div>
+          <div class="form-row"><label>Stream</label>
+            <select id="f-stream">
+              <option value="true" selected>SSE 流式</option>
+              <option value="false">同步</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">别名映射</div>
+        <div class="form-grid">
+          <div class="form-row"><label>默认别名</label>
+            <input id="f-alias_default" type="text" placeholder="minimax-1-m3" oninput="this.dataset.userEdited='1'"/>
+          </div>
+          <div class="form-row"><label>指向模型</label>
+            <input id="f-alias_target" type="text" placeholder="minimax-1/MiniMax-M3"/>
+          </div>
+        </div>
+        <div class="preset-hint">点右栏模型自动填入 (带 provider 前缀避免冲突)。</div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn" onclick="saveConfig()">保存</button>
+      <button class="btn purple" onclick="applyConfig()">应用到 godex</button>
+      <button class="btn gray" onclick="generateAndCopy()">复制 YAML</button>
+      <button class="btn gray" onclick="resetForm()">重置</button>
+      <button class="btn danger" onclick="restartGodex()">重启 godex</button>
+      <span class="msg" id="param-msg"></span>
+    </div>
+  </div>
+
+  <div class="col-right">
+    <div class="sec">模型列表 (所有 Provider 并集)</div>
+    <div style="padding:6px 8px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center">
+      <input id="ml-filter" type="text" placeholder="过滤..." style="flex:1;font-size:11px;padding:3px 6px" oninput="filterText=this.value;renderModels()"/>
+      <button class="btn gray" style="padding:3px 8px;font-size:11px" onclick="fetchAllModels()">刷新</button>
+      <button class="btn gray" style="padding:3px 8px;font-size:11px" onclick="openFetchModal()">Fetch URL</button>
+    </div>
+    <div class="model-list" id="model-list">
+      <div style="padding:16px;text-align:center;color:var(--text2);font-size:12px">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom">
+  <div class="bottom-header">
+    <span>Logs</span>
+    <button class="btn gray" style="padding:2px 8px;font-size:11px" onclick="clearLogs()">Clear</button>
+    <span id="log-count" style="margin-left:auto;font-size:11px;color:var(--text2)"></span>
+  </div>
+  <div class="bottom-body" id="logs-body"></div>
+</div>
+
+<div id="fetch-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>Fetch from URL</h3>
+    <div class="desc">从任意 OpenAI 协议地址临时拉取模型 (不保存到 config)</div>
+    <div class="row"><label>Base URL</label><input id="fu-url" type="text" placeholder="https://api.proxy.com/v1"/></div>
+    <div class="row"><label>API Key</label><input id="fu-key" type="password" placeholder="可选"/></div>
+    <div class="row"><label>显示名称</label><input id="fu-name" type="text" placeholder="可选 (用于右栏分组)"/></div>
+    <div class="actions">
+      <button class="btn gray" onclick="closeFetchModal()">取消</button>
+      <button class="btn" onclick="doFetchFromUrl()">拉取</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const G='http://127.0.0.1:5678';
-const S=localStorage;
-let P={};
-function e(s){return document.getElementById(s)}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-async function r(u,o={}){const R=await fetch(G+u,o);if(!R.ok)throw E(u,R.status);return R.json()}
-function log(m,t='ok'){const d=document.createElement('div');d.className='log '+t;d.textContent=m;e('logs').prepend(d)}
-async function load(){try{const M=await r('/v1/models');const m=e('ml');m.innerHTML='';const B={};for(const x of M.data||[]){const p=x.id.split('/')[0]||'?';(B[p]=B[p]||[]).push(x)}for(const [p,ms] of Object.entries(B)){const g=document.createElement('div');g.innerHTML='<div style="font-size:10px;color:#8b949e;padding:4px 0 2px">'+esc(p);for(const x of ms){const c=document.createElement('div');c.className='card';c.innerHTML='<div class=n>'+esc(x.id)+'<div class=s>'+esc(x.owned_by||'')+'</div></div>';c.onclick=()=>{S.active=x.id;e('info').innerHTML='<div class=card><div class=n>'+esc(x.id)+'<div class=s>Selected</div></div>';load()};g.appendChild(c)}m.appendChild(g)}
-}catch(E){log(E.message,'err')}
-try{const H=await r('/health');e('godex').textContent='godex: '+(H.providers||[]).join(', ');e('godex').style.color='#3fb950';e('godex').parentElement.style.color=''}
-catch(E){e('godex').textContent='godex: offline';e('godex').style.color='#f85149';log('godex offline','err')}
-reload=()=>{e('logs').innerHTML='';log('reloaded','ok');log(E.message,'err')};
-save=async()=>{try{const A=S.active||'default';P[A]={temperature:parseFloat(e('temp').value)||0.7,top_p:parseFloat(e('topp').value)||1,max_tokens:parseInt(e('maxo').value)||16384};localStorage.setItem('profiles',JSON.stringify(P));e('msg').textContent='saved '+A;e('msg').style.color='#3fb950';log('saved '+A)}catch(E){e('msg').textContent=E.message;e('msg').style.color='#f85149';log(E.message,'err')};
-reset=()=>{e('temp').value='0.7';e('topp').value='1.0';e('maxo').value='16384'};
-setInterval(async()=>{try{e('logs').innerHTML='';const L=await r('/v1/logs')||[];L.slice(0,50).forEach(E=>log(E.event_name||'?'))}catch(){}},5000);
-load();
+const GODEX = "__GODEX_BASE__";
+const STUDIO_PORT = __STUDIO_PORT__;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+// State
+let providers = []; // [{ name, base_url, api_key, spec, timeout_ms }]
+let activeProvider = null;
+let modelsByProvider = {}; // { providerName: [{ id, name }] }
+let extraModels = []; // ad-hoc fetched via modal
+let filterText = "";
+let logCount = 0;
+
+function log(msg, level = "info") {
+  const el = $("logs-body");
+  const d = document.createElement("div");
+  d.className = "log-line " + (level === "error" ? "error" : level === "warn" ? "warn" : "ok");
+  const ts = new Date().toTimeString().slice(0, 8);
+  d.innerHTML = '<span class="ts">' + ts + '</span><span class="msg">' + esc(msg) + '</span>';
+  el.insertBefore(d, el.firstChild);
+  if (el.children.length > 200) el.removeChild(el.lastChild);
+  logCount++;
+  $("log-count").textContent = logCount + " lines";
+}
+
+function showMsg(text, type) {
+  const m = $("param-msg");
+  m.textContent = text;
+  m.className = "msg " + (type || "");
+}
+
+// Model preset library — context window defaults by model id pattern.
+const MODEL_PRESETS = [
+  { match: /^MiniMax-M3$/i, context_window: 1000000, max_output: 16384, thinking: "adaptive", reasoning_effort: "medium" },
+  { match: /^MiniMax-M2\.7-highspeed$/i, context_window: 204800, max_output: 16384, thinking: "adaptive", reasoning_effort: "medium" },
+  { match: /^MiniMax-M2\.7$/i, context_window: 204800, max_output: 16384, thinking: "adaptive", reasoning_effort: "medium" },
+  { match: /^deepseek-reasoner$/i, context_window: 64000, max_output: 8192, thinking: "enabled", reasoning_effort: "high" },
+  { match: /^deepseek-chat$/i, context_window: 64000, max_output: 8192, thinking: "disabled", reasoning_effort: "" },
+  { match: /^deepseek-coder$/i, context_window: 64000, max_output: 8192, thinking: "disabled", reasoning_effort: "" },
+  { match: /^gpt-4o$/i, context_window: 128000, max_output: 16384, thinking: "disabled", reasoning_effort: "" },
+  { match: /^gpt-4-turbo$/i, context_window: 128000, max_output: 4096, thinking: "disabled", reasoning_effort: "" },
+  { match: /^o1/i, context_window: 200000, max_output: 100000, thinking: "enabled", reasoning_effort: "high" },
+  { match: /^o3/i, context_window: 200000, max_output: 100000, thinking: "enabled", reasoning_effort: "medium" },
+  { match: /^o4-mini/i, context_window: 200000, max_output: 100000, thinking: "enabled", reasoning_effort: "medium" },
+  { match: /^glm-4-plus$/i, context_window: 128000, max_output: 8192, thinking: "adaptive", reasoning_effort: "medium" },
+  { match: /^glm-4-air$/i, context_window: 128000, max_output: 8192, thinking: "disabled", reasoning_effort: "" },
+];
+function presetFor(modelId) {
+  for (const p of MODEL_PRESETS) if (p.match.test(modelId)) return p;
+  return null;
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return { error: t }; }
+}
+
+function renderProviders() {
+  const el = $("provider-items");
+  el.innerHTML = "";
+  if (!providers.length) {
+    el.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:12px;text-align:center">暂无 Provider — 点下方添加或 Fetch URL</div>';
+    return;
+  }
+  for (const p of providers) {
+    const item = document.createElement("div");
+    item.className = "provider-item" + (p.name === activeProvider ? " active" : "");
+    item.innerHTML =
+      '<div class="n">' + esc(p.name) + '</div>' +
+      '<div class="sub">' + esc(p.spec) + ' · ' + esc(p.base_url || "(no URL)") + '</div>' +
+      '<div class="del" title="删除" onclick="event.stopPropagation();deleteProvider(\'' + esc(p.name) + '\')">&times;</div>';
+    item.onclick = () => selectProvider(p.name);
+    el.appendChild(item);
+  }
+}
+
+function renderModels() {
+  const list = $("model-list");
+  list.innerHTML = "";
+  let entries = [];
+  for (const p of providers) {
+    const ms = modelsByProvider[p.name] || [];
+    for (const m of ms) entries.push({ provider: p.name, spec: p.spec, model: m });
+  }
+  for (const m of extraModels) entries.push({ provider: m.provider || "(extra)", spec: "?", model: { id: m.id } });
+  if (filterText) {
+    const f = filterText.toLowerCase();
+    entries = entries.filter((e) => (e.model.id || "").toLowerCase().includes(f) || e.provider.toLowerCase().includes(f));
+  }
+  if (!entries.length) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text2);font-size:12px">无模型 — 点上方 Fetch URL 拉取，或填好 Connection 后点刷新</div>';
+    return;
+  }
+  for (const e of entries) {
+    const preset = presetFor(e.model.id);
+    const card = document.createElement("div");
+    card.className = "model-card";
+    let html = '<div class="name">' + esc(e.model.id) + ' <span class="ptag">' + esc(e.provider) + '</span></div>';
+    if (preset) {
+      html += '<div class="preset">ctx ' + preset.context_window + ' · max ' + preset.max_output + (preset.thinking === "enabled" ? " · think" : "") + '</div>';
+    } else {
+      html += '<div class="hint">未识别 — 点击用默认参数</div>';
+    }
+    card.innerHTML = html;
+    card.onclick = () => selectModel(e.provider, e.model.id, preset);
+    list.appendChild(card);
+  }
+}
+
+function selectProvider(name) {
+  activeProvider = name;
+  renderProviders();
+  const p = providers.find((x) => x.name === name);
+  if (p) {
+    $("f-provider-name").value = p.name;
+    $("f-base_url").value = p.base_url || "";
+    $("f-api_key").value = p.api_key || "";
+    $("f-timeout").value = p.timeout_ms || 120000;
+    $("f-spec").value = p.spec || "minimax";
+    $("f-alias_default").value = name + "-default";
+    $("f-alias_default").dataset.userEdited = "0";
+    $("f-alias_target").value = name + "/";
+  }
+  saveConfig();
+}
+
+function selectModel(provider, modelId, preset) {
+  if (activeProvider !== provider) selectProvider(provider);
+  $("f-alias_default").value = provider + "-" + modelId.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  $("f-alias_default").dataset.userEdited = "1";
+  $("f-alias_target").value = provider + "/" + modelId;
+  if (preset) {
+    $("f-context").value = preset.context_window;
+    $("f-max_output").value = preset.max_output;
+    if (preset.thinking) $("f-thinking").value = preset.thinking;
+    if (preset.reasoning_effort !== undefined) $("f-reasoning_effort").value = preset.reasoning_effort;
+    log("已套用预设: " + modelId + " (ctx=" + preset.context_window + ", max=" + preset.max_output + ")", "info");
+  } else {
+    log("模型 " + modelId + " 未识别 — 使用表单当前值", "warn");
+  }
+  showMsg("已选择 " + modelId, "ok");
+}
+
+async function loadProviders() {
+  providers = await api("/api/providers");
+  if (!Array.isArray(providers)) providers = [];
+  if (!activeProvider && providers.length) activeProvider = providers[0].name;
+  if (activeProvider && !providers.find((p) => p.name === activeProvider)) activeProvider = providers[0]?.name || null;
+  renderProviders();
+  if (activeProvider) selectProvider(activeProvider);
+}
+
+async function fetchAllModels() {
+  log("正在拉取所有 provider 的模型列表...");
+  const res = await api("/api/all-models");
+  if (!Array.isArray(res)) { log("拉取失败: " + JSON.stringify(res), "error"); return; }
+  modelsByProvider = {};
+  for (const r of res) modelsByProvider[r.name] = r.models || [];
+  const total = res.reduce((s, r) => s + (r.models?.length || 0), 0);
+  const errs = res.filter((r) => r.error).length;
+  log("已拉取 " + total + " 个模型 (" + res.length + " providers" + (errs ? ", " + errs + " 个失败" : "") + ")", errs ? "warn" : "info");
+  renderModels();
+}
+
+async function deleteProvider(name) {
+  if (!confirm("确定删除 provider " + name + "?")) return;
+  const res = await api("/api/providers/" + encodeURIComponent(name), { method: "DELETE" });
+  if (res.ok) {
+    log("已删除 provider " + name);
+    delete modelsByProvider[name];
+    await loadProviders();
+    renderModels();
+  } else {
+    log("删除失败: " + (res.error || JSON.stringify(res)), "error");
+  }
+}
+
+function toggleAddProvider() {
+  $("add-provider-form").style.display = $("add-provider-form").style.display === "none" ? "block" : "none";
+}
+
+async function addProvider() {
+  const name = $("np-name").value.trim();
+  const base_url = $("np-url").value.trim();
+  const api_key = $("np-key").value.trim();
+  const spec = $("np-spec").value;
+  const timeout_ms = parseInt($("np-timeout").value) || 120000;
+  if (!name) { log("名称必填", "error"); return; }
+  const res = await api("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, base_url, api_key, spec, timeout_ms }) });
+  if (res.ok) {
+    log("已添加 provider " + name);
+    $("np-name").value = ""; $("np-url").value = ""; $("np-key").value = "";
+    toggleAddProvider();
+    await loadProviders();
+  } else {
+    log("添加失败: " + (res.error || JSON.stringify(res)), "error");
+  }
+}
+
+function openFetchModal() { $("fetch-modal").style.display = "flex"; }
+function closeFetchModal() { $("fetch-modal").style.display = "none"; }
+
+async function doFetchFromUrl() {
+  const base_url = $("fu-url").value.trim();
+  const api_key = $("fu-key").value.trim();
+  const name = $("fu-name").value.trim() || "extra";
+  if (!base_url) { log("URL 必填", "error"); return; }
+  const qs = new URLSearchParams({ base_url, api_key });
+  const res = await api("/api/upstream-models?" + qs);
+  if (!res.data) { log("拉取失败: " + JSON.stringify(res), "error"); return; }
+  for (const m of res.data) extraModels.push({ id: m.id, provider: name });
+  log("已临时拉取 " + res.data.length + " 个模型 (" + name + ")", "info");
+  renderModels();
+  closeFetchModal();
+}
+
+function saveConfig() {
+  const cfg = {
+    provider: activeProvider,
+    base_url: $("f-base_url").value,
+    api_key: $("f-api_key").value,
+    timeout: parseInt($("f-timeout").value) || 120000,
+    spec: $("f-spec").value,
+    alias_default: $("f-alias_default").value,
+    alias_target: $("f-alias_target").value,
+    context: parseInt($("f-context").value) || null,
+    max_output: parseInt($("f-max_output").value) || 16384,
+    temperature: parseFloat($("f-temperature").value) || 0.7,
+    top_p: parseFloat($("f-top_p").value) || 1.0,
+    top_k: parseInt($("f-top_k").value) || null,
+    thinking: $("f-thinking").value,
+    reasoning_effort: $("f-reasoning_effort").value,
+    seed: parseInt($("f-seed").value) || null,
+    stream: $("f-stream").value === "true",
+  };
+  localStorage.setItem("studio:config", JSON.stringify(cfg));
+}
+
+async function applyConfig() {
+  saveConfig();
+  showMsg("正在写 config.yaml + 重启 godex...", "");
+  log("Apply: writing config + restarting godex...");
+  const cfg = JSON.parse(localStorage.getItem("studio:config"));
+  const res = await api("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider: cfg.provider,
+      base_url: cfg.base_url,
+      api_key: cfg.api_key,
+      timeout_ms: cfg.timeout,
+      spec: cfg.spec,
+      alias_default: cfg.alias_default,
+      alias_target: cfg.alias_target,
+    }),
+  });
+  if (res.ok) {
+    showMsg("已应用！重启中... (PID: " + res.pid + ")", "ok");
+    log("Config applied: " + res.config_path);
+    log("New godex PID: " + res.pid);
+    setTimeout(checkGodex, 3000);
+    setTimeout(() => location.reload(), 6000);
+  } else {
+    showMsg("失败: " + (res.error || JSON.stringify(res)), "err");
+    log("Apply failed: " + (res.error || JSON.stringify(res)), "error");
+  }
+}
+
+async function restartGodex() {
+  showMsg("正在重启 godex...", "");
+  log("Restart requested");
+  // Re-apply last saved config to trigger restart.
+  await applyConfig();
+}
+
+function resetForm() {
+  if (activeProvider) selectProvider(activeProvider);
+  $("f-context").value = "";
+  $("f-max_output").value = "16384";
+  $("f-temperature").value = "0.7";
+  $("f-top_p").value = "1.0";
+  $("f-top_k").value = "";
+  $("f-reasoning_effort").value = "medium";
+  $("f-seed").value = "";
+  $("f-stream").value = "true";
+  showMsg("已重置", "");
+}
+
+function clearLogs() { $("logs-body").innerHTML = ""; logCount = 0; $("log-count").textContent = ""; }
+
+async function checkGodex() {
+  const dot = $("dot");
+  const text = $("status-text");
+  try {
+    const r = await fetch("/api/health", { signal: AbortSignal.timeout(3000) });
+    if (r.ok) {
+      dot.classList.add("ok");
+      text.textContent = "godex online";
+      text.style.color = "var(--green)";
+    } else {
+      dot.classList.remove("ok");
+      text.textContent = "godex " + r.status;
+      text.style.color = "var(--red)";
+    }
+  } catch (e) {
+    dot.classList.remove("ok");
+    text.textContent = "godex offline: " + e.message;
+    text.style.color = "var(--red)";
+  }
+}
+
+async function pollLogs() {
+  try {
+    const logs = await api("/api/logs");
+    if (!Array.isArray(logs) || !logs.length) return;
+    const el = $("logs-body");
+    const existing = new Set([...el.querySelectorAll(".log-line")].map((d) => d.dataset.req));
+    for (const l of logs) {
+      if (existing.has(l.request_id)) continue;
+      const d = document.createElement("div");
+      const level = (l.event_name || "").includes("error") ? "error" : (l.event_name || "").includes("warn") ? "warn" : "ok";
+      d.className = "log-line " + level;
+      d.dataset.req = l.request_id;
+      const ts = l.created_at ? new Date(l.created_at * 1000).toTimeString().slice(0, 8) : "--:--:--";
+      d.innerHTML = '<span class="ts">' + ts + '</span><span class="msg">' + esc(l.event_name || "?") + (l.message ? " · " + esc(l.message) : "") + '</span>';
+      el.insertBefore(d, el.firstChild);
+      if (el.children.length > 200) el.removeChild(el.lastChild);
+    }
+  } catch {}
+}
+
+(async function init() {
+  await loadProviders();
+  await fetchAllModels();
+  await checkGodex();
+  setInterval(checkGodex, 8000);
+  setInterval(pollLogs, 5000);
+  log("GodeX Studio 已启动 (port " + STUDIO_PORT + " -> " + GODEX + ")");
+})();
 </script>
 </body>
 </html>
