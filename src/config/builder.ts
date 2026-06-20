@@ -3,6 +3,7 @@ import { asConfigObject } from "./raw";
 import type { GodeXConfig } from "./schema";
 import { parseLoggingConfig } from "./sections/logging";
 import { parseModelsConfig } from "./sections/models";
+import { parsePluginsConfig } from "./sections/plugins";
 import { parseProvidersConfig } from "./sections/providers";
 import { parseServerConfig } from "./sections/server";
 import { parseSessionConfig } from "./sections/session";
@@ -26,6 +27,7 @@ export function buildConfig(
 		file.models,
 		new Set(Object.keys(providers)),
 	);
+	const plugins = parsePluginsConfig(file.plugins);
 
 	return {
 		server: parseServerConfig(file.server, overrides),
@@ -35,6 +37,7 @@ export function buildConfig(
 		session: parseSessionConfig(file.session),
 		logging: parseLoggingConfig(file.logging, overrides.logLevel),
 		trace: parseTraceConfig(file.trace),
+		plugins,
 	};
 }
 

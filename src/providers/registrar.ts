@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../bridge/plugins";
 import type { ProviderEdge } from "../bridge/provider-spec";
 import type { ProviderConfig } from "../config";
 import { SERVER_PROVIDER_NOT_REGISTERED, ServerError } from "../error";
@@ -6,6 +7,7 @@ import type { ProviderDefinition } from "./definition";
 
 export type ProviderFactory = (
 	config: ProviderConfig,
+	plugins?: readonly GodexPlugin[],
 ) => ProviderEdge<unknown, unknown, unknown>;
 
 export interface ProviderRegistrationResult {
@@ -42,6 +44,7 @@ export class Registrar {
 	registerProviders(
 		providers: Record<string, ProviderConfig>,
 		logger?: Logger,
+		plugins?: readonly GodexPlugin[],
 	): ProviderRegistrationResult {
 		const registeredProviders = new Map<
 			string,
@@ -54,7 +57,7 @@ export class Registrar {
 				unsupportedProviders.push(name);
 				continue;
 			}
-			registeredProviders.set(name, factory(config));
+			registeredProviders.set(name, factory(config, plugins));
 		}
 		this.providers = registeredProviders;
 		this.unsupportedProviders = unsupportedProviders;

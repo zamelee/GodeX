@@ -1,5 +1,10 @@
 import type { JsonServerSentEvent } from "@ahoo-wang/fetcher-eventstream";
 import {
+	applyPluginStreamDeltaHooks,
+	type GodexPlugin,
+	type GodexPluginContext,
+} from "../bridge/plugins";
+import {
 	mapProviderDeltasToEvents,
 	ResponseStreamPhase,
 	ResponseStreamStateMachine,
@@ -88,12 +93,19 @@ export class StreamPipeline {
 class ProviderStreamEventBridge
 	implements Transformer<JsonServerSentEvent<unknown>, ResponseStreamEvent>
 {
+	private readonly plugins: readonly GodexPlugin[];
+	private readonly pluginCtx: GodexPluginContext;
 	readonly machine: ResponseStreamStateMachine;
 
 	constructor(
 		private readonly ctx: ResponsesContext,
 		built: ProviderStreamExchangeResult["built"],
 	) {
+		this.plugins = ctx.app.plugins;
+		this.pluginCtx = {
+			model: ctx.resolved.model,
+			provider: ctx.resolved.provider,
+		};
 		const toolIdentities = new ToolIdentityMap();
 		toolIdentities.addDeclarations(built.tools.declarations);
 		this.machine = new ResponseStreamStateMachine({
@@ -106,11 +118,16 @@ class ProviderStreamEventBridge
 		});
 	}
 
-	transform(
+	async transform(
 		event: JsonServerSentEvent<unknown>,
 		controller: TransformStreamDefaultController<ResponseStreamEvent>,
-	): void {
-		const deltas = this.ctx.provider.spec.stream.deltas(event.data);
+	): Promise<void> {
+		const transformed = await applyPluginStreamDeltaHooks(
+			this.plugins,
+			event.data,
+			this.pluginCtx,
+		);
+		const deltas = this.ctx.provider.spec.stream.deltas(transformed);
 		for (const responseEvent of mapProviderDeltasToEvents({
 			machine: this.machine,
 			deltas,
