@@ -1,23 +1,20 @@
-// GodexStudio plugin — Layer 2 pass-through skeleton
+// Studio Hooks — Layer 3.5 will remove godex hardcode and enable these.
 //
-// Hooks are no-ops at this stage. Each hook becomes a real transform
-// in Layer 3 when we migrate MiniMax quirks out of godex.
+// Currently godex builtin MINIMAX_PROVIDER_SPEC already handles all MiniMax quirks.
+// Studio hooks are pass-through to avoid double-processing.
+// When godex minimax hooks are stripped, these will take over.
 import type { GodexPlugin } from "../../godex/src/bridge/plugins";
 
-// Placeholder profiles; loaded from profiles.yaml in Layer 4.
 const PLUGINS: GodexPlugin = {
 	name: "studio",
 	hooks: {
-		// Hook A: transformChatMessages
-		// Will handle image splitting, parallel reorder, orphan drop.
+		// Pass-through until godex hardcode is removed (Layer 3.5)
 		transformChatMessages: (messages) => messages,
 
-		// Hook B: patchRequest
-		// Will handle tool args canonicalization, empty-string→{}, etc.
+		// Pass-through until godex hardcode is removed (Layer 3.5)
 		patchRequest: (request) => request,
 
-		// Hook C: transformStreamDelta
-		// Will handle null filtering, reasoning_details extraction.
+		// Pass-through until godex hardcode is removed (Layer 3.5)
 		transformStreamDelta: (delta) => delta,
 	},
 };
