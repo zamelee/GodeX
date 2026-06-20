@@ -1,9 +1,19 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "types": ["bun"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
     "noEmit": true,
     "strict": true,
-    "moduleResolution": "bundler"
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true
   },
   "include": ["src/**/*"]
 }
