@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head><meta charset=utf-8><title>GodeX Studio</title><style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;}
+header{background:#161b22;border-bottom:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:13px;}
+h1{color:#58a6ff;font-weight:600;font-size:14px;}
+.status{font-size:12px;}
+.cols{display:flex;flex:1;overflow:hidden;}
+.col{border-right:1px solid #21262d;display:flex;flex-direction:column;min-width:180px;}
+.col:last-child{border-right:none;}
+.col-head{background:#161b22;border-bottom:1px solid #21262d;padding:6px 12px;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;}
+.body{flex:1;overflow-y:auto;padding:8px;}
+.card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;font-size:12px;}
+.card:hover{border-color:#388bfd;}
+.card.active{border-color:#58a6ff;background:rgba(88,166,255,.06);}
+.card .n{font-weight:600;color:#e6edf3;}
+.card .s{font-size:11px;color:#8b949e;margin-top:2px;}
+.grid{display:grid;grid-template-columns:80px 1fr;gap:4px 8px;padding:8px;font-size:12px;}
+.grid label{color:#8b949e;display:flex;align-items:center;}
+input,select,option{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:4px 8px;font-size:12px;width:100%;}
+.btn-row{display:flex;gap:8px;padding:0 8px 8px;}
+button{background:#238636;border:none;border-radius:4px;color:#fff;padding:6px 14px;font-size:12px;cursor:pointer;}
+button:hover{background:#2ea043;}
+button.info{background:#6e40c9;}
+button.info:hover{background:#8957e5;}
+.logs{height:160px;border-top:1px solid #30363d;display:flex;flex-direction:column;flex-shrink:0;}
+.log-head{background:#161b22;padding:4px 12px;display:flex;align-items:center;gap:8px;font-size:11px;color:#8b949e;}
+#logs{flex:1;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11px;white-space:nowrap;}
+.log{overflow:hidden;text-overflow:ellipsis;padding:2px 12px;border-bottom:1px solid #161b22;}
+.log.err{background:rgba(248,81,73,.06);border-left:3px solid #f85149;padding-left:9px;}
+.log.ok{border-left:3px solid #3fb950;padding-left:9px;}
+.log.warn{border-left:3px solid #d29922;padding-left:9px;}
+</style></head>
+<body>
+<header><h1>GodeX Studio</h1><span class=status id=godex>godex: ...</span></header>
+<div class=cols>
+<div class=col style=min-width:200px><div class=col-head>Models</div><div class=body id=ml></div></div>
+<div class=col style=flex:1>
+<div class=col-head>Parameters</div>
+<div class=body><div class=grid>
+<label>Temperature</label><input id=temp type=number min=0 max=2 step=.1 value=.7>
+<label>Top P</label><input id=topp type=number min=0 max=1 step=.05 value=1.0>
+<label>Max Output</label><input id=maxo type=number min=1 max=65536 value=16384>
+<label>Stream</label><select id=strm><option value=true>stream</option><option value=false>sync</option></select>
+</div><div class=btn-row><button onclick=save()>Save</button><button class=info onclick=reset()>Reset</button></div>
+<div id=msg></div>
+</div></div>
+<div class=col style=min-width:220px><div class=col-head>Active</div><div class=body id=info><div class=log>No model selected</div></div></div></div>
+<div class=logs><div class=log-head><span>Logs</span><button onclick=reload()>Reload</button></div><div id=logs></div></div>
+<script>
+const G='http://127.0.0.1:5678';
+const S=localStorage;
+let P={};
+function e(s){return document.getElementById(s)}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+async function r(u,o={}){const R=await fetch(G+u,o);if(!R.ok)throw E(u,R.status);return R.json()}
+function log(m,t='ok'){const d=document.createElement('div');d.className='log '+t;d.textContent=m;e('logs').prepend(d)}
+async function load(){try{const M=await r('/v1/models');const m=e('ml');m.innerHTML='';const B={};for(const x of M.data||[]){const p=x.id.split('/')[0]||'?';(B[p]=B[p]||[]).push(x)}for(const [p,ms] of Object.entries(B)){const g=document.createElement('div');g.innerHTML='<div style="font-size:10px;color:#8b949e;padding:4px 0 2px">'+esc(p);for(const x of ms){const c=document.createElement('div');c.className='card';c.innerHTML='<div class=n>'+esc(x.id)+'<div class=s>'+esc(x.owned_by||'')+'</div></div>';c.onclick=()=>{S.active=x.id;e('info').innerHTML='<div class=card><div class=n>'+esc(x.id)+'<div class=s>Selected</div></div>';load()};g.appendChild(c)}m.appendChild(g)}
+}catch(E){log(E.message,'err')}
+try{const H=await r('/health');e('godex').textContent='godex: '+(H.providers||[]).join(', ');e('godex').style.color='#3fb950';e('godex').parentElement.style.color=''}
+catch(E){e('godex').textContent='godex: offline';e('godex').style.color='#f85149';log('godex offline','err')}
+reload=()=>{e('logs').innerHTML='';log('reloaded','ok');log(E.message,'err')};
+save=async()=>{try{const A=S.active||'default';P[A]={temperature:parseFloat(e('temp').value)||0.7,top_p:parseFloat(e('topp').value)||1,max_tokens:parseInt(e('maxo').value)||16384};localStorage.setItem('profiles',JSON.stringify(P));e('msg').textContent='saved '+A;e('msg').style.color='#3fb950';log('saved '+A)}catch(E){e('msg').textContent=E.message;e('msg').style.color='#f85149';log(E.message,'err')};
+reset=()=>{e('temp').value='0.7';e('topp').value='1.0';e('maxo').value='16384'};
+setInterval(async()=>{try{e('logs').innerHTML='';const L=await r('/v1/logs')||[];L.slice(0,50).forEach(E=>log(E.event_name||'?'))}catch(){}},5000);
+load();
+</script>
+</body>
+</html>

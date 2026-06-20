@@ -1,0 +1,31 @@
+server:
+  port: 5679
+  host: 127.0.0.1
+default_provider: minimax
+providers:
+  minimax:
+    spec: minimax
+    credentials:
+      api_key: gw
+    endpoint:
+      base_url: https://minnimax.chat/v1
+models:
+  aliases:
+    "minimax-m3": minimax/MiniMax-M3
+session:
+  backend: sqlite
+  sqlite:
+    path: D:/Documents/VibeCoding/GodeX/.godex-new/data/session.db
+logging:
+  level: debug
+trace:
+  enabled: true
+  path: D:/Documents/VibeCoding/GodeX/.godex-new/data/trace.db
+  max_queue_size: 100
+  flush_interval_ms: 5000
+  batch_size: 50
+  capture_payload: true
+  payload_max_bytes: 10485760
+plugins:
+  paths:
+    - D:/Documents/VibeCoding/GodeX/studio/dist/plugin.js

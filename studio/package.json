@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "build": "bun build src/plugin.ts --outdir dist --target bun",
+    "serve": "bun --env-file=.env run src/serve.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
