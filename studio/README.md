@@ -1,63 +1,87 @@
-# GodexStudio
+# GodeX Studio — Layer 4 UI
 
-Plugin + UI for Godex — per-model profiles, MiniMax quirk handling, and
-eventual visual configuration without touching Godex core.
+Configuration UI for GodeX — edit provider, API key, model params, save profiles, monitor logs.
 
-## Status
+## Quick Start
 
-**Layer 2** (this branch): Pass-through plugin skeleton. All hooks are no-ops.
-Godex continues to work exactly as before.
+### One-click launch (Edge App Mode)
 
-**Layer 3** (future): Migrate MiniMax-specific hardcoded logic from Godex
-into real studio hook implementations.
+Double-click `start.vbs` on your desktop. It will:
+1. Start the bun backend (if not already running) on port 56791
+2. Open Microsoft Edge in **App Mode** (no browser chrome — looks like a native app)
+3. The Studio window stays open until you close it
 
-**Layer 4** (future): Add a web UI for model selection, parameter tuning,
-and log inspection.
+If you don't have a desktop shortcut, see "Create Desktop Shortcut" below.
 
-## Directory Layout
+### Manual launch
+
+```bash
+bun run serve                                          # default: studio :56791, godex :5678
+GODEX_BASE=http://127.0.0.1:5679 bun run serve          # use godex on port 5679
+STUDIO_PORT=56792 bun run serve                         # use studio on port 56792
+```
+
+Then open <http://127.0.0.1:56791/> in any browser.
+
+## UI Layout (4-column)
+
+| Column | Purpose |
+|--------|---------|
+| **Left** (200px) | Provider selector — click to switch MiniMax / DeepSeek / OpenAI / GLM |
+| **Center** | Settings forms — Connection (URL, Key, Timeout) / Model Params (Context, Max Output, Temp, TopP, TopK) / Advanced (Thinking, Reasoning Effort, Seed, Stream) / Alias (default alias → model) |
+| **Right** (240px) | Model list pulled from godex `/v1/models` — click to auto-fill Context / Max Output from presets |
+| **Bottom** (180px) | Live logs from trace.db (polls every 5s) |
+
+### Action bar (bottom-center)
+- **💾 保存配置** — saves current form values to localStorage
+- **📋 生成 config.yaml** — generates YAML config and copies to clipboard
+- **🔄 重置** — resets form to provider defaults
+
+### Known model presets (auto-fills on click)
+- `minimax/MiniMax-M3` — context 192k, max output 16k, thinking adaptive
+- `minimax/MiniMax-M2.7` — context 192k, max output 16k, thinking adaptive
+- `minimax/MiniMax-M2` — context 100k, max output 8k, thinking adaptive
+- `deepseek/deepseek-chat` — context 64k, max output 8k
+- `openai/gpt-4o` — context 128k, max output 16k
+- `zhipu/glm-4` — context 128k, max output 8k
+
+Add more by editing `PRESETS` in `src/serve.ts`.
+
+## Environment Variables
+
+| Var | Default | Description |
+|-----|---------|-------------|
+| `GODEX_BASE` | http://127.0.0.1:5678 | godex backend URL |
+| `STUDIO_PORT` | 56791 | studio server port |
+| `GODEX_DATA` | (auto-detected) | path to godex data dir containing trace.db |
+| `STUDIO_PROFILES` | `../profiles.json` | path to profiles.json file |
+
+## Create Desktop Shortcut
+
+```powershell
+$ws = New-Object -ComObject WScript.Shell
+$shortcut = $ws.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\GodeX Studio.lnk")
+$shortcut.TargetPath = "D:\Documents\VibeCoding\GodeX\studio\start.vbs"
+$shortcut.WorkingDirectory = "D:\Documents\VibeCoding\GodeX\studio"
+$shortcut.IconLocation = "C:\Program Files (x86)\Microsoft\EdgeCore\149.0.4022.69\msedge.exe,0"
+$shortcut.WindowStyle = 7
+$shortcut.Description = "GodeX Studio - Configuration UI"
+$shortcut.Save()
+```
+
+## Files
 
 ```
 studio/
   src/
-    plugin.ts      # GodexPlugin default export (pass-through until Layer 3)
-    hooks/         # Per-hook implementations (Layer 3)
-    profiles/      # Profile loading logic (Layer 3-4)
-    server/        # UI web server (Layer 4)
-    public/       # Static UI assets (Layer 4)
-  dist/
-    plugin.js     # Built from src/plugin.ts — this is what godex loads
-  profiles.yaml   # Model parameter presets (Layer 4)
+    serve.ts            — main entry, Bun.serve, embedded HTML
+    hooks/              — plugin hooks (Layer 3, currently pass-through)
+    profiles/           — profile storage (future)
+    public/             — old static HTML (kept as reference)
+    server/             — old server/index.ts (kept as reference)
+  start.ps1             — PowerShell launcher (starts bun + opens Edge)
+  start.vbs             — VBS wrapper to hide PowerShell window
+  profiles.yaml         — placeholder (runtime uses profiles.json)
+  package.json          — bun scripts
+  README.md             — this file
 ```
-
-## Build
-
-```bash
-cd studio
-bun install
-bun run build   # → dist/plugin.js
-```
-
-## Using with Godex
-
-In your `godex.yaml`:
-
-```yaml
-plugins:
-  paths:
-    - ./studio/dist/plugin.js
-```
-
-Then start godex normally. The plugin loads at startup; if the path
-is wrong or the file is missing godex will print an error and refuse to start
-(fail-fast — no silent degradation).
-
-## Hook Reference
-
-| Hook | When | What |
-|------|------|------|
-| `transformChatMessages` | After messages are normalized, before HTTP call | Rewrite message arrays (image split, reorder, orphan drop) |
-| `patchRequest` | After provider spec patch, before HTTP call | Rewrite request fields (tool args, etc.) |
-| `transformStreamDelta` | Raw SSE chunk from provider, before delta mapper | Rewrite streaming chunks (null filter, reasoning extraction) |
-
-Each hook runs async, errors propagate to the caller, and multiple plugins
-chain in registration order.
