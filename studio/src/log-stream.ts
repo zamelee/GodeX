@@ -19,18 +19,35 @@ let buffer: LogLine[] = [];
 let listeners: Set<(line: LogLine) => void> = new Set();
 let godex: GodexProc = { child: null, startTs: 0 };
 
+// Parse --key=value from process.argv once at module load.
+// CLI args on Windows are passed in the system default code page but PowerShell's
+// Start-Process reliably mangles non-ASCII env vars; argv is usually safer for
+// ASCII paths and we still fall back to env for the simple cases.
+function readCliFlag(name: string): string | undefined {
+	const prefix = "--" + name + "=";
+	for (let i = 2; i < process.argv.length; i++) {
+		const a = process.argv[i];
+		if (a && a.startsWith(prefix)) return a.slice(prefix.length);
+	}
+	return undefined;
+}
+
 export function getGodexPort(): number {
+	const cli = readCliFlag("port");
+	if (cli) { const n = Number(cli); if (Number.isFinite(n)) return n; }
+	const envPort = process.env.STUDIO_PORT;
+	if (envPort) { const n = Number(envPort); if (Number.isFinite(n)) return n; }
 	const url = process.env.GODEX_BASE ?? "http://127.0.0.1:5678";
 	try { return new URL(url).port ? Number(new URL(url).port) : 5678; }
 	catch { return 5678; }
 }
 
 export function getGodexBinary(): string {
-	return process.env.GODEX_BINARY ?? "D:\\Documents\\VibeCoding\\GodeX\\platforms\\win32-x64\\bin\\godex2.exe";
+	return readCliFlag("binary") ?? process.env.GODEX_BINARY ?? "D:\\Documents\\VibeCoding\\GodeX\\platforms\\win32-x64\\bin\\godex2.exe";
 }
 
 export function getGodexConfig(): string {
-	return process.env.GODEX_CONFIG ?? "C:\\Users\\Bliss\\.godex\\config.yaml";
+	return readCliFlag("config") ?? process.env.GODEX_CONFIG ?? "C:\\Users\\Bliss\\.godex\\config.yaml";
 }
 
 export function pushLog(text: string, source: "godex" | "studio" = "studio", level: LogLine["level"] = "info"): void {
