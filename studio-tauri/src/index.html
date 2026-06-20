@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>GodeX Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#c9d1d9;--text2:#8b949e;--blue:#58a6ff;--green:#3fb950;
+  --red:#f85149;--yellow:#d29922;--purple:#8957e5;
+}
+body{font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:13px}
+header{background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:8px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+h1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;vertical-align:middle;margin-right:6px}
+.dot.ok{background:var(--green)}
+.dot.warn{background:var(--yellow)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.hdr-right code{color:var(--blue);font-family:ui-monospace,monospace}
+main{display:flex;flex:1;overflow:hidden;min-height:0}
+.col-left{width:240px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.sec{background:var(--bg2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);
+  letter-spacing:.05em;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sec .right{font-size:10px;font-weight:400;letter-spacing:0}
+.provider-list{padding:8px;overflow-y:auto;flex:1}
+.provider-item{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer}
+.provider-item:hover{border-color:var(--blue)}
+.provider-item.active{border-color:var(--blue);background:rgba(88,166,255,.1)}
+.provider-item.active .pname{color:var(--blue)}
+.provider-item .pname{font-size:13px;font-weight:600;word-break:break-all}
+.provider-item .psub{font-size:11px;color:var(--text2);font-weight:400;margin-top:2px;word-break:break-all}
+.provider-item .pmeta{font-size:10px;color:var(--text2);margin-top:2px}
+.provider-item .del{position:absolute;top:4px;right:6px;font-size:16px;color:var(--text2);cursor:pointer;opacity:0;transition:opacity .15s;line-height:1;padding:0 4px}
+.provider-item:hover .del{opacity:1}
+.provider-item .del:hover{color:var(--red)}
+.forms-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.form-section-head .badge{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:400;padding:1px 6px;border-radius:3px}
+.form-section-head .right{margin-left:auto;display:flex;gap:6px}
+.form-grid{display:grid;grid-template-columns:130px 1fr;gap:0}
+.form-row{display:contents}
+.form-row label{padding:7px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;border-bottom:1px solid rgba(48,54,61,.5)}
+.form-row label .req{color:var(--red);margin-left:2px}
+input,select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-size:12px;width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--blue)}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:600}
+.action-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;background:var(--bg2)}
+.btn{background:#238636;border:none;border-radius:5px;color:#fff;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;font-family:inherit}
+.btn:hover{background:#2ea043}
+.btn:disabled{background:#444c56;cursor:not-allowed}
+.btn.purple{background:#6e40c9}
+.btn.purple:hover{background:var(--purple)}
+.btn.gray{background:var(--bg3);color:var(--text)}
+.btn.gray:hover{background:#3a3f47}
+.btn.danger{background:#b62324}
+.btn.danger:hover{background:#d1242f}
+.btn.small{padding:3px 8px;font-size:11px}
+.btn.tiny{padding:2px 6px;font-size:10px}
+.msg{font-size:12px;margin-left:8px}
+.msg.ok{color:var(--green)}
+.msg.err{color:var(--red)}
+.bottom{height:200px;flex-shrink:0;border-top:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg)}
+.bottom-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.bottom-header span{font-size:11px;color:var(--text2);font-weight:600}
+.bottom-body{flex:1;overflow-y:auto;font-family:"Consolas","Courier New",monospace;font-size:11px}
+.log-line{padding:1px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px;align-items:flex-start}
+.log-line:hover{background:rgba(255,255,255,.02)}
+.log-line .ts{color:#6e7681;flex-shrink:0;font-size:10px;padding-top:2px;font-family:ui-monospace,monospace}
+.log-line .src{font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0;background:var(--bg3);color:var(--text2);margin-top:1px}
+.log-line .src.godex{background:rgba(88,166,255,.15);color:var(--blue)}
+.log-line .src.studio{background:rgba(63,185,80,.12);color:var(--green)}
+.log-line .msg{color:var(--text);word-break:break-all;flex:1;white-space:pre-wrap}
+.log-line.error{background:rgba(248,81,73,.06);border-left:3px solid var(--red)}
+.log-line.error .msg{color:var(--red)}
+.log-line.warn{border-left:3px solid var(--yellow)}
+.log-line.warn .msg{color:var(--yellow)}
+.model-toolbar{padding:8px 12px;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(48,54,61,.5);flex-wrap:wrap}
+.model-toolbar input[type=text]{flex:1;min-width:120px}
+.model-list{padding:0}
+.model-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px}
+.model-row:hover{background:rgba(255,255,255,.02)}
+.model-row .name{font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.model-row .name .src{font-size:9px;color:var(--text2);background:var(--bg3);padding:1px 4px;border-radius:3px}
+.model-row .name .preset{font-size:10px;color:var(--green)}
+.model-row .actions{display:flex;gap:4px;align-items:center;flex-shrink:0}
+.model-row .caps{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
+.model-row .cap{font-size:9px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--text2);cursor:pointer;user-select:none}
+.model-row .cap.on{background:rgba(63,185,80,.18);color:var(--green)}
+.model-row .cap.off{opacity:.45}
+.model-row .params{display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap}
+.model-row .params input{width:90px;padding:2px 6px;font-size:11px}
+.model-row .params label{font-size:10px;color:var(--text2)}
+.empty{padding:24px;text-align:center;color:var(--text2);font-size:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:340px;max-width:90vw;max-height:90vh;overflow-y:auto}
+.modal-box h3{margin-bottom:6px;color:var(--blue);font-size:14px}
+.modal-box .desc{font-size:11px;color:var(--text2);margin-bottom:12px}
+.modal-box .row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.modal-box .row label{font-size:11px;color:var(--text2)}
+.modal-box .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>GodeX Studio</h1>
+  <span class="dot" id="dot"></span>
+  <span id="status-text" style="font-size:12px;color:var(--text2)">检查中...</span>
+  <span id="godex-pid" style="font-size:11px;color:var(--text2)"></span>
+  <div class="hdr-right">
+    <span>原生窗口 &middot; <code>Tauri 2</code></span>
+  </div>
+</header>
+
+<main>
+  <div class="col-left">
+    <div class="sec">服务商列表 <span class="right" id="provider-count">0</span></div>
+    <div class="provider-list" id="provider-items">
+      <div class="empty">加载中...</div>
+    </div>
+    <div style="padding:8px;border-top:1px solid var(--border);background:var(--bg2)">
+      <button class="btn small" style="width:100%" onclick="openNewProviderModal()">+ 新建服务商</button>
+    </div>
+  </div>
+
+  <div class="col-right">
+    <div id="editor-empty" class="empty" style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div>
+        <div style="font-size:14px;margin-bottom:8px">未选择服务商</div>
+        <div>请点击左侧已有服务商进行编辑,或点击下方"新建服务商"创建。</div>
+      </div>
+    </div>
+    <div id="editor" style="display:none;flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="forms-area">
+        <div class="form-section">
+          <div class="form-section-head">
+            <span id="form-provider-name">服务商</span>
+            <span class="badge" id="form-spec-badge">类型: ?</span>
+            <div class="right">
+              <button class="btn gray tiny" onclick="reloadProvider()">刷新</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-row"><label>名称</label>
+              <input id="f-name" type="text" readonly value=""/>
+            </div>
+            <div class="form-row"><label>接口地址 <span class="req">*</span></label>
+              <input id="f-base_url" type="text" placeholder="https://api.example.com/v1"/>
+            </div>
+            <div class="form-row"><label>API 密钥</label>
+              <input id="f-api_key" type="password" placeholder="sk-..."/>
+            </div>
+            <div class="form-row"><label>协议类型</label>
+              <select id="f-spec">
+                <option value="minimax">minimax (默认)</option>
+                <option value="deepseek">deepseek</option>
+                <option value="zhipu">zhipu</option>
+                <option value="openai">openai</option>
+              </select>
+            </div>
+            <div class="form-row"><label>超时(毫秒)</label>
+              <input id="f-timeout_ms" type="number" min="1000" step="1000" value="120000"/>
+            </div>
+            <div class="form-row"><label>备注</label>
+              <input id="f-note" type="text" placeholder="可选 (如:主线路、备用)"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-head">
+            <span>已启用的模型</span>
+            <span class="badge" id="enabled-count">0 个已选</span>
+            <div class="right">
+              <button class="btn gray tiny" id="btn-fetch" onclick="fetchRemoteModels()">从上游拉取</button>
+              <button class="btn gray tiny" onclick="addManualModel()">+ 手动添加</button>
+              <button class="btn gray tiny" onclick="clearEnabled()">清空</button>
+            </div>
+          </div>
+          <div class="model-toolbar">
+            <input id="model-filter" type="text" placeholder="按模型名筛选..." oninput="renderModels()"/>
+            <span id="model-stats" style="font-size:11px;color:var(--text2)"></span>
+          </div>
+          <div class="model-list" id="model-list">
+            <div class="empty">暂无已启用模型。点击"从上游拉取"或"+ 手动添加"。</div>
+          </div>
+          <div style="padding:6px 12px;background:rgba(255,255,255,.02);border-top:1px solid rgba(48,54,61,.5);font-size:10px;color:var(--text2)">
+            未勾选行不会保存。留空的 context_window / max_tokens / capabilities 也会跳过。
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="saveEnabled()">保存配置</button>
+        <button class="btn purple" onclick="saveAndRestart()">保存并重启 godex</button>
+        <button class="btn gray" onclick="resetEditor()">重置</button>
+        <span class="msg" id="action-msg"></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)" id="editor-status"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="bottom">
+  <div class="bottom-header">
+    <span>运行日志</span>
+    <select id="log-filter" style="font-size:10px;padding:1px 4px;width:auto" onchange="setLogFilters()">
+      <option value="all">全部来源</option>
+      <option value="godex">godex</option>
+      <option value="studio">Studio</option>
+    </select>
+    <select id="log-level" style="font-size:10px;padding:1px 4px;width:auto" onchange="setLogFilters()">
+      <option value="all">全部级别</option>
+      <option value="warn">警告及以上</option>
+      <option value="error">仅错误</option>
+    </select>
+    <button class="btn gray small" onclick="clearLogs()">清空</button>
+    <span id="log-count" style="margin-left:auto;font-size:11px;color:var(--text2)"></span>
+  </div>
+  <div class="bottom-body" id="logs-body"></div>
+</div>
+
+<div id="new-provider-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>新建服务商</h3>
+    <div class="desc">每个服务商是一个兼容 OpenAI 协议的 API 入口。不同服务商的同名模型可同时启用。</div>
+    <div class="row"><label>名称 <span style="color:var(--red)">*</span></label>
+      <input id="np-name" type="text" placeholder="如:minimax、jisu、deepseek-1"/></div>
+    <div class="row"><label>接口地址 <span style="color:var(--red)">*</span></label>
+      <input id="np-base_url" type="text" placeholder="https://api.proxy.com/v1"/></div>
+    <div class="row"><label>API 密钥</label>
+      <input id="np-api_key" type="password" placeholder="sk-..."/></div>
+    <div class="row"><label>协议类型</label>
+      <select id="np-spec">
+        <option value="minimax">minimax (默认)</option>
+        <option value="deepseek">deepseek</option>
+        <option value="zhipu">zhipu</option>
+        <option value="openai">openai</option>
+      </select></div>
+    <div class="row"><label>超时(毫秒)</label>
+      <input id="np-timeout_ms" type="number" value="120000"/></div>
+    <div class="actions">
+      <button class="btn gray" onclick="closeNewProviderModal()">取消</button>
+      <button class="btn" onclick="createProvider()">创建</button>
+    </div>
+  </div>
+</div>
+<script>
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+const CAPS = [
+  "text", "image_input", "audio_input", "video_input",
+  "image_output", "audio_output", "tool_use", "stream",
+];
+
+const CAP_LABELS = {
+  text: "文本",
+  image_input: "图像入",
+  audio_input: "音频入",
+  video_input: "视频入",
+  image_output: "图像出",
+  audio_output: "音频出",
+  tool_use: "工具",
+  stream: "流式",
+};
+
+const MODEL_PRESETS = [
+  { match: /^MiniMax-M3$/i, context_window: 1000000, max_tokens: 16384, caps: { text:1, image_input:1, audio_input:1, tool_use:1, stream:1 } },
+  { match: /^MiniMax-M2\.7-highspeed$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^MiniMax-M2\.7$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
+  { match: /^MiniMax-M2\.5$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-reasoner$/i, context_window: 64000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-chat$/i, context_window: 64000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^gpt-4o/i, context_window: 128000, max_tokens: 16384, caps: { text:1, image_input:1, image_output:1, tool_use:1, stream:1 } },
+  { match: /^o1/i, context_window: 200000, max_tokens: 100000, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^o3/i, context_window: 200000, max_tokens: 100000, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^glm-4-plus$/i, context_window: 128000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
+];
+function presetFor(modelId) {
+  for (const p of MODEL_PRESETS) if (p.match.test(modelId)) return p;
+  return null;
+}
+
+let providers = [];
+let activeProvider = null;
+let enabled = [];
+let remoteModels = [];
+let logFilterSrc = "all";
+let logFilterLevel = "all";
+let logLines = [];
+
+function showMsg(text, type) {
+  const m = $("action-msg");
+  m.textContent = text;
+  m.className = "msg " + (type || "");
+  if (type === "ok") setTimeout(() => { if (m.textContent === text) { m.textContent = ""; m.className = "msg"; } }, 4000);
+}
+function setEditorStatus(text) { $("editor-status").textContent = text || ""; }
+
+function ek_(s) {
+  if (!s) return "(无)";
+  if (s.length <= 8) return s;
+  return s.slice(0, 4) + "..." + s.slice(-4);
+}
+
+function renderProviders() {
+  const el = $("provider-items");
+  el.innerHTML = "";
+  $("provider-count").textContent = String(providers.length);
+  if (!providers.length) {
+    el.innerHTML = '<div class="empty">暂无服务商<br/>点击下方"+ 新建服务商"</div>';
+    return;
+  }
+  for (const p of providers) {
+    const item = document.createElement("div");
+    item.className = "provider-item" + (p.name === activeProvider ? " active" : "");
+    item.innerHTML =
+      '<div class="pname">' + esc(p.name) + '</div>' +
+      '<div class="psub">' + esc(p.spec || "?") + ' &middot; ' + esc(p.base_url || "(无地址)") + '</div>' +
+      '<div class="pmeta">密钥: ' + ek_(p.api_key) + ' &middot; 超时: ' + (p.timeout_ms || 120000) + 'ms</div>' +
+      '<div class="del" title="删除" onclick="event.stopPropagation();deleteProvider(\'' + esc(p.name) + '\')">&times;</div>';
+    item.onclick = () => selectProvider(p.name);
+    el.appendChild(item);
+  }
+}
+
+function selectProvider(name) {
+  activeProvider = name;
+  renderProviders();
+  const p = providers.find((x) => x.name === name);
+  if (!p) return;
+  $("editor-empty").style.display = "none";
+  $("editor").style.display = "flex";
+  $("form-provider-name").textContent = p.name;
+  $("form-spec-badge").textContent = "类型: " + (p.spec || "?");
+  $("f-name").value = p.name;
+  $("f-base_url").value = p.base_url || "";
+  $("f-api_key").value = p.api_key || "";
+  $("f-spec").value = p.spec || "minimax";
+  $("f-timeout_ms").value = p.timeout_ms || 120000;
+  enabled = [];
+  remoteModels = [];
+  loadEnabledForCurrent();
+  setEditorStatus("");
+}
+
+async function loadEnabledForCurrent() {
+  if (!activeProvider) return;
+  try {
+    const all = await invoke("read_enabled_models");
+    enabled = (all || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
+    renderModels();
+    setEditorStatus("已加载 " + enabled.length + " 个已启用模型");
+  } catch (e) { setEditorStatus("加载失败: " + e); }
+}
+
+function normalizeEnabled(o) {
+  const out = { provider: o.provider, model: o.model };
+  if (o.context_window !== undefined && o.context_window !== null) out.context_window = Number(o.context_window);
+  if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = Number(o.max_tokens);
+  if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
+  if (o.capabilities && typeof o.capabilities === "object") out.capabilities = Object.assign({}, o.capabilities);
+  if (o.note) out.note = o.note;
+  return out;
+}
+
+function reloadProvider() {
+  if (!activeProvider) return;
+  loadProviders().then(() => selectProvider(activeProvider));
+}
+
+function applyPresetToRow(modelId, row) {
+  const p = presetFor(modelId);
+  if (!p) return false;
+  if (row.context_window === undefined) row.context_window = p.context_window;
+  if (row.max_tokens === undefined) row.max_tokens = p.max_tokens;
+  if (!row.capabilities) row.capabilities = {};
+  for (const c of CAPS) {
+    if (p.caps && p.caps[c] !== undefined && row.capabilities[c] === undefined) {
+      row.capabilities[c] = !!p.caps[c];
+    }
+  }
+  return true;
+}
+
+async function fetchRemoteModels() {
+  if (!activeProvider) return;
+  const p = providers.find((x) => x.name === activeProvider);
+  if (!p) return;
+  const btn = $("btn-fetch");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 拉取中';
+  setEditorStatus("正在从上游拉取模型列表...");
+  try {
+    const list = await invoke("fetch_remote_models", { baseUrl: p.base_url, apiKey: p.api_key || "" });
+    const ids = (list || []).map((m) => m.id);
+    remoteModels = ids;
+    let added = 0;
+    let updated = 0;
+    for (const id of ids) {
+      const existing = enabled.find((e) => e.model === id);
+      if (existing) { if (applyPresetToRow(id, existing)) updated++; continue; }
+      const row = { provider: activeProvider, model: id };
+      applyPresetToRow(id, row);
+      enabled.push(row);
+      added++;
+    }
+    renderModels();
+    setEditorStatus("已拉取 " + ids.length + " 个,新增 " + added + " 个,更新 " + updated + " 个");
+    showMsg("已拉取 " + ids.length + " 个 (新增 " + added + ")", "ok");
+  } catch (e) {
+    setEditorStatus("拉取失败: " + e);
+    showMsg("拉取失败: " + e, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "从上游拉取";
+  }
+}
+
+function addManualModel() {
+  if (!activeProvider) return;
+  const id = prompt("为 " + activeProvider + " 添加模型名 (如 custom-experimental):");
+  if (!id) return;
+  const id2 = id.trim();
+  if (!id2) return;
+  if (enabled.find((e) => e.model === id2)) { showMsg("已存在", "err"); return; }
+  const row = { provider: activeProvider, model: id2 };
+  applyPresetToRow(id2, row);
+  enabled.push(row);
+  renderModels();
+  setEditorStatus("手动添加 " + id2);
+}
+
+function clearEnabled() {
+  if (!activeProvider) return;
+  if (!enabled.length) return;
+  if (!confirm("清空 " + activeProvider + " 的所有已启用模型? (其他服务商不受影响)")) return;
+  enabled = [];
+  renderModels();
+  setEditorStatus("已清空 (尚未保存)");
+}
+
+function toggleModel(idx) {
+  if (enabled[idx]._deleted) delete enabled[idx]._deleted;
+  else enabled[idx]._deleted = true;
+  renderModels();
+}
+
+function removeModel(idx) {
+  enabled.splice(idx, 1);
+  renderModels();
+}
+
+function setModelCap(idx, cap, val) {
+  if (!enabled[idx].capabilities) enabled[idx].capabilities = {};
+  enabled[idx].capabilities[cap] = !!val;
+  renderModels();
+}
+
+function setModelParam(idx, key, val) {
+  if (val === "" || val === null || val === undefined) {
+    delete enabled[idx][key];
+  } else {
+    const n = Number(val);
+    if (!Number.isFinite(n)) { delete enabled[idx][key]; }
+    else enabled[idx][key] = n;
+  }
+  renderModels();
+}
+function renderModels() {
+  const list = $("model-list");
+  const filter = ($("model-filter").value || "").toLowerCase();
+  const rows = enabled.map((m, i) => ({ m, i })).filter((r) => !r.m._deleted);
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty">暂无模型。点击"从上游拉取"或"+ 手动添加"。</div>';
+    $("enabled-count").textContent = "0 个已选";
+    $("model-stats").textContent = "";
+    return;
+  }
+  const filtered = filter ? rows.filter((r) => r.m.model.toLowerCase().includes(filter)) : rows;
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">无匹配 "' + esc(filter) + '"</div>';
+    $("enabled-count").textContent = rows.length + " 个已选";
+    $("model-stats").textContent = "0 / " + rows.length;
+    return;
+  }
+  let html = "";
+  for (const { m, i } of filtered) {
+    const preset = presetFor(m.model);
+    html += '<div class="model-row">';
+    html += '<input type="checkbox" checked onchange="toggleModel(' + i + ')" title="启用"/>';
+    html += '<div>';
+    html += '<div class="name">' + esc(m.model);
+    html += ' <span class="src">' + esc(m.provider) + '</span>';
+    if (preset) html += ' <span class="preset">预设</span>';
+    html += '</div>';
+    html += '<div class="params">';
+    html += '<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="' + (m.context_window ?? "") + '" oninput="setModelParam(' + i + ',\'context_window\',this.value)"/>';
+    html += '<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="' + (m.max_tokens ?? "") + '" oninput="setModelParam(' + i + ',\'max_tokens\',this.value)"/>';
+    html += '</div>';
+    html += '<div class="caps">';
+    for (const c of CAPS) {
+      const on = !!(m.capabilities && m.capabilities[c]);
+      const label = CAP_LABELS[c] || c;
+      html += '<span class="cap ' + (on ? "on" : "off") + '" onclick="setModelCap(' + i + ',\'' + c + '\',' + (on ? "false" : "true") + ')" title="点击切换">' + label + '</span>';
+    }
+    html += '</div>';
+    html += '</div>';
+    html += '<div class="actions"><button class="btn gray tiny" onclick="removeModel(' + i + ')">删除</button></div>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+  $("enabled-count").textContent = rows.length + " 个已选";
+  $("model-stats").textContent = filtered.length + " / " + rows.length + (remoteModels.length ? " (上游 " + remoteModels.length + ")" : "");
+}
+
+function stripUndef(o) {
+  const out = { provider: o.provider, model: o.model };
+  if (o.context_window !== undefined && o.context_window !== null) out.context_window = o.context_window;
+  if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = o.max_tokens;
+  if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
+  if (o.capabilities && typeof o.capabilities === "object") {
+    const cap = {};
+    for (const c of CAPS) {
+      if (o.capabilities[c] === true) cap[c] = true;
+      else if (o.capabilities[c] === false) cap[c] = false;
+    }
+    if (Object.keys(cap).length) out.capabilities = cap;
+  }
+  if (o.note) out.note = String(o.note);
+  return out;
+}
+
+async function saveEnabled() {
+  if (!activeProvider) return;
+  let all;
+  try { all = await invoke("read_enabled_models"); }
+  catch (e) { showMsg("读取失败: " + e, "err"); return; }
+  const others = (all || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
+  const mine = enabled.filter((m) => !m._deleted).map(stripUndef);
+  const merged = others.concat(mine);
+  try {
+    const count = await invoke("save_enabled_models", { enabled: merged });
+    showMsg("已保存 " + count + " 个模型 (未重启)", "ok");
+    setEditorStatus("保存于 " + new Date().toLocaleTimeString());
+  } catch (e) {
+    showMsg("保存失败: " + e, "err");
+  }
+}
+
+async function saveAndRestart() {
+  await saveEnabled();
+  showMsg("正在重启 godex...", "");
+  setEditorStatus("重启中...");
+  try {
+    const pid = await invoke("godex_restart");
+    showMsg("已重启,pid=" + pid, "ok");
+    setEditorStatus("已重启,新 pid=" + pid);
+    refreshStatus();
+  } catch (e) {
+    showMsg("重启失败: " + e, "err");
+  }
+}
+
+async function loadProviders() {
+  try {
+    const res = await invoke("list_providers");
+    providers = res || [];
+  } catch (e) { providers = []; }
+  if (!activeProvider && providers.length) activeProvider = providers[0].name;
+  renderProviders();
+  return providers;
+}
+
+async function deleteProvider(name) {
+  if (!confirm("确定删除服务商 " + name + "? 这也会从 config 中删除它的启用模型。")) return;
+  try {
+    await invoke("delete_provider", { name });
+    if (activeProvider === name) activeProvider = null;
+    await loadProviders();
+    showMsg("已删除 " + name, "ok");
+  } catch (e) { showMsg("删除失败: " + e, "err"); }
+}
+
+function openNewProviderModal() { $("new-provider-modal").style.display = "flex"; }
+function closeNewProviderModal() { $("new-provider-modal").style.display = "none"; }
+
+async function createProvider() {
+  const name = $("np-name").value.trim();
+  const base_url = $("np-base_url").value.trim();
+  const api_key = $("np-api_key").value.trim();
+  const spec = $("np-spec").value;
+  const timeout_ms = parseInt($("np-timeout_ms").value) || 120000;
+  if (!name) { showMsg("名称必填", "err"); return; }
+  if (!base_url) { showMsg("接口地址必填", "err"); return; }
+  try {
+    await invoke("upsert_provider", { name, baseUrl: base_url, apiKey: api_key, spec, timeoutMs: timeout_ms });
+    showMsg("已创建 " + name, "ok");
+    closeNewProviderModal();
+    await loadProviders();
+    selectProvider(name);
+  } catch (e) { showMsg("创建失败: " + e, "err"); }
+}
+
+function resetEditor() {
+  if (activeProvider) selectProvider(activeProvider);
+}
+
+function clearLogs() { $("logs-body").innerHTML = ""; logLines = []; $("log-count").textContent = ""; }
+
+function setLogFilters() {
+  logFilterSrc = $("log-filter").value;
+  logFilterLevel = $("log-level").value;
+  renderLogs();
+}
+
+function fmtTime(ts) {
+  try { return new Date(ts).toTimeString().slice(0, 8); } catch { return "--:--:--"; }
+}
+function levelClass(l) { return l === "error" ? "error" : l === "warn" ? "warn" : ""; }
+
+function appendLogLine(line) {
+  logLines.push(line);
+  if (logLines.length > 500) logLines = logLines.slice(-500);
+  if (!passesLogFilter(line)) return;
+  const el = $("logs-body");
+  const d = document.createElement("div");
+  d.className = "log-line " + levelClass(line.level);
+  d.innerHTML =
+    '<span class="ts">' + fmtTime(line.ts) + '</span>' +
+    '<span class="src ' + line.source + '">' + line.source + '</span>' +
+    '<span class="msg">' + esc(line.text) + '</span>';
+  el.insertBefore(d, el.firstChild);
+  while (el.children.length > 300) el.removeChild(el.lastChild);
+  $("log-count").textContent = logLines.length + " 行";
+}
+
+function renderLogs() {
+  const el = $("logs-body");
+  el.innerHTML = "";
+  for (const line of logLines) {
+    if (!passesLogFilter(line)) continue;
+    const d = document.createElement("div");
+    d.className = "log-line " + levelClass(line.level);
+    d.innerHTML =
+      '<span class="ts">' + fmtTime(line.ts) + '</span>' +
+      '<span class="src ' + line.source + '">' + line.source + '</span>' +
+      '<span class="msg">' + esc(line.text) + '</span>';
+    el.appendChild(d);
+  }
+  $("log-count").textContent = logLines.length + " 行";
+}
+
+function passesLogFilter(line) {
+  if (logFilterSrc !== "all" && line.source !== logFilterSrc) return false;
+  if (logFilterLevel === "error" && line.level !== "error") return false;
+  if (logFilterLevel === "warn" && !(line.level === "warn" || line.level === "error")) return false;
+  return true;
+}
+
+async function refreshStatus() {
+  const dot = $("dot");
+  const text = $("status-text");
+  const pidText = $("godex-pid");
+  try {
+    const r = await invoke("godex_status");
+    if (r.running) {
+      dot.classList.add("ok");
+      text.textContent = "godex 在线";
+      text.style.color = "var(--green)";
+    } else {
+      dot.classList.remove("ok");
+      text.textContent = "godex 未运行";
+      text.style.color = "var(--yellow)";
+    }
+    pidText.textContent = r.pid ? "pid=" + r.pid : "";
+  } catch (e) {
+    dot.classList.remove("ok");
+    text.textContent = "状态错误: " + e;
+    text.style.color = "var(--red)";
+  }
+}
+
+(async function init() {
+  await loadProviders();
+  refreshStatus();
+  setInterval(refreshStatus, 5000);
+
+  // Subscribe to live log events from Rust.
+  await listen("godex://log", (ev) => { appendLogLine(ev.payload); });
+
+  // Fetch recent log history (everything pushed so far in the ring buffer).
+  try {
+    const tail = await invoke("godex_logs_tail", { limit: 200 });
+    for (const line of (tail || [])) appendLogLine(line);
+  } catch (e) { /* no-op */ }
+})();
+</script>
+</body>
+</html>
