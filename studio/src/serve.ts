@@ -1,374 +1,57 @@
-// GodeX Studio HTTP Server — Layer 4
-// Listens on :56791, proxies godex, serves UI, exposes /api/logs and /api/profiles.
-// Usage:
-//   bun run src/serve.ts
-//   GODEX_BASE=http://127.0.0.1:5679 STUDIO_PORT=56791 bun run src/serve.ts
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+// GodeX Studio — Layer 4 UI Server
+// Usage: bun run src/serve.ts
+// Env: GODEX_BASE, STUDIO_PORT, GODEX_DATA, STUDIO_PROFILES
+import { existsSync, readFileSync as fs_read, writeFileSync as fs_write } from "node:fs";
 import { resolve } from "node:path";
 
 const GODEX_BASE = process.env.GODEX_BASE ?? "http://127.0.0.1:5678";
-const PROFILES_PATH = process.env.STUDIO_PROFILES
-	? resolve(process.env.STUDIO_PROFILES)
-	: resolve(import.meta.dirname, "../profiles.json");
 const PORT = Number(process.env.STUDIO_PORT ?? "56791");
 const TRACE_DB_PATH = process.env.GODEX_DATA
-	? resolve(process.env.GODEX_DATA, "trace.db")
-	: resolve(import.meta.dirname, "../../godex-new/trace.db");
+  ? resolve(process.env.GODEX_DATA, "trace.db")
+  : resolve(import.meta.dirname ?? ".", "../../godex-new/data/trace.db");
 
-// ─── Static HTML ─────────────────────────────────────────────────────────────
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
+const JSON_H = { "Content-Type": "application/json", ...CORS };
+const HTML_H = { "Content-Type": "text/html; charset=utf-8", ...CORS };
 
-const HTML = `<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="utf-8"/>
-<title>GodeX Studio</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6edf3; min-height: 100vh; display: flex; flex-direction: column; }
-header { background: #161b22; border-bottom: 1px solid #30363d; padding: 8px 16px; display: flex; align-items: center; gap: 16px; }
-header h1 { font-size: 15px; font-weight: 600; color: #58a6ff; }
-header .status { font-size: 12px; color: #8b949e; }
-header .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f85149; margin-right: 6px; vertical-align: middle; }
-header .dot.ok { background: #3fb950; }
-.cols { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-.col { border-right: 1px solid #21262d; overflow-y: auto; }
-.col-header { background: #161b22; padding: 8px 12px; font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #21262d; position: sticky; top: 0; z-index: 1; }
-.col-content { padding: 8px; }
-.model-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
-.model-card:hover { border-color: #58a6ff; }
-.model-card.active { border-color: #58a6ff; background: rgba(88,166,255,.08); }
-.model-card .name { font-size: 13px; font-weight: 600; color: #c9d1d9; }
-.model-card .meta { font-size: 11px; color: #8b949e; margin-top: 2px; }
-.params-form { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 12px; align-items: center; padding: 8px 8px 0; }
-.params-form label { color: #8b949e; }
-.params-form input, .params-form select { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; padding: 5px 8px; font-size: 12px; width: 100%; }
-.params-form .actions { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 4px; }
-.btn { background: #238636; color: #fff; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-.btn:hover { background: #2ea043; }
-.btn.sec { background: #21262d; }
-.btn.sec:hover { background: #30363d; }
-.btn.info { background: #6e40c9; }
-.btn.info:hover { background: #8957e5; }
-.msg { font-size: 11px; color: #8b949e; margin-top: 4px; }
-.msg.ok { color: #3fb950; }
-.msg.err { color: #f85149; }
-.logs-panel { background: #0d1117; height: 180px; display: flex; flex-direction: column; flex-shrink: 0; border-top: 1px solid #30363d; }
-.logs-header { background: #161b22; padding: 4px 12px; display: flex; gap: 8px; align-items: center; }
-.logs-header span { font-size: 11px; color: #8b949e; }
-.logs-body { flex: 1; overflow-y: auto; }
-.log-entry { padding: 3px 12px; border-bottom: 1px solid #161b22; font-family: ui-monospace, monospace; font-size: 11px; display: flex; gap: 8px; }
-.log-entry.error { background: rgba(248,81,73,.08); border-left: 3px solid #f85149; }
-.log-entry.warn { border-left: 3px solid #d29922; }
-.log-entry.ok { border-left: 3px solid #3fb950; }
-.log-entry .ts { color: #6e7681; flex-shrink: 0; }
-.log-entry .msg { color: #c9d1d9; word-break: break-all; margin: 0; }
-</style>
-</head>
-<body>
-<header>
-  <h1>GodeX Studio</h1>
-  <span class="status"><span class="dot" id="dot"></span><span id="status-text">checking...</span></span>
-  <span style="font-size:11px;color:#6e7681;margin-left:auto">Studio :56791 &rarr; GodeX ${GODEX_BASE}</span>
-</header>
-<div class="cols">
-  <div class="col" style="width:220px;flex-shrink:0">
-    <div class="col-header">Provider / Model</div>
-    <div class="col-content" id="models-list"></div>
-  </div>
-  <div class="col" style="flex:1">
-    <div class="col-header">Parameters</div>
-    <div class="col-content">
-      <div class="params-form">
-        <label>Provider</label>
-        <select id="param-provider"><option value="minimax">MiniMax</option></select>
-        <label>Temperature</label><input id="param-temperature" type="number" min="0" max="2" step="0.1" value="0.7"/>
-        <label>Top P</label><input id="param-top_p" type="number" min="0" max="1" step="0.05" value="1.0"/>
-        <label>Max Output</label><input id="param-max_output" type="number" min="1" max="65536" value="16384"/>
-        <label>Stream</label>
-        <select id="param-stream">
-          <option value="true">true (SSE)</option>
-          <option value="false">false (sync)</option>
-        </select>
-        <div class="actions">
-          <button class="btn" id="btn-save">Save Profile</button>
-          <button class="btn info" id="btn-apply">Apply &amp; Restart GodeX</button>
-          <button class="btn sec" id="btn-reset">Reset</button>
-        </div>
-        <div class="msg" id="param-msg"></div>
-      </div>
-    </div>
-  </div>
-  <div class="col" style="width:260px">
-    <div class="col-header">Active Model</div>
-    <div class="col-content" id="active-model">
-      <div class="model-card" style="cursor:default"><div class="name" style="color:#8b949e">No model selected</div></div>
-    </div>
-  </div>
-</div>
-<div class="logs-panel">
-  <div class="logs-header">
-    <span>Logs</span>
-    <button class="btn sec" id="btn-refresh" style="padding:2px 8px;font-size:11px">Refresh</button>
-    <button class="btn sec" id="btn-clear" style="padding:2px 8px;font-size:11px">Clear</button>
-  </div>
-  <div class="logs-body" id="logs-content"></div>
-</div>
-<script>
-const GODEX = "${GODEX_BASE}";
-let activeModel = null;
-let activeProvider = null;
+interface TraceRow { created_at: number; event_name: string; request_id: string; provider?: string; model?: string; message?: string; }
 
-function $(id) { return document.getElementById(id); }
-function esc(s) { return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-function setStatus(text, ok) { $("status-text").textContent = text; $("dot").className = "dot" + (ok ? " ok" : ""); }
-function log(msg, type) {
-  const el = $("logs-content");
-  const d = document.createElement("div");
-  d.className = "log-entry " + (type || "ok");
-  d.innerHTML = "<span class=ts>" + new Date().toTimeString().slice(0,8) + "</span><span class=msg>" + esc(msg) + "</span>";
-  el.insertBefore(d, el.firstChild);
-  if (el.children.length > 80) el.removeChild(el.lastChild);
-}
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) throw new Error(path + " HTTP " + r.status);
-  return r.json().catch(() => ({}));
-}
-async function checkGodex() {
+async function queryTraceLogs(limit = 60): Promise<TraceRow[]> {
   try {
-    const [h, m] = await Promise.all([
-      fetch(GODEX + "/health").then(r => r.json()),
-      fetch(GODEX + "/v1/models").then(r => r.json()),
-    ]);
-    setStatus("godex: " + (h.providers || []).join(", "), true);
-    renderModels(m.data || []);
-  } catch(e) { setStatus("godex offline: " + e.message, false); }
+    const { DatabaseSync } = await import("bun");
+    if (!existsSync(TRACE_DB_PATH)) return [];
+    const db = new DatabaseSync(TRACE_DB_PATH);
+    const rows = db.query(
+      `SELECT created_at, event_name, request_id, provider, model, message FROM trace_events ORDER BY created_at DESC LIMIT ?`
+    ).all(limit) as TraceRow[];
+    db.close();
+    return rows;
+  } catch { return []; }
 }
-function renderModels(list) {
-  const el = $("models-list");
-  const byP = {};
-  for (const x of list) { const p = (x.id || "").split("/")[0] || "unknown"; (byP[p] = byP[p] || []).push(x); }
-  el.innerHTML = "";
-  for (const [p, ms] of Object.entries(byP)) {
-    const g = document.createElement("div");
-    g.innerHTML = "<div style=\'font-size:10px;color:#6e7681;padding:4px 0 2px 4px\'>" + esc(p) + "</div>";
-    for (const x of ms) {
-      const c = document.createElement("div");
-      c.className = "model-card" + (x.id === activeModel ? " active" : "");
-      c.innerHTML = "<div class=name>" + esc(x.id) + "</div>";
-      c.onclick = () => {
-        activeModel = x.id; activeProvider = p;
-        $("param-provider").value = p;
-        $("active-model").innerHTML = "<div class=model-card><div class=name>" + esc(x.id) + "</div><div class=meta>Selected</div></div>";
-        localStorage.setItem("studio:active", x.id);
-        renderModels(list);
-        log("Selected: " + x.id);
-        loadProfile(x.id);
-      };
-      g.appendChild(c);
-    }
-    el.appendChild(g);
-  }
-  const saved = localStorage.getItem("studio:active");
-  if (saved && !activeModel) {
-    activeModel = saved; activeProvider = saved.split("/")[0];
-    $("param-provider").value = activeProvider;
-    $("active-model").innerHTML = "<div class=model-card><div class=name>" + esc(saved) + "</div><div class=meta>Selected</div></div>";
-    loadProfile(saved);
-  }
-}
-async function loadProfile(model) {
-  try {
-    const p = await api("/api/profiles?model=" + encodeURIComponent(model || ""));
-    if (p.temperature !== undefined) $("param-temperature").value = p.temperature;
-    if (p.top_p !== undefined) $("param-top_p").value = p.top_p;
-    if (p.max_output_tokens !== undefined) $("param-max_output").value = p.max_output_tokens;
-    if (p.stream !== undefined) $("param-stream").value = String(p.stream);
-  } catch {}
-}
-$("btn-save").addEventListener("click", async () => {
-  const msg = $("param-msg");
-  try {
-    await api("/api/profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: activeModel || "", temperature: +$("param-temperature").value, top_p: +$("param-top_p").value, max_output_tokens: +$("param-max_output").value, stream: $("param-stream").value === "true" })
-    });
-    msg.textContent = "Profile saved for " + (activeModel || "default"); msg.className = "msg ok";
-    log("Profile saved: " + (activeModel || "default"));
-  } catch(e) { msg.textContent = e.message; msg.className = "msg err"; log(e.message, "error"); }
-});
-$("btn-reset").addEventListener("click", () => {
-  $("param-temperature").value = "0.7"; $("param-top_p").value = "1.0"; $("param-max_output").value = "16384"; $("param-stream").value = "true";
-  $("param-msg").textContent = "";
-});
-$("btn-apply").addEventListener("click", () => {
-  $("param-msg").textContent = "Edit config.yaml, then restart godex to apply.";
-  $("param-msg").className = "msg";
-  log("Apply requires godex restart");
-});
-$("btn-refresh").addEventListener("click", () => { $("logs-content").innerHTML = ""; log("cleared"); });
-$("btn-clear").addEventListener("click", () => { $("logs-content").innerHTML = ""; });
-async function loadLogs() {
-  try {
-    const logs = await api("/api/logs");
-    const el = $("logs-content");
-    el.innerHTML = "";
-    for (const l of (logs || []).slice(0, 60)) {
-      const d = document.createElement("div");
-      const lvl = l.event_name?.includes("error") ? "error" : l.event_name?.includes("warn") ? "warn" : "ok";
-      d.className = "log-entry " + lvl;
-      d.innerHTML = "<span class=ts>" + (l.created_at ? new Date(l.created_at * 1000).toTimeString().slice(0,8) : "--:--:--") + "</span><span class=msg>" + esc(l.event_name || "?") + "</span>";
-      el.appendChild(d);
-    }
-  } catch(e) { log("logs: " + e.message, "error"); }
-}
-checkGodex(); loadLogs();
-setInterval(checkGodex, 8000);
-setInterval(loadLogs, 6000);
-</script>
-</body>
-</html>`;
-
-// ─── Profiles Persistence ────────────────────────────────────────────────────
-
-interface ProfileEntry {
-	temperature: number;
-	top_p: number;
-	max_output_tokens: number;
-	stream: boolean;
-}
-
-interface ProfilesData {
-	models: Record<string, ProfileEntry>;
-}
-
-function loadProfiles(): ProfilesData {
-	try {
-		if (existsSync(PROFILES_PATH)) {
-			return JSON.parse(readFileSync(PROFILES_PATH, "utf-8")) as ProfilesData;
-		}
-	} catch {}
-	return { models: {} };
-}
-
-function saveProfiles(data: ProfilesData): void {
-	writeFileSync(PROFILES_PATH, JSON.stringify(data, null, 2), "utf-8");
-}
-
-// ─── Trace DB Reader (Bun built-in SQLite) ───────────────────────────────────
-
-interface TraceLog {
-	created_at: number;
-	event_name: string;
-	request_id: string;
-	provider?: string;
-	model?: string;
-	message?: string;
-}
-
-async function queryTraceLogs(limit = 60): Promise<TraceLog[]> {
-	try {
-		const { DatabaseSync } = await import("bun");
-		if (!existsSync(TRACE_DB_PATH)) return [];
-		const db = new DatabaseSync(TRACE_DB_PATH);
-		const rows = db.query(
-			`SELECT created_at, event_name, request_id, provider, model, message
-       FROM trace_events ORDER BY created_at DESC LIMIT ?`,
-		).all(limit) as TraceLog[];
-		db.close();
-		return rows;
-	} catch {
-		return [];
-	}
-}
-
-// ─── Bun.serve ───────────────────────────────────────────────────────────────
-
-const CORS = {
-	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-	"Access-Control-Allow-Headers": "Content-Type",
-};
 
 const server = Bun.serve({
-	port: PORT,
-	async fetch(req) {
-		const url = new URL(req.url);
-		const path = url.pathname;
-
-		if (req.method === "OPTIONS") {
-			return new Response(null, { headers: { ...CORS } });
-		}
-
-		const jsonHeaders = { "Content-Type": "application/json", ...CORS };
-
-		// Serve UI
-		if (path === "/" || path === "/index.html") {
-			return new Response(HTML, { headers: { "Content-Type": "text/html; charset=utf-8", ...CORS } });
-		}
-
-		// Proxy: /health
-		if (path === "/health") {
-			try {
-				const r = await fetch(GODEX_BASE + "/health", { signal: AbortSignal.timeout(3000) });
-				const body = await r.text();
-				return new Response(body, { headers: { "Content-Type": "application/json", ...CORS } });
-			} catch (e: unknown) {
-				return new Response(JSON.stringify({ error: String((e as Error).message) }), { status: 502, headers: jsonHeaders });
-			}
-		}
-
-		// Proxy: /v1/models
-		if (path === "/v1/models") {
-			try {
-				const r = await fetch(GODEX_BASE + "/v1/models", { signal: AbortSignal.timeout(5000) });
-				const body = await r.text();
-				return new Response(body, { headers: { "Content-Type": "application/json", ...CORS } });
-			} catch (e: unknown) {
-				return new Response(JSON.stringify({ error: String((e as Error).message) }), { status: 502, headers: jsonHeaders });
-			}
-		}
-
-		// API: GET /api/logs
-		if (path === "/api/logs" && req.method === "GET") {
-			const logs = await queryTraceLogs(60);
-			return new Response(JSON.stringify(logs), { headers: jsonHeaders });
-		}
-
-		// API: GET /api/profiles?model=xxx
-		if (path === "/api/profiles" && req.method === "GET") {
-			const model = url.searchParams.get("model") || "";
-			const profiles = loadProfiles();
-			const entry = model ? (profiles.models[model] ?? profiles.models["*"]) : profiles.models["*"];
-			return new Response(JSON.stringify(entry ?? {}), { headers: jsonHeaders });
-		}
-
-		// API: POST /api/profiles
-		if (path === "/api/profiles" && req.method === "POST") {
-			try {
-				const body = await req.json() as { model?: string; temperature?: number; top_p?: number; max_output_tokens?: number; stream?: boolean };
-				const profiles = loadProfiles();
-				const key = body.model || "*";
-				profiles.models = profiles.models ?? {};
-				profiles.models[key] = {
-					temperature: body.temperature ?? 0.7,
-					top_p: body.top_p ?? 1.0,
-					max_output_tokens: body.max_output_tokens ?? 16384,
-					stream: body.stream ?? true,
-				};
-				saveProfiles(profiles);
-				return new Response(JSON.stringify({ ok: true, model: key }), { headers: jsonHeaders });
-			} catch (e: unknown) {
-				return new Response(JSON.stringify({ error: String((e as Error).message) }), { status: 400, headers: jsonHeaders });
-			}
-		}
-
-		return new Response("Not found", { status: 404 });
-	},
+  port: PORT,
+  async fetch(req) {
+    const url = new URL(req.url);
+    const path = url.pathname;
+    if (req.method === "OPTIONS") return new Response(null, { headers: { ...CORS } });
+    if (path === "/" || path === "/index.html") return new Response(HTML, { headers: HTML_H });
+    if (path === "/health") {
+      try { const r = await fetch(GODEX_BASE + "/health", { signal: AbortSignal.timeout(3000) }); return new Response(await r.text(), { headers: JSON_H }); }
+      catch (e: unknown) { return new Response(JSON.stringify({ error: String((e as Error).message) }), { status: 502, headers: JSON_H }); }
+    }
+    if (path === "/v1/models") {
+      try { const r = await fetch(GODEX_BASE + "/v1/models", { signal: AbortSignal.timeout(5000) }); return new Response(await r.text(), { headers: JSON_H }); }
+      catch (e: unknown) { return new Response(JSON.stringify({ error: String((e as Error).message) }), { status: 502, headers: JSON_H }); }
+    }
+    if (path === "/api/logs" && req.method === "GET") return new Response(JSON.stringify(await queryTraceLogs(60)), { headers: JSON_H });
+    return new Response("Not found", { status: 404 });
+  },
 });
 
 console.log(`GodeX Studio listening on http://127.0.0.1:${PORT}`);
-console.log(`  -> GodeX backend : ${GODEX_BASE}`);
-console.log(`  -> Profiles file  : ${PROFILES_PATH}`);
-console.log(`  -> Trace DB       : ${TRACE_DB_PATH}`);
+console.log(`  -> GodeX: ${GODEX_BASE}`);
+console.log(`  -> Trace DB: ${TRACE_DB_PATH}`);
+
+
+const HTML = "<!DOCTYPE html>\n<html lang=\"zh\">\n<head>\n<meta charset=\"utf-8\"/>\n<title>GodeX Studio</title>\n<style>\n*{box-sizing:border-box;margin:0;padding:0}\n:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#c9d1d9;--text2:#8b949e;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--purple:#8957e5}\nbody{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden}\nheader{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px}\nh1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}\n.dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;vertical-align:middle}\n.dot.ok{background:var(--green)}\n.layout{display:flex;flex:1;overflow:hidden;min-height:0}\n.col-left{width:200px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column}\n.col-center{flex:1;display:flex;flex-direction:column;overflow:hidden}\n.col-right{width:240px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column}\n.sec{background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 12px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}\n.provider-list{padding:8px;flex:1;overflow-y:auto}\n.provider-item{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:13px;font-weight:600}\n.provider-item:hover{border-color:var(--blue)}\n.provider-item.active{border-color:var(--blue);background:rgba(88,166,255,.1);color:var(--blue)}\n.provider-item .sub{font-size:11px;color:var(--text2);font-weight:400;margin-top:2px}\n.forms-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}\n.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}\n.form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}\n.form-grid{display:grid;grid-template-columns:130px 1fr;gap:0}\n.form-row{display:contents}\n.form-row label{padding:7px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;border-bottom:1px solid rgba(48,54,61,.5)}\n.form-row label .req{color:var(--red);margin-left:2px}\ninput,select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-size:12px;width:100%;font-family:inherit}\ninput:focus,select:focus{outline:none;border-color:var(--blue)}\ninput[type=number]{-moz-appearance:textfield}\ninput[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}\n.preset-hint{padding:4px 12px;font-size:11px;color:var(--text2);background:rgba(255,255,255,.02);border-top:1px solid rgba(48,54,61,.5)}\n.action-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0}\n.btn{background:#238636;border:none;border-radius:5px;color:#fff;padding:7px 16px;font-size:13px;cursor:pointer;font-weight:600}\n.btn:hover{background:#2ea043}\n.btn.purple{background:#6e40c9}\n.btn.purple:hover{background:var(--purple)}\n.btn.gray{background:var(--bg3);color:var(--text)}\n.btn.gray:hover{background:#3a3f47}\n.msg{font-size:12px;margin-left:8px}\n.msg.ok{color:var(--green)}\n.msg.err{color:var(--red)}\n.model-list{flex:1;overflow-y:auto;padding:8px}\n.model-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:5px;cursor:pointer}\n.model-card:hover{border-color:var(--blue)}\n.model-card.active{border-color:var(--blue);background:rgba(88,166,255,.08)}\n.model-card .name{font-size:12px;font-weight:600}\n.model-card.active .name{color:var(--blue)}\n.model-card .preset{font-size:10px;color:var(--green);margin-top:2px}\n.model-card .hint{font-size:10px;color:var(--yellow);margin-top:2px}\n.bottom{height:180px;flex-shrink:0;border-top:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg)}\n.bottom-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}\n.bottom-header span{font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase}\n.bottom-body{flex:1;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11px}\n.log-line{padding:2px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px}\n.log-line:hover{background:rgba(255,255,255,.02)}\n.log-line .ts{color:#6e7681;flex-shrink:0}\n.log-line .msg{color:var(--text);word-break:break-all}\n.log-line.error{background:rgba(248,81,73,.06);border-left:3px solid var(--red)}\n.log-line.error .msg{color:var(--red)}\n.log-line.warn{border-left:3px solid var(--yellow)}\n.log-line.warn .msg{color:var(--yellow)}\n.log-line.ok{border-left:3px solid var(--green)}\n.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}\n</style>\n</head>\n<body>\n\n<header>\n  <h1>&#9881; GodeX Studio</h1>\n  <div class=\"dot ok\" id=\"godex-dot\"></div>\n  <span style=\"font-size:12px;color:var(--text2)\" id=\"godex-label\">checking godex...</span>\n  <div class=\"header-right\">\n    <span>Studio :56791</span><span>&#8594;</span><span id=\"godex-url\">http://127.0.0.1:5678</span>\n  </div>\n</header>\n\n<div class=\"layout\">\n\n  <!-- LEFT: Provider -->\n  <div class=\"col-left\">\n    <div class=\"sec\">Provider</div>\n    <div class=\"provider-list\">\n      <div class=\"provider-item active\" data-provider=\"minimax\" onclick=\"selectProvider('minimax')\">\n        MiniMax<div class=\"sub\">minnimax.chat</div>\n      </div>\n      <div class=\"provider-item\" data-provider=\"deepseek\" onclick=\"selectProvider('deepseek')\">\n        DeepSeek<div class=\"sub\">api.deepseek.com</div>\n      </div>\n      <div class=\"provider-item\" data-provider=\"openai\" onclick=\"selectProvider('openai')\">\n        OpenAI<div class=\"sub\">api.openai.com</div>\n      </div>\n      <div class=\"provider-item\" data-provider=\"zhipu\" onclick=\"selectProvider('zhipu')\">\n        智谱 GLM<div class=\"sub\">bigmodel.cn</div>\n      </div>\n    </div>\n  </div>\n\n  <!-- CENTER: Settings Forms -->\n  <div class=\"col-center\">\n    <div class=\"forms-area\">\n\n      <!-- Connection -->\n      <div class=\"form-section\">\n        <div class=\"form-section-head\">&#128279; 连接设置</div>\n        <div class=\"form-grid\">\n          <div class=\"form-row\"><label>Base URL <span class=\"req\">*</span></label>\n            <input id=\"f-base_url\" type=\"text\" placeholder=\"https://api.example.com/v1\" value=\"https://minnimax.chat/v1\"/>\n          </div>\n          <div class=\"form-row\"><label>API Key <span class=\"req\">*</span></label>\n            <input id=\"f-api_key\" type=\"password\" placeholder=\"gw-xxxxxxxxxxxxxxxx\"/>\n          </div>\n          <div class=\"form-row\"><label>Timeout (ms)</label>\n            <input id=\"f-timeout\" type=\"number\" min=\"5000\" max=\"300000\" step=\"5000\" value=\"120000\"/>\n          </div>\n        </div>\n      </div>\n\n      <!-- Model params -->\n      <div class=\"form-section\">\n        <div class=\"form-section-head\">&#128203; 模型参数（右侧选模型自动填入）</div>\n        <div class=\"form-grid\">\n          <div class=\"form-row\"><label>Context Window</label>\n            <input id=\"f-context\" type=\"number\" min=\"1024\" max=\"2000000\" step=\"1024\" placeholder=\"点击右侧模型自动填入\"/>\n          </div>\n          <div class=\"form-row\"><label>Max Output</label>\n            <input id=\"f-max_output\" type=\"number\" min=\"1\" max=\"65536\" value=\"16384\"/>\n          </div>\n          <div class=\"form-row\"><label>Temperature</label>\n            <input id=\"f-temperature\" type=\"number\" min=\"0\" max=\"2\" step=\"0.1\" value=\"0.7\"/>\n          </div>\n          <div class=\"form-row\"><label>Top P</label>\n            <input id=\"f-top_p\" type=\"number\" min=\"0\" max=\"1\" step=\"0.05\" value=\"1.0\"/>\n          </div>\n          <div class=\"form-row\"><label>Top K</label>\n            <input id=\"f-top_k\" type=\"number\" min=\"1\" max=\"100\" placeholder=\"不限制\"/>\n          </div>\n        </div>\n      </div>\n\n      <!-- Advanced -->\n      <div class=\"form-section\">\n        <div class=\"form-section-head\">&#9889; 高级参数</div>\n        <div class=\"form-grid\">\n          <div class=\"form-row\"><label>Thinking</label>\n            <select id=\"f-thinking\">\n              <option value=\"disabled\">disabled</option>\n              <option value=\"adaptive\" selected>adaptive</option>\n              <option value=\"enabled\">enabled</option>\n            </select>\n          </div>\n          <div class=\"form-row\"><label>Reasoning Effort</label>\n            <select id=\"f-reasoning_effort\">\n              <option value=\"\">默认</option>\n              <option value=\"low\">low</option>\n              <option value=\"medium\" selected>medium</option>\n              <option value=\"high\">high</option>\n            </select>\n          </div>\n          <div class=\"form-row\"><label>Seed</label>\n            <input id=\"f-seed\" type=\"number\" min=\"1\" max=\"9999999999\" placeholder=\"随机\"/>\n          </div>\n          <div class=\"form-row\"><label>Stream</label>\n            <select id=\"f-stream\">\n              <option value=\"true\" selected>SSE 流式</option>\n              <option value=\"false\">同步</option>\n            </select>\n          </div>\n        </div>\n      </div>\n\n      <!-- Alias -->\n      <div class=\"form-section\">\n        <div class=\"form-section-head\">&#128278; 模型别名映射</div>\n        <div class=\"form-grid\">\n          <div class=\"form-row\"><label>默认别名 *</label>\n            <input id=\"f-alias_default\" type=\"text\" value=\"minimax-m3\" placeholder=\"minimax-m3\"/>\n          </div>\n          <div class=\"form-row\"><label>指向模型</label>\n            <input id=\"f-alias_target\" type=\"text\" value=\"minimax/MiniMax-M3\" placeholder=\"minimax/MiniMax-M3\"/>\n          </div>\n        </div>\n        <div class=\"preset-hint\">* Codex 发送 model 字段时用别名匹配，如输入 \"minimax-m3\" → 映射到 \"minimax/MiniMax-M3\"</div>\n      </div>\n\n    </div>\n\n    <!-- Action bar -->\n    <div class=\"action-bar\">\n      <button class=\"btn\" onclick=\"saveConfig()\">&#128190; 保存配置</button>\n      <button class=\"btn purple\" onclick=\"generateAndCopy()\">&#128203; 生成 config.yaml</button>\n      <button class=\"btn gray\" onclick=\"resetForm()\">&#128260; 重置</button>\n      <span class=\"msg\" id=\"action-msg\"></span>\n    </div>\n  </div>\n\n  <!-- RIGHT: Model List -->\n  <div class=\"col-right\">\n    <div class=\"sec\">&#128203; 模型列表</div>\n    <div class=\"model-list\" id=\"model-list\">\n      <div style=\"padding:16px;text-align:center;color:var(--text2);font-size:12px\">加载中...</div>\n    </div>\n  </div>\n\n</div>\n\n<!-- BOTTOM: Logs -->\n<div class=\"bottom\">\n  <div class=\"bottom-header\">\n    <span>Logs</span>\n    <button class=\"btn gray\" style=\"padding:2px 8px;font-size:11px\" onclick=\"clearLogs()\">Clear</button>\n    <span id=\"log-count\" style=\"margin-left:auto;font-size:11px;color:var(--text2)\"></span>\n  </div>\n  <div class=\"bottom-body\" id=\"logs-body\"></div>\n</div>\n\n<script>\nconst GODEX = \"http://127.0.0.1:5678\";\nconst $ = id => document.getElementById(id);\nconst esc = s => String(s||\"\").replace(/&/g,\"&amp;\").replace(/</g,\"&lt;\").replace(/>/g,\"&gt;\");\n\nlet logCount = 0;\nlet activeProvider = localStorage.getItem(\"studio:provider\") || \"minimax\";\nlet activeModel = localStorage.getItem(\"studio:active\") || \"\";\n\n// Known model presets: context window, max_output, thinking\nconst PRESETS = {\n  \"minimax/MiniMax-M3\":        { ctx: 192000, out: 16384, think: \"adaptive\" },\n  \"minimax/MiniMax-M2.7\":      { ctx: 192000, out: 16384, think: \"adaptive\" },\n  \"minimax/MiniMax-M2\":        { ctx: 100000, out: 8192,  think: \"adaptive\" },\n  \"minimax/MiniMax-M1.5\":      { ctx: 100000, out: 8192,  think: \"adaptive\" },\n  \"minimax/MiniMax-Text-01\":   { ctx: 100000, out: 8192,  think: \"disabled\" },\n  \"deepseek/deepseek-chat\":    { ctx: 64000,  out: 8192,  think: \"disabled\" },\n  \"deepseek/deepseek-coder\":   { ctx: 64000,  out: 8192,  think: \"disabled\" },\n  \"openai/gpt-4o\":             { ctx: 128000, out: 16384, think: \"disabled\" },\n  \"openai/gpt-4o-mini\":       { ctx: 128000, out: 16384, think: \"disabled\" },\n  \"openai/gpt-4-turbo\":        { ctx: 128000, out: 16384, think: \"disabled\" },\n  \"zhipu/glm-4\":               { ctx: 128000, out: 8192,  think: \"disabled\" },\n  \"zhipu/glm-4-flash\":         { ctx: 128000, out: 8192,  think: \"disabled\" },\n};\n\nconst PROVIDER_DEFAULTS = {\n  minimax:  { base: \"https://minnimax.chat/v1\", timeout: 120000, think: \"adaptive\" },\n  deepseek: { base: \"https://api.deepseek.com/v1\", timeout: 60000, think: \"disabled\" },\n  openai:   { base: \"https://api.openai.com/v1\", timeout: 60000, think: \"disabled\" },\n  zhipu:    { base: \"https://open.bigmodel.cn/api/paas/v4\", timeout: 60000, think: \"disabled\" },\n};\n\nfunction log(msg, type=\"ok\") {\n  const body = $(\"logs-body\");\n  const d = document.createElement(\"div\");\n  d.className = \"log-line \" + type;\n  d.innerHTML = \"<span class=ts>\"+new Date().toTimeString().slice(0,8)+\"</span><span class=msg>\"+esc(msg)+\"</span>\";\n  body.insertBefore(d, body.firstChild);\n  logCount++;\n  $(\"log-count\").textContent = logCount + \" 条\";\n  if (body.children.length > 200) body.removeChild(body.lastChild);\n}\n\nfunction setGodexStatus(text, ok) {\n  $(\"godex-label\").textContent = text;\n  $(\"godex-dot\").className = \"dot\" + (ok ? \" ok\" : \"\");\n}\n\nfunction showMsg(text, type) {\n  const el = $(\"action-msg\");\n  el.textContent = text; el.className = \"msg \" + (type||\"\");\n  setTimeout(() => { el.textContent = \"\"; }, 4000);\n}\n\nfunction selectProvider(p) {\n  activeProvider = p;\n  localStorage.setItem(\"studio:provider\", p);\n  document.querySelectorAll(\".provider-item\").forEach(el => el.classList.toggle(\"active\", el.dataset.provider === p));\n  const def = PROVIDER_DEFAULTS[p] || {};\n  $(\"f-base_url\").value = def.base || \"\";\n  $(\"f-timeout\").value = def.timeout || 60000;\n  $(\"f-thinking\").value = def.think || \"adaptive\";\n  log(\"切换到 \" + p);\n}\n\nfunction selectModel(id) {\n  activeModel = id;\n  localStorage.setItem(\"studio:active\", id);\n  document.querySelectorAll(\".model-card\").forEach(el => el.classList.toggle(\"active\", el.dataset.id === id));\n  $(\"f-alias_target\").value = id;\n  const p = PRESETS[id];\n  if (p) {\n    $(\"f-context\").value = p.ctx;\n    $(\"f-max_output\").value = p.out;\n    if (p.think) $(\"f-thinking\").value = p.think;\n    log(\"已选 \" + id + \" (ctx:\" + p.ctx + \" out:\" + p.out + \")\", \"ok\");\n  } else {\n    $(\"f-context\").value = \"\";\n    $(\"f-max_output\").value = 16384;\n    log(\"已选 \" + id + \" (无预设，请手动填 Context/MaxOutput)\", \"warn\");\n  }\n}\n\nasync function loadModels() {\n  try {\n    const json = await fetch(GODEX + \"/v1/models\", {signal:AbortSignal.timeout(5000)}).then(r=>r.json());\n    const list = json.data || [];\n    const el = $(\"model-list\");\n    if (!list.length) { el.innerHTML = \"<div style='padding:16px;color:var(--text2)'>无模型</div>\"; return; }\n    const byP = {};\n    for (const m of list) { const pr = (m.id||\"\").split(\"/\")[0]||\"unknown\"; (byP[pr]=byP[pr]||[]).push(m); }\n    el.innerHTML = \"\";\n    for (const [pr, ms] of Object.entries(byP)) {\n      const grp = document.createElement(\"div\");\n      grp.innerHTML = \"<div style='font-size:10px;color:#6e7681;padding:4px 0 2px'>\"+esc(pr)+\"</div>\";\n      for (const m of ms) {\n        const card = document.createElement(\"div\");\n        const p2 = PRESETS[m.id];\n        card.className = \"model-card\" + (m.id===activeModel?\" active\":\"\");\n        card.dataset.id = m.id;\n        let extra = \"\";\n        if (p2) extra = \"<div class=preset>ctx:\"+p2.ctx+\" out:\"+p2.out+\"</div>\";\n        else extra = \"<div class=hint>请手动填参数</div>\";\n        card.innerHTML = \"<div class=name>\"+esc(m.id)+\"</div>\"+extra;\n        card.onclick = () => selectModel(m.id);\n        grp.appendChild(card);\n      }\n      el.appendChild(grp);\n    }\n  } catch(e) { $(\"model-list\").innerHTML = \"<div style='padding:16px;color:var(--red)'>加载失败: \"+esc(e.message)+\"</div>\"; }\n}\n\nasync function checkGodex() {\n  try {\n    const h = await fetch(GODEX+\"/health\",{signal:AbortSignal.timeout(3000)}).then(r=>r.json());\n    setGodexStatus(\"godex: \"+(h.providers||[]).join(\", \"), true);\n  } catch(e) { setGodexStatus(\"godex offline\", false); }\n}\n\nfunction saveConfig() {\n  const cfg = {\n    provider: activeProvider,\n    base_url: $(\"f-base_url\").value,\n    api_key: $(\"f-api_key\").value,\n    timeout: parseInt($(\"f-timeout\").value)||60000,\n    context: parseInt($(\"f-context\").value)||0,\n    max_output: parseInt($(\"f-max_output\").value)||16384,\n    temperature: parseFloat($(\"f-temperature\").value)||0.7,\n    top_p: parseFloat($(\"f-top_p\").value)||1,\n    top_k: $(\"f-top_k\").value?parseInt($(\"f-top_k\").value):null,\n    thinking: $(\"f-thinking\").value,\n    reasoning_effort: $(\"f-reasoning_effort\").value||null,\n    seed: $(\"f-seed\").value?parseInt($(\"f-seed\").value):null,\n    stream: $(\"f-stream\").value===\"true\",\n    alias_default: $(\"f-alias_default\").value,\n    alias_target: $(\"f-alias_target\").value,\n  };\n  localStorage.setItem(\"studio:config\", JSON.stringify(cfg));\n  showMsg(\"已保存到浏览器\", \"ok\");\n  log(\"配置已保存: \" + cfg.provider + \"/\" + cfg.alias_default);\n}\n\nfunction loadConfig() {\n  try {\n    const cfg = JSON.parse(localStorage.getItem(\"studio:config\")||\"{}\");\n    if (!cfg.provider) return;\n    selectProvider(cfg.provider);\n    $(\"f-base_url\").value = cfg.base_url||\"\";\n    $(\"f-api_key\").value = cfg.api_key||\"\";\n    $(\"f-timeout\").value = cfg.timeout||60000;\n    $(\"f-context\").value = cfg.context||\"\";\n    $(\"f-max_output\").value = cfg.max_output||16384;\n    $(\"f-temperature\").value = cfg.temperature??0.7;\n    $(\"f-top_p\").value = cfg.top_p??1;\n    $(\"f-top_k\").value = cfg.top_k||\"\";\n    $(\"f-thinking\").value = cfg.thinking||\"adaptive\";\n    $(\"f-reasoning_effort\").value = cfg.reasoning_effort||\"medium\";\n    $(\"f-seed\").value = cfg.seed||\"\";\n    $(\"f-stream\").value = cfg.stream?\"true\":\"false\";\n    $(\"f-alias_default\").value = cfg.alias_default||\"minimax-m3\";\n    $(\"f-alias_target\").value = cfg.alias_target||\"\";\n    log(\"配置已恢复\");\n  } catch {}\n}\n\nfunction getGodexPort() { try { return new URL(GODEX).port||\"5678\"; } catch { return \"5678\"; } }\n\nfunction generateAndCopy() {\n  saveConfig();\n  const p = activeProvider;\n  const alias = $(\"f-alias_default\").value || p+\"-model\";\n  const target = $(\"f-alias_target\").value || p+\"/Model\";\n  const yaml = `server:\n  port: ${getGodexPort()}\n  host: 127.0.0.1\ndefault_provider: ${p}\nproviders:\n  ${p}:\n    spec: ${p}\n    credentials:\n      api_key: ${$(\"f-api_key\").value || \"YOUR_API_KEY\"}\n    endpoint:\n      base_url: ${$(\"f-base_url\").value || \"https://api.example.com/v1\"}\n    timeout_ms: ${$(\"f-timeout\").value || 60000}\nmodels:\n  aliases:\n    \"${alias}\": ${target}\nsession:\n  backend: sqlite\nlogging:\n  level: info\ntrace:\n  enabled: true\n  capture_payload: true\n`;\n  navigator.clipboard.writeText(yaml).then(() => { showMsg(\"config.yaml 已复制到剪贴板！\", \"ok\"); log(\"config.yaml 已复制\"); }).catch(e => { showMsg(e.message, \"err\"); });\n}\n\nfunction resetForm() {\n  selectProvider(activeProvider);\n  $(\"f-context\").value = \"\";\n  $(\"f-max_output\").value = \"16384\";\n  $(\"f-temperature\").value = \"0.7\";\n  $(\"f-top_p\").value = \"1.0\";\n  $(\"f-top_k\").value = \"\";\n  $(\"f-reasoning_effort\").value = \"medium\";\n  $(\"f-seed\").value = \"\";\n  $(\"f-stream\").value = \"true\";\n  showMsg(\"已重置\", \"\");\n}\n\nfunction clearLogs() { $(\"logs-body\").innerHTML = \"\"; logCount=0; $(\"log-count\").textContent=\"\"; }\n\nasync function pollLogs() {\n  try {\n    const logs = await fetch(\"/api/logs\",{signal:AbortSignal.timeout(5000)}).then(r=>r.json());\n    if (!logs||!logs.length) return;\n    const el = $(\"logs-body\");\n    const existing = new Set([...el.querySelectorAll(\".log-line\")].map(d=>d.dataset.req));\n    for (const l of logs) {\n      if (existing.has(l.request_id)) continue;\n      const d = document.createElement(\"div\");\n      d.className = \"log-line \" + (l.event_name?.includes(\"error\")?\"error\":l.event_name?.includes(\"warn\")?\"warn\":\"ok\");\n      d.dataset.req = l.request_id;\n      const ts = l.created_at?new Date(l.created_at*1000).toTimeString().slice(0,8):\"--:--:--\";\n      d.innerHTML = \"<span class=ts>\"+ts+\"</span><span class=msg>\"+esc(l.event_name||\"?\")+\"</span>\";\n      el.insertBefore(d, el.firstChild);\n      if (el.children.length > 200) el.removeChild(el.lastChild);\n    }\n  } catch {}\n}\n\nselectProvider(activeProvider);\nloadConfig();\nloadModels();\ncheckGodex();\nsetInterval(checkGodex, 8000);\nsetInterval(pollLogs, 5000);\nlog(\"GodeX Studio 已启动\");\n</script>\n</body>\n</html>";
