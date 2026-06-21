@@ -390,11 +390,16 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </div>
 <script>
+
+
+
+
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"[c]));
 
 const CAPS = [
   "text", "image_input", "audio_input", "video_input",
@@ -844,8 +849,6 @@ function applyPresetToRow(modelId, row) {
       row.capabilities[c] = !!caps[c];
     }
   }
-  return true;
-}
   return true;
 }
 
@@ -1353,6 +1356,12 @@ async function conflictKillProcess() {
 async function doGodexRestart() {
   try { await invoke("godex_restart"); } catch (e) { showMsg("重启 godex 失败: " + e, "err"); }
 }
+
+
+
+
+
+
 </script>
 </body>
 </html>
