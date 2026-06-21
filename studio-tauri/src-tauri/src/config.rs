@@ -247,9 +247,12 @@ fn find_enabled_block(raw: &str) -> Option<(usize, usize)> {
 }
 
 fn replace_or_insert(raw: &str, new_block: &str) -> String {
-    if let Some((_start, body)) = find_enabled_block(raw) {
+    if let Some((enabled_start, body)) = find_enabled_block(raw) {
         // Find end of the block: next line whose leftmost non-space is at
-        // column 0 (top-level key).
+        // column 0 (top-level key). The splice replaces from `enabled_start`
+        // (start of "  enabled:" line) through the next top-level key (or
+        // EOF), so any old "  enabled: []" header is removed cleanly even
+        // when it appears on its own line.
         let bytes = raw.as_bytes();
         let mut cursor = body;
         while cursor < bytes.len() {
@@ -264,13 +267,13 @@ fn replace_or_insert(raw: &str, new_block: &str) -> String {
                     // to before its leading newline.
                     let mut cut = cursor;
                     if cut > 0 && bytes[cut - 1] == b'\n' { cut -= 1; }
-                    return format!("{}{}{}", &raw[..body], new_block.trim_end(), &raw[cut..]);
+                    return format!("{}{}{}", &raw[..enabled_start], new_block.trim_end(), &raw[cut..]);
                 }
             }
             cursor = if line_end_rel.is_some() { line_end + 1 } else { bytes.len() };
         }
         // Block runs to EOF.
-        return format!("{}{}", &raw[..body], new_block.trim_end());
+        return format!("{}{}", &raw[..enabled_start], new_block.trim_end());
     }
     // No `models.enabled` block; insert after `default_provider:` line.
     if let Some(idx) = raw.find("default_provider:") {
@@ -465,5 +468,57 @@ models:
         assert!(!block.contains("video_input:"));
         assert!(!block.contains("image_output:"));
         assert!(block.contains("      note: \"hello\"\n"));
+    }
+
+    fn double_enabled_raw() -> &'static str {
+        r##"server:
+  port: 5678
+  host: 127.0.0.1
+default_provider: minnimax
+providers:
+  minnimax:
+    spec: minimax
+    credentials:
+      api_key: gw-x
+    endpoint:
+      base_url: https://minnimax.chat/v1
+    timeout_ms: 120000
+models:
+  enabled: []
+  enabled:
+    - provider: minnimax
+      model: MiniMax-M3
+      context_window: 1000000
+      max_tokens: 16384
+"##
+    }
+
+    #[test]
+    fn replace_block_when_old_empty_enabled_line_is_present() {
+        // Reproduces the real-world corruption pattern: file has both
+        // `  enabled: []` on its own line AND a second `  enabled:`
+        // block underneath (left over from a previous buggy save).
+        let raw = double_enabled_raw();
+        let block = render_enabled_block(&sample_items());
+        let updated = replace_or_insert(raw, &block);
+        // The new block should be present.
+        assert!(updated.contains("- provider: minnimax"));
+        assert!(updated.contains("      model: MiniMax-M3"));
+        assert!(updated.contains("      context_window: 1000000"));
+        // No leftover `  enabled: []` orphan line.
+        assert!(
+            !updated.contains("  enabled: []"),
+            "leftover `enabled: []` in output:\n{}",
+            updated
+        );
+        // Providers block still intact.
+        assert!(updated.contains("providers:\n  minnimax:"));
+        assert!(updated.contains("      api_key: gw-x"));
+        // Exactly one `  enabled:` header line at indent 2.
+        let header_count = updated
+            .lines()
+            .filter(|l| l.trim_start() == "enabled:" && l.starts_with("  enabled:"))
+            .count();
+        assert_eq!(header_count, 1, "expected one enabled: header in:\n{}", updated);
     }
 }
