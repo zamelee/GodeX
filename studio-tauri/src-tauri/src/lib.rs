@@ -5,18 +5,50 @@ mod godex;
 mod state;
 mod strip_ansi;
 
+use std::fs::OpenOptions;
+use std::io::Write;
+use parking_lot::Mutex;
 use tauri::Manager;
 
+pub static LOG_PATH: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn diag(msg: &str) {
+    let guard = LOG_PATH.lock();
+    if let Some(path) = guard.as_ref() {
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(f, "{}", msg);
+        }
+    }
+}
+
 pub fn run() {
+    let log_path = std::env::var("GODEX_STUDIO_LOG")
+        .unwrap_or_else(|_| String::from("C:\\Users\\Bliss\\.godex\\studio.log"));
+    if let Some(parent) = std::path::Path::new(&log_path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    *LOG_PATH.lock() = Some(log_path.clone());
+    // truncate previous log
+    if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(&log_path) {
+        let _ = writeln!(f, "[studio] startup log_path={}", log_path);
+    }
+    // Also init env_logger to stderr so dev console gets output too.
     let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info"),
     )
+    .target(env_logger::Target::Stderr)
     .try_init();
+    diag("[studio] diag logger initialized");
+    std::panic::set_hook(Box::new(|info| {
+        diag(&format!("[studio] PANIC: {}", info));
+    }));
 
     tauri::Builder::default()
         .setup(|app| {
+            log::info!("[studio] setup: managing AppState");
             let state = state::AppState::new();
             app.manage(state);
+            log::info!("[studio] setup: done");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
