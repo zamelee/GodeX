@@ -58,6 +58,7 @@ pub struct GodexSupervisor {
     buffer: Mutex<VecDeque<LogLine>>,
     config: Mutex<Option<PathBuf>>,
     binary: Mutex<Option<PathBuf>>,
+    port: Mutex<Option<u16>>,
 }
 
 impl GodexSupervisor {
@@ -67,12 +68,14 @@ impl GodexSupervisor {
             buffer: Mutex::new(VecDeque::with_capacity(RING_BUFFER_LIMIT)),
             config: Mutex::new(None),
             binary: Mutex::new(None),
+            port: Mutex::new(None),
         }
     }
 
-    pub fn set_paths(&self, config: PathBuf, binary: PathBuf) {
+    pub fn set_paths(&self, config: PathBuf, binary: PathBuf, port: u16) {
         *self.config.lock() = Some(config);
         *self.binary.lock() = Some(binary);
+        *self.port.lock() = Some(port);
     }
 
     fn push_internal(&self, line: LogLine) {
@@ -122,6 +125,21 @@ impl GodexSupervisor {
             return Err(format!("config not found: {}", config.display()));
         }
 
+        // Determine the target port (prefer tracked, else read from config)
+        let port = self.port.lock().unwrap_or_else(|| crate::state::read_port_from_config(&config));
+        if port > 0 {
+            let killed = kill_process_on_port(port);
+            for (pid, name) in &killed {
+                self.push_and_emit(app, LogLine::studio(format!("[studio] killed pid={} ({}) on port {}", pid, name, port)));
+            }
+            if killed.is_empty() {
+                self.push_and_emit(app, LogLine::studio(format!("[studio] port {} is free", port)));
+            }
+            if !killed.is_empty() {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+        }
+
         let mut cmd = Command::new(&binary);
         cmd.arg("--config").arg(&config);
         cmd.arg("--log-level").arg("info");
@@ -168,5 +186,58 @@ impl GodexSupervisor {
 
         *self.child.lock() = Some(child);
         Ok(pid)
+    }
+}
+
+
+/// Find and kill processes listening on the given TCP port. Returns the list
+/// of (pid, process_name) that were killed. Skips the current process.
+fn kill_process_on_port(port: u16) -> Vec<(u32, String)> {
+    let self_pid = std::process::id();
+    let mut killed: Vec<(u32, String)> = Vec::new();
+    let out = match std::process::Command::new("netstat").args(["-ano", "-p", "tcp"]).output() {
+        Ok(o) => o,
+        Err(_) => return killed,
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let needle = format!(":{}", port);
+    let mut pids: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    for line in text.lines() {
+        if !line.contains("LISTENING") {
+            continue;
+        }
+        if !line.contains(&needle) {
+            continue;
+        }
+        if let Some(pid_str) = line.split_whitespace().last() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if pid != 0 && pid != self_pid {
+                    pids.insert(pid);
+                }
+            }
+        }
+    }
+    for pid in pids {
+        let name = process_name_for_pid(pid).unwrap_or_else(|| "?".to_string());
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .output();
+        killed.push((pid, name));
+    }
+    killed
+}
+
+fn process_name_for_pid(pid: u32) -> Option<String> {
+    let out = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next()?;
+    let name = first.split(',').next()?.trim_matches(|c| c == '"' || c == ' ');
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
     }
 }

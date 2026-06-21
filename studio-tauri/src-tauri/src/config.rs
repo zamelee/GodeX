@@ -164,8 +164,11 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
 
 pub fn save_enabled_models(path: &Path, items: &[EnabledModel]) -> Result<(), String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("read config failed: {}", e))?;
+    crate::diag(&format!("[splice] RAW ({}b):\n{}", raw.len(), raw));
     let new_block = render_enabled_block(items);
+    crate::diag(&format!("[splice] BLOCK ({}b):\n{}", new_block.len(), new_block));
     let updated = replace_or_insert(&raw, &new_block);
+    crate::diag(&format!("[splice] UPDATED ({}b):\n{}", updated.len(), updated));
     fs::write(path, updated).map_err(|e| format!("write config failed: {}", e))?;
     Ok(())
 }
@@ -225,71 +228,65 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
 // "enabled:" header. Returns (header_byte_offset, body_byte_offset)
 // where body_byte_offset points just past the newline of the "enabled:"
 // line (or to EOF if the header is the last line).
-fn find_enabled_block(raw: &str) -> Option<(usize, usize)> {
+// Locate the top-level models: block. Returns the byte range
+// [start, end) covering the entire block (including the models: line
+// itself and the trailing newline of its last line). Tolerant of CRLF
+// (`r`n) and LF (`n`) line endings
+// because Windows tools routinely save YAML with CRLF.
+fn find_models_block(raw: &str) -> Option<(usize, usize)> {
     let bytes = raw.as_bytes();
-    // Find a "models:" line at column 0.
-    let models_idx = raw.find("\nmodels:").map(|i| i + 1)
+    let models_idx = raw.find("\nmodels:")
+        .map(|i| i + 1)
         .or_else(|| if raw.starts_with("models:") { Some(0) } else { None })?;
-    // Confirm models: is followed by newline or EOF (not a prefix).
     let after_models = models_idx + "models:".len();
-    if after_models < bytes.len() && bytes[after_models] != b'\n' {
+    if after_models < bytes.len() && bytes[after_models] != b'\n' && bytes[after_models] != b'\r' {
         return None;
     }
-    // Now find "  enabled:" at 2-space indent anywhere after.
-    let needle = "\n  enabled:";
-    let rel = raw[after_models..].find(needle)?;
-    let enabled_start = after_models + rel + 1; // skip leading '\n'
-    // Skip past the "  enabled:" line itself.
-    let after_enabled = raw[enabled_start..].find('\n')
-        .map(|i| enabled_start + i + 1)
-        .unwrap_or(bytes.len());
-    Some((enabled_start, after_enabled))
+    // Skip past the models: line terminator. CRLF uses 2 bytes, LF uses 1.
+    let mut cursor = after_models
+        + if after_models < bytes.len() && bytes[after_models] == b'\r' { 2 } else { 1 };
+    while cursor < bytes.len() {
+        let line_end_rel = raw[cursor..].find('\n');
+        let line_end = cursor + line_end_rel.unwrap_or(bytes.len() - cursor);
+        let line_str = &raw[cursor..line_end];
+        let current_line = line_str.strip_suffix("\r").unwrap_or(line_str);
+        if !current_line.is_empty() {
+            let trimmed = current_line.trim_start();
+            let indent = current_line.len() - trimmed.len();
+            if indent == 0 {
+                return Some((models_idx, cursor));
+            }
+        }
+        cursor = if line_end_rel.is_some() { line_end + 1 } else { bytes.len() };
+    }
+    Some((models_idx, cursor))
 }
 
 fn replace_or_insert(raw: &str, new_block: &str) -> String {
-    if let Some((enabled_start, body)) = find_enabled_block(raw) {
-        // Find end of the block: next line whose leftmost non-space is at
-        // column 0 (top-level key). The splice replaces from `enabled_start`
-        // (start of "  enabled:" line) through the next top-level key (or
-        // EOF), so any old "  enabled: []" header is removed cleanly even
-        // when it appears on its own line.
-        let bytes = raw.as_bytes();
-        let mut cursor = body;
-        while cursor < bytes.len() {
-            let line_end_rel = raw[cursor..].find('\n');
-            let line_end = cursor + line_end_rel.unwrap_or(bytes.len() - cursor);
-            let line = &raw[cursor..line_end];
-            if !line.is_empty() {
-                let trimmed = line.trim_start();
-                let indent = line.len() - trimmed.len();
-                if indent == 0 {
-                    // Cut from cursor (start of this top-level line) backwards
-                    // to before its leading newline.
-                    let mut cut = cursor;
-                    if cut > 0 && bytes[cut - 1] == b'\n' { cut -= 1; }
-                    return format!("{}{}{}", &raw[..enabled_start], new_block.trim_end(), &raw[cut..]);
-                }
-            }
-            cursor = if line_end_rel.is_some() { line_end + 1 } else { bytes.len() };
-        }
-        // Block runs to EOF.
-        return format!("{}{}", &raw[..enabled_start], new_block.trim_end());
+    let new_payload = format!("models:\n{}\n", new_block.trim_end());
+    if let Some((start, end)) = find_models_block(raw) {
+        // Keep the newline that precedes models: so the replacement
+        // doesn't glue the previous top-level key onto models:.
+        let prefix_end = if start > 0 && (raw.as_bytes()[start - 1] == b'\n' || raw.as_bytes()[start - 1] == b'\r') {
+            start
+        } else {
+            start
+        };
+        let suffix = &raw[end..];
+        return format!("{}{}{}", &raw[..prefix_end], new_payload, suffix);
     }
-    // No `models.enabled` block; insert after `default_provider:` line.
+    // No models: block yet; insert after default_provider: line.
+    let bytes = raw.as_bytes();
     if let Some(idx) = raw.find("default_provider:") {
-        let nl_rel = raw[idx..].find('\n').map(|i| i + 1).unwrap_or(raw.len() - idx);
-        let nl = idx + nl_rel;
-        let prefix = if nl > 0 && bytes_at(raw, nl - 1) == b'\n' { &raw[..nl] } else { &raw[..idx + "default_provider:".len()] };
-        return format!("{}models:\n{}\n{}", prefix, new_block, &raw[nl..]);
+        let nl = raw[idx..].find('\n')
+            .map(|i| idx + i + 1)
+            .unwrap_or(raw.len());
+        let cut = if nl > 0 && bytes[bytes.len().min(nl) - 1] == b'\n' { nl } else { idx + "default_provider:".len() };
+        return format!("{}{}\n{}", &raw[..cut], new_payload.trim_end_matches('\n'), &raw[cut..]);
     }
-    // No anchor; append at the end.
-    format!("{}models:\n{}", raw, new_block)
+    // No anchor; prepend.
+    format!("{}\n{}", new_payload.trim_end_matches('\n'), raw)
 }
-
-fn bytes_at(s: &str, i: usize) -> u8 {
-    s.as_bytes().get(i).copied().unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -520,5 +517,30 @@ models:
             .filter(|l| l.trim_start() == "enabled:" && l.starts_with("  enabled:"))
             .count();
         assert_eq!(header_count, 1, "expected one enabled: header in:\n{}", updated);
+    }
+    #[test]
+    fn debug_crlf_backup_replaces_models_block() {
+        // User backup uses CRLF line endings. Previous splice only
+        // handled LF and silently fell through to the
+        // default_provider insert path, producing two
+        // top-level models: keys and breaking godex.
+        let raw = "server:\r\n  port: 5678\r\ndefault_provider: minimax\r\nproviders:\r\n  minimax:\r\n    spec: minimax\r\n    credentials:\r\n      api_key: gw-x\r\n    endpoint:\r\n      base_url: https://minnimax.chat/v1\r\nmodels:\r\n  aliases:\r\n    '*': minimax/MiniMax-M3\r\nsession:\r\n  backend: sqlite\r\n";        let items = vec![EnabledModel {
+            provider: "minimax".to_string(),
+            model: "MiniMax-M3".to_string(),
+            context_window: Some(1000000),
+            max_tokens: Some(16384),
+            multimodal: None,
+            capabilities: None,
+            note: None,
+        }];
+        let block = render_enabled_block(&items);
+        let updated = replace_or_insert(raw, &block);
+        let mut top_models = 0;
+        for line in updated.lines() {
+            if line == "models:" { top_models += 1; }
+        }
+        assert_eq!(top_models, 1, "CRLF input must produce exactly one top-level models:, got:\n{}", updated);
+        assert!(!updated.contains("aliases:"), "old aliases: should be gone, got:\n{}", updated);
+        assert!(updated.contains("enabled:"), "new enabled: block should be present");
     }
 }

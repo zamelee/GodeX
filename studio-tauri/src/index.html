@@ -39,9 +39,9 @@ main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
 .provider-item .del{position:absolute;top:4px;right:6px;font-size:16px;color:var(--text2);cursor:pointer;opacity:0;transition:opacity .15s;line-height:1;padding:0 4px}
 .provider-item:hover .del{opacity:1}
 .provider-item .del:hover{color:var(--red)}
-.forms-area{flex:1;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0}
-.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;margin:0 0 8px 0}
-#fs-models{margin-bottom:0}
+.forms-area{flex:1 1 0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;flex-shrink:0;margin:0 0 8px 0}
+#fs-provider{flex:0 0 auto;border:1px solid red;background:rgba(255,0,0,.05)}#fs-models{flex:1 1 0;margin-bottom:0;min-height:200px;border:1px solid lime;background:rgba(0,255,0,.05)}.forms-area{background:rgba(0,0,255,.05)}
 .form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .form-section-head .badge{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:400;padding:1px 6px;border-radius:3px}
 .form-section-head .right{margin-left:auto;display:flex;gap:6px}
@@ -89,7 +89,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 
 
 .log-region{flex:1 1 0;display:flex;flex-direction:column;min-height:120px;background:var(--bg)}
-.log-panel{display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
+.log-panel{display:flex;flex-direction:column;min-height:120px;background:var(--bg);overflow:hidden}
 .log-panel-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;height:30px}
 .log-panel-header .lp-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;transition:background .15s}
 .log-panel-header .lp-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:.02em}
@@ -151,6 +151,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   <h1>GodeX Studio</h1>
   <div class="hdr-right">
     <span>原生窗口 &middot; <code>Tauri 2</code></span>
+    <button class="btn small gray" onclick="openSettingsModal()" title="修改 Config / Binary 路径">⚙ 设置</button>
   </div>
 </header>
 
@@ -167,13 +168,13 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 
   <div class="sash sash-v" id="sash-cols" title="拖动调整左右比例"></div>
   <div class="col-right" id="col-right">
-    <div id="editor-empty" class="empty" style="flex:1;display:flex;align-items:center;justify-content:center">
+    <div id="editor-empty" class="empty" style="display:none;flex:1;align-items:center;justify-content:center">
       <div>
         <div style="font-size:14px;margin-bottom:8px">未选择服务商</div>
         <div>请点击左侧已有服务商进行编辑,或点击下方"新建服务商"创建。</div>
       </div>
     </div>
-    <div id="editor" style="display:none;flex:1;display:flex;flex-direction:column;min-height:0">
+    <div id="editor" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="forms-area" id="forms-area">
         <div class="form-section" id="fs-provider">
           <div class="form-section-head">
@@ -211,8 +212,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
           </div>
         </div>
 
-        <div class="sash sash-v" id="sash-forms" title="拖动调整上下编辑区比例"></div>
-
+        <div class="sash sash-h" id="sash-forms" title="拖动调整上下编辑区比例"></div>
         <div class="form-section" id="fs-models">
           <div class="form-section-head">
             <span>已启用的模型</span>
@@ -324,6 +324,57 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     </div>
   </div>
 </div>
+<div id="settings-modal" class="modal" style="display:none">
+  <div class="modal-box" style="min-width:480px">
+    <h3>设置</h3>
+    <div class="desc">GodeX 配置 / 二进制 / 端口。修改后保存即生效:Config 路径与 Binary 路径需重启 studio;Port 立即写入 config.yaml,下次启动 godex 时生效。优先级:环境变量 <code>GODEX_CONFIG</code>/<code>GODEX_BINARY</code> &gt; 此处保存的路径 &gt; 内置默认。</div>
+    <div class="row">
+      <label>Config 路径 <span style="color:var(--text2)">(godex config yaml)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-config" type="text" placeholder="C:\Users\Bliss\.godex\config.yaml" style="flex:1"/>
+        <button class="btn small" onclick="browseConfigPath()" title="浏览...">📁</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>Binary 路径 <span style="color:var(--text2)">(godex 可执行文件)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-binary" type="text" placeholder="D:\...\godex.exe" style="flex:1"/>
+        <button class="btn small" onclick="browseBinaryPath()" title="浏览...">📁</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>端口 <span style="color:var(--text2)">(godex server.port)</span></label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="set-port" type="number" min="1" max="65535" placeholder="5678" style="flex:1" oninput="refreshPortStatus()"/>
+        <span id="set-port-status" style="font-size:11px;color:var(--text2);min-width:160px"></span>
+      </div>
+    </div>
+    <div id="set-error" class="desc" style="color:var(--red);display:none;margin-top:4px"></div>
+    <div id="set-hint" class="desc" style="color:var(--text2);margin-top:4px"></div>
+    <div class="actions">
+      <button class="btn gray" onclick="resetSettings()">恢复默认</button>
+      <button class="btn gray" onclick="closeSettingsModal()">取消</button>
+      <button class="btn" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="port-conflict-modal" class="modal" style="display:none">
+  <div class="modal-box" style="min-width:480px">
+    <h3 style="color:var(--yellow)">⚠ 端口冲突</h3>
+    <div class="desc" id="pc-desc">该端口已被其他进程占用。</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;margin:8px 0;font-size:12px;line-height:1.6">
+      <div>端口: <code id="pc-port" style="color:var(--blue)">?</code></div>
+      <div>进程: <code id="pc-name" style="color:var(--blue)">?</code> <span style="color:var(--text2)" id="pc-pid-wrap">(pid <span id="pc-pid">?</span>)</span></div>
+      <div>路径: <code id="pc-path" style="color:var(--text2);word-break:break-all">?</code></div>
+    </div>
+    <div class="actions">
+      <button class="btn gray" onclick="closePortConflictModal()">取消</button>
+      <button class="btn" onclick="conflictChangePort()" style="background:var(--yellow);color:#000">换个端口 (+1)</button>
+      <button class="btn" onclick="conflictKillProcess()" style="background:var(--red)">关闭该进程</button>
+    </div>
+  </div>
+</div>
 <script>
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -372,7 +423,7 @@ let remoteModels = [];
 // Both siblings must be in the same flex container, side by side.
 // ratio = (size of `before`) / (total size of container) is persisted in localStorage.
 class Sash {
-  constructor({ sashEl, beforeEl, afterEl, dir, storageKey, minBefore = 80, minAfter = 80, defaultRatio = 0.5 }) {
+  constructor({ sashEl, beforeEl, afterEl, dir, storageKey, minBefore = 80, minAfter = 80, defaultRatio = 0.5, mode = "pct" }) {
     this.sash = sashEl;
     this.before = beforeEl;
     this.after = afterEl;
@@ -381,6 +432,7 @@ class Sash {
     this.minBefore = minBefore;
     this.minAfter = minAfter;
     this.defaultRatio = defaultRatio;
+    this.mode = mode; // "pct" => flex-basis:%; "px" => flex-basis:px
     this.container = sashEl.parentElement;
     this._onMove = this._onMove.bind(this);
     this._onUp = this._onUp.bind(this);
@@ -388,7 +440,9 @@ class Sash {
     this._onTouchStart = this._onTouchStart.bind(this);
     sashEl.addEventListener("mousedown", this._onDown);
     sashEl.addEventListener("touchstart", this._onTouchStart, { passive: false });
-    this.applyRatio(this._loadRatio(), /*persist=*/false);
+    // Defer to next frame so the flex layout has computed container size.
+    const me = this;
+    requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); });
   }
   _loadRatio() {
     const v = parseFloat(localStorage.getItem(this.storageKey));
@@ -397,12 +451,15 @@ class Sash {
   }
   applyRatio(ratio, persist = true) {
     const r = Math.max(0.05, Math.min(0.95, ratio));
-    if (this.dir === "v") {
-      // sash is vertical (resizes left/right) → container is flex-row
+    if (this.mode === "px") {
+      const total = this.dir === "v" ? this.container.clientWidth : this.container.clientHeight;
+      const px = Math.round(r * total);
+      this.before.style.flex = `0 0 ${px}px`;
+      this.after.style.flex = "1 1 0";
+    } else if (this.dir === "v") {
       this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
       this.after.style.flex = "1 1 0";
     } else {
-      // sash is horizontal (resizes top/bottom) → container is flex-column
       this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
       this.after.style.flex = "1 1 0";
     }
@@ -473,6 +530,17 @@ function initSashes() {
     minBefore: 200, minAfter: 120, defaultRatio: 0.6,
   }));
   // D: col-left / col-right — vertical split.
+  // E: forms area — vertical split between #fs-provider and #fs-models.
+  // The parent of #sash-forms is #forms-area.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-forms"),
+    beforeEl: $("fs-provider"),
+    afterEl: $("fs-models"),
+    dir: "h",
+    storageKey: "godex-studio.formsRatio",
+    minBefore: 80, minAfter: 80, defaultRatio: 0.35, mode: "px",
+  }));
+
   _godexSashes.push(new Sash({
     sashEl: $("sash-cols"),
     beforeEl: $("col-left"),
@@ -488,20 +556,9 @@ function initSashes() {
     afterEl: $("lp-godex"),
     dir: "h",
     storageKey: "godex-studio.sashRatio",
-    minBefore: 80, minAfter: 80, defaultRatio: 0.5,
-  }));
-  // E: forms area — vertical split between #fs-provider and #fs-models.
-  // The parent of #sash-forms is #forms-area.
-  _godexSashes.push(new Sash({
-    sashEl: $("sash-forms"),
-    beforeEl: $("fs-provider"),
-    afterEl: $("fs-models"),
-    dir: "h",
-    storageKey: "godex-studio.formsRatio",
-    minBefore: 100, minAfter: 100, defaultRatio: 0.35,
+    minBefore: 120, minAfter: 80, defaultRatio: 0.6,
   }));
 }
-
 
 // Each panel has its own level filter, wrap toggle, and Clear button.
 const LOG_MAX_LINES = 3000;
@@ -654,7 +711,11 @@ function selectProvider(name) {
   activeProvider = name;
   renderProviders();
   const p = providers.find((x) => x.name === name);
-  if (!p) return;
+  if (!p) {
+    $("editor-empty").style.display = "flex";
+    $("editor").style.display = "none";
+    return;
+  }
   $("editor-empty").style.display = "none";
   $("editor").style.display = "flex";
   $("form-provider-name").textContent = p.name;
@@ -982,7 +1043,197 @@ async function refreshStatus() {
     const tail = await invoke("godex_logs_tail", { limit: 500 });
     for (const line of (tail || [])) pushLogLine(line);
   } catch (e) { /* no-op */ }
+  // Sync editor state with whatever activeProvider is after loadProviders().
+  if (activeProvider && providers.find((x) => x.name === activeProvider)) {
+    selectProvider(activeProvider);
+  } else {
+    $("editor-empty").style.display = "flex";
+    $("editor").style.display = "none";
+  }
+  // Force forms-area sash to re-measure now that the editor is visible.
+  // This runs AFTER initSashes() so _godexSashes is populated.
+  const formsSash = _godexSashes.find((s) => s.storageKey === "godex-studio.formsRatio");
+  if (formsSash) formsSash.applyRatio(formsSash._loadRatio(), false);
 })();
+
+// --- Settings modal ---
+async function openSettingsModal() {
+  try {
+    const p = await invoke("get_config_paths");
+    $("set-config").value = p.godex_config;
+    $("set-binary").value = p.godex_binary;
+    $("set-port").value = p.godex_port || 5678;
+    $("set-error").style.display = "none";
+    $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
+    await refreshPortStatus();
+    $("settings-modal").style.display = "flex";
+  } catch (e) {
+    showMsg("读取路径失败: " + e, "err");
+  }
+}
+function closeSettingsModal() {
+  $("settings-modal").style.display = "none";
+}
+
+async function saveSettings() {
+  const cfg = $("set-config").value.trim();
+  const bin = $("set-binary").value.trim();
+  const port = parseInt($("set-port").value, 10);
+  $("set-error").style.display = "none";
+  if (!cfg || !bin) {
+    $("set-error").textContent = "Config 路径和 Binary 路径都必须填写";
+    $("set-error").style.display = "block";
+    return;
+  }
+  if (!port || port < 1 || port > 65535) {
+    $("set-error").textContent = "端口必须是 1-65535 之间的数字";
+    $("set-error").style.display = "block";
+    return;
+  }
+  try {
+    await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port });
+    showMsg("设置已保存。Config/Binary 需重启 studio 生效;Port 已写入 config.yaml。", "ok");
+    closeSettingsModal();
+  } catch (e) {
+    $("set-error").textContent = "保存失败: " + e;
+    $("set-error").style.display = "block";
+  }
+}
+async function resetSettings() {
+  if (!confirm("确定恢复默认路径?\n\n会清除已保存的设置(下次启动生效)。")) return;
+  try {
+    const p = await invoke("reset_paths");
+    $("set-config").value = p.godex_config;
+    $("set-binary").value = p.godex_binary;
+    $("set-port").value = p.godex_port || 5678;
+    $("set-hint").textContent = "已重置为默认。重启 studio 后 Config/Binary 路径生效;Port 已写入 config.yaml。";
+    showMsg("已恢复默认。", "ok");
+    await refreshPortStatus();
+  } catch (e) {
+    showMsg("恢复失败: " + e, "err");
+  }
+}
+
+// --- Port helpers ---
+async function refreshPortStatus() {
+  const portEl = $("set-port");
+  const statusEl = $("set-port-status");
+  const port = parseInt(portEl.value, 10);
+  if (!port || port < 1 || port > 65535) {
+    statusEl.textContent = "";
+    return;
+  }
+  try {
+    const info = await invoke("check_port", { port });
+    if (info) {
+      statusEl.textContent = "X 被 " + info.name + " 占用";
+      statusEl.style.color = "var(--red)";
+    } else {
+      statusEl.textContent = "OK 空闲";
+      statusEl.style.color = "var(--green)";
+    }
+  } catch (e) {
+    statusEl.textContent = "检查失败";
+    statusEl.style.color = "var(--red)";
+  }
+}
+
+// --- File browse (Task 3) ---
+async function browseConfigPath() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "YAML", extensions: ["yaml","yml"] }, { name: "All", extensions: ["*"] }],
+        title: "选择 GodeX config 文件"
+      }
+    });
+    if (path) $("set-config").value = path;
+  } catch (e) { showMsg("文件选择失败: " + e, "err"); }
+}
+
+async function browseBinaryPath() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Executable", extensions: ["exe"] }, { name: "All", extensions: ["*"] }],
+        title: "选择 GodeX binary 文件"
+      }
+    });
+    if (path) $("set-binary").value = path;
+  } catch (e) { showMsg("文件选择失败: " + e, "err"); }
+}
+
+// --- Port conflict modal ---
+let _conflictState = null;
+
+async function preCheckAndRestartGodex() {
+  let p;
+  try { p = await invoke("get_config_paths"); } catch (e) { showMsg("读取配置失败: " + e, "err"); return; }
+  const port = p.godex_port;
+  let info = null;
+  try { info = await invoke("check_port", { port }); } catch (e) { showMsg("检查端口失败: " + e, "err"); return; }
+  if (info) { showPortConflictModal(port, info); } else { doGodexRestart(); }
+}
+
+function showPortConflictModal(port, info) {
+  $("pc-port").textContent = String(port);
+  $("pc-name").textContent = info.name;
+  $("pc-pid").textContent = String(info.pid);
+  $("pc-path").textContent = "(在 tasklist 中查询失败)";
+  $("pc-desc").innerHTML = 'GodeX 配置的端口 <code style="color:var(--yellow)">' + port + '</code> 已被占用,无法启动 godex。';
+  _conflictState = { port, pid: info.pid, name: info.name };
+  $("port-conflict-modal").style.display = "flex";
+}
+
+function closePortConflictModal() {
+  $("port-conflict-modal").style.display = "none";
+  _conflictState = null;
+}
+
+async function conflictChangePort() {
+  if (!_conflictState) return;
+  const oldPort = _conflictState.port;
+  closePortConflictModal();
+  let newPort;
+  try { newPort = await invoke("find_free_port", { start: oldPort + 1 }); }
+  catch (e) { showMsg("找空闲端口失败: " + e, "err"); return; }
+  if (!newPort || newPort === oldPort) { showMsg("找不到空闲端口", "err"); return; }
+  try {
+    const p = await invoke("get_config_paths");
+    await invoke("set_config_paths", { godexConfig: p.godex_config, godexBinary: p.godex_binary, godexPort: newPort });
+    showMsg("已切换到端口 " + newPort + ",正在重启 godex...", "ok");
+    await new Promise(r => setTimeout(r, 200));
+    doGodexRestart();
+  } catch (e) { showMsg("切换端口失败: " + e, "err"); }
+}
+
+async function conflictKillProcess() {
+  if (!_conflictState) return;
+  const pid = _conflictState.pid;
+  closePortConflictModal();
+  try {
+    await invoke("kill_pid", { pid });
+    showMsg("已关闭 pid=" + pid + ",正在重启 godex...", "ok");
+    await new Promise(r => setTimeout(r, 200));
+    doGodexRestart();
+  } catch (e) { showMsg("关闭进程失败: " + e, "err"); }
+}
+
+async function doGodexRestart() {
+  try { await invoke("godex_restart"); } catch (e) { showMsg("重启 godex 失败: " + e, "err"); }
+}
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+

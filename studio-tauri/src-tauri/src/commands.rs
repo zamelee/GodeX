@@ -9,8 +9,8 @@ use tauri::{AppHandle, Emitter, State};
 pub struct PathInfo {
     pub godex_config: String,
     pub godex_binary: String,
+    pub godex_port: u16,
 }
-
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
     crate::diag(&format!("[cmd] enter get_config_paths"));
@@ -18,21 +18,131 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
     PathInfo {
         godex_config: p.godex_config.display().to_string(),
         godex_binary: p.godex_binary.display().to_string(),
+        godex_port: p.godex_port,
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PortInfo {
+    pub pid: u32,
+    pub name: String,
+}
+
+/// Look up the process listening on the given TCP port. Returns None if free.
 #[tauri::command(rename_all = "camelCase")]
-pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_binary: String) -> PathInfo {
-    crate::diag(&format!("[cmd] enter set_config_paths"));
-    let config = PathBuf::from(&godex_config);
-    let binary = PathBuf::from(&godex_binary);
-    state.godex.set_paths(config.clone(), binary.clone());
+pub fn check_port(port: u16) -> Option<PortInfo> {
+    crate::diag(&format!("[cmd] enter check_port port={}", port));
+    let out = std::process::Command::new("netstat")
+        .args(["-ano", "-p", "tcp"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let needle = format!(":{}", port);
+    for line in text.lines() {
+        if !line.contains("LISTENING") { continue; }
+        if !line.contains(&needle) { continue; }
+        if let Some(pid_str) = line.split_whitespace().last() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if pid == 0 { continue; }
+                let name = process_name_for_pid_check(pid).unwrap_or_else(|| "?".to_string());
+                return Some(PortInfo { pid, name });
+            }
+        }
+    }
+    None
+}
+
+/// taskkill /F /PID <pid>
+#[tauri::command]
+pub fn kill_pid(pid: u32) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter kill_pid pid={}", pid));
+    let out = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("taskkill spawn failed: {}", e))?;
+    if !out.status.success() {
+        return Err(format!("taskkill failed: {}", String::from_utf8_lossy(&out.stderr)));
+    }
+    Ok(())
+}
+
+/// Find the first free port starting from `start`, up to start+1000.
+#[tauri::command(rename_all = "camelCase")]
+pub fn find_free_port(start: u16) -> u16 {
+    crate::diag(&format!("[cmd] enter find_free_port start={}", start));
+    let mut candidate = start;
+    for _ in 0..1000 {
+        if candidate < 1024 && candidate < start {
+            break;
+        }
+        if check_port(candidate).is_none() {
+            return candidate;
+        }
+        candidate = candidate.saturating_add(1);
+        if candidate == start { break; }
+    }
+    start
+}
+
+fn process_name_for_pid_check(pid: u32) -> Option<String> {
+    let out = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next()?;
+    let name = first.split(',').next()?.trim_matches(|c: char| c == '"' || c == ' ');
+    if name.is_empty() { None } else { Some(name.to_string()) }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_binary: String, godex_port: u16) -> Result<PathInfo, String> {
+    crate::diag(&format!("[cmd] enter set_config_paths config={} binary={} port={}", godex_config, godex_binary, godex_port));
+    let config_pb = PathBuf::from(&godex_config);
+    let binary_pb = PathBuf::from(&godex_binary);
+    if !binary_pb.exists() {
+        return Err(format!("binary not found: {}", godex_binary));
+    }
+    if godex_port == 0 {
+        return Err("port must be > 0".to_string());
+    }
+    // Write port into config.yaml (single source of truth for the port)
+    if config_pb.exists() {
+        crate::state::write_port_to_config(&config_pb, godex_port)
+            .map_err(|e| format!("write port failed: {}", e))?;
+    }
+    // Persist binary path (skip when GODEX_BINARY env var is overriding)
+    if std::env::var("GODEX_BINARY").is_err() {
+        let persisted = crate::state::PersistedPaths {
+            godex_config: Some(godex_config.clone()),
+            godex_binary: Some(godex_binary.clone()),
+        };
+        if let Err(e) = crate::state::save_persisted_paths(&persisted) {
+            crate::diag(&format!("[cmd] set_config_paths persist failed: {}", e));
+        }
+    }
+    state.godex.set_paths(config_pb.clone(), binary_pb.clone(), godex_port);
     {
         let mut p = state.paths.lock();
-        p.godex_config = config;
-        p.godex_binary = binary;
+        p.godex_config = config_pb;
+        p.godex_binary = binary_pb;
+        p.godex_port = godex_port;
     }
-    get_config_paths(state)
+    Ok(get_config_paths(state))
+}
+
+#[tauri::command]
+pub fn reset_paths(state: State<'_, AppState>) -> PathInfo {
+    crate::diag(&format!("[cmd] enter reset_paths"));
+    crate::state::clear_persisted_paths();
+    let defaults = crate::state::Paths::default_paths();
+    state.godex.set_paths(defaults.godex_config.clone(), defaults.godex_binary.clone(), defaults.godex_port);
+    *state.paths.lock() = defaults.clone();
+    PathInfo {
+        godex_config: defaults.godex_config.display().to_string(),
+        godex_binary: defaults.godex_binary.display().to_string(),
+        godex_port: defaults.godex_port,
+    }
 }
 
 #[tauri::command]
@@ -294,3 +404,4 @@ pub fn godex_logs_clear(state: State<'_, AppState>) {
     crate::diag(&format!("[cmd] enter godex_logs_clear"));
     state.godex.clear();
 }
+

@@ -65,6 +65,7 @@ pub fn run() {
     }));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             log::info!("[studio] setup: managing AppState");
             let state = state::AppState::new();
@@ -87,7 +88,14 @@ pub fn run() {
             commands::godex_start,
             commands::godex_logs_tail,
             commands::godex_logs_clear,
+            commands::check_port,
+            commands::kill_pid,
+            commands::find_free_port,
+            commands::reset_paths,
         ])
         .run(tauri::generate_context!())
         .expect("error while running godex-studio");
 }
+
+
+
