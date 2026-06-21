@@ -221,37 +221,249 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
     s
 }
 
+// Locate the "models:" top-level line and its 2-space-indented
+// "enabled:" header. Returns (header_byte_offset, body_byte_offset)
+// where body_byte_offset points just past the newline of the "enabled:"
+// line (or to EOF if the header is the last line).
+fn find_enabled_block(raw: &str) -> Option<(usize, usize)> {
+    let bytes = raw.as_bytes();
+    // Find a "models:" line at column 0.
+    let models_idx = raw.find("\nmodels:").map(|i| i + 1)
+        .or_else(|| if raw.starts_with("models:") { Some(0) } else { None })?;
+    // Confirm models: is followed by newline or EOF (not a prefix).
+    let after_models = models_idx + "models:".len();
+    if after_models < bytes.len() && bytes[after_models] != b'\n' {
+        return None;
+    }
+    // Now find "  enabled:" at 2-space indent anywhere after.
+    let needle = "\n  enabled:";
+    let rel = raw[after_models..].find(needle)?;
+    let enabled_start = after_models + rel + 1; // skip leading '\n'
+    // Skip past the "  enabled:" line itself.
+    let after_enabled = raw[enabled_start..].find('\n')
+        .map(|i| enabled_start + i + 1)
+        .unwrap_or(bytes.len());
+    Some((enabled_start, after_enabled))
+}
+
 fn replace_or_insert(raw: &str, new_block: &str) -> String {
-    // Strategy: find "  enabled:" with 2-space indent; replace the contiguous
-    // block until the next top-level key or EOF. If not present, insert a
-    // "models:\n  enabled: <block>" pair right after `default_provider:` line.
-    if let Some(start) = raw.find("  enabled:") {
-        // ensure it is preceded by "models:" (2-space indent)
-        let before = &raw[..start];
-        if before.ends_with("models:\n") || before.trim_end().ends_with("models:") {
-            // find end: next line whose leftmost non-space is at 0 indent (top-level key)
-            let after_start = start;
-            #[allow(unused_assignments)]
-            let mut end: Option<usize> = None;
-            for (i, line) in raw[after_start..].lines().enumerate() {
-                if i == 0 { continue; }
-                if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
-                    end = Some(after_start + i);
-                    // back up to start of this line
-                    let mut cut = end.expect("end is set on this branch");
-                    while cut > 0 && &raw[cut..cut + 1] != "\n" { cut -= 1; }
-                    if cut > 0 { cut += 1; }
-                    return format!("{}{}{}", before, new_block.trim_end(), &raw[cut..]);
+    if let Some((_start, body)) = find_enabled_block(raw) {
+        // Find end of the block: next line whose leftmost non-space is at
+        // column 0 (top-level key).
+        let bytes = raw.as_bytes();
+        let mut cursor = body;
+        while cursor < bytes.len() {
+            let line_end_rel = raw[cursor..].find('\n');
+            let line_end = cursor + line_end_rel.unwrap_or(bytes.len() - cursor);
+            let line = &raw[cursor..line_end];
+            if !line.is_empty() {
+                let trimmed = line.trim_start();
+                let indent = line.len() - trimmed.len();
+                if indent == 0 {
+                    // Cut from cursor (start of this top-level line) backwards
+                    // to before its leading newline.
+                    let mut cut = cursor;
+                    if cut > 0 && bytes[cut - 1] == b'\n' { cut -= 1; }
+                    return format!("{}{}{}", &raw[..body], new_block.trim_end(), &raw[cut..]);
                 }
             }
-            return format!("{}{}", before, new_block.trim_end());
+            cursor = if line_end_rel.is_some() { line_end + 1 } else { bytes.len() };
         }
+        // Block runs to EOF.
+        return format!("{}{}", &raw[..body], new_block.trim_end());
     }
     // No `models.enabled` block; insert after `default_provider:` line.
     if let Some(idx) = raw.find("default_provider:") {
-        let nl = raw[idx..].find('\n').unwrap_or(0) + idx + 1;
-        return format!("{}models:\n{}\n{}", &raw[..nl], new_block, &raw[nl..]);
+        let nl_rel = raw[idx..].find('\n').map(|i| i + 1).unwrap_or(raw.len() - idx);
+        let nl = idx + nl_rel;
+        let prefix = if nl > 0 && bytes_at(raw, nl - 1) == b'\n' { &raw[..nl] } else { &raw[..idx + "default_provider:".len()] };
+        return format!("{}models:\n{}\n{}", prefix, new_block, &raw[nl..]);
     }
     // No anchor; append at the end.
     format!("{}models:\n{}", raw, new_block)
+}
+
+fn bytes_at(s: &str, i: usize) -> u8 {
+    s.as_bytes().get(i).copied().unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn clean_raw() -> &'static str {
+        r##"server:
+  port: 5678
+  host: 127.0.0.1
+default_provider: minnimax
+providers:
+  minnimax:
+    spec: minimax
+    credentials:
+      api_key: gw-x
+    endpoint:
+      base_url: https://minnimax.chat/v1
+    timeout_ms: 120000
+models:
+  enabled: []
+"##
+    }
+
+    fn corrupted_raw() -> &'static str {
+        r##"server:
+  port: 5678
+  host: 127.0.0.1
+default_provider: minnimax
+providers:  minnimax:
+    spec: minimax
+    credentials:
+      api_key: gw-x
+    endpoint:
+      base_url: https://minnimax.chat/v1
+    timeout_ms: 120000
+    spec: minimax
+    credentials:
+      api_key: gw-x
+    endpoint:
+      base_url: https://minnimax.chat/v1
+    timeout_ms: 120000
+models:
+  enabled: []
+"##
+    }
+
+    fn no_models_raw() -> &'static str {
+        r##"server:
+  port: 5678
+  host: 127.0.0.1
+default_provider: minnimax
+providers:
+  minnimax:
+    spec: minimax
+"##
+    }
+
+    fn existing_models_raw() -> &'static str {
+        r##"server:
+  port: 5678
+default_provider: x
+models:
+  enabled:
+    - provider: a
+      model: b
+"##
+    }
+
+    fn sample_items() -> Vec<EnabledModel> {
+        vec![EnabledModel {
+            provider: "minnimax".to_string(),
+            model: "MiniMax-M3".to_string(),
+            context_window: Some(1000000),
+            max_tokens: Some(16384),
+            multimodal: None,
+            capabilities: None,
+            note: None,
+        }]
+    }
+
+    #[test]
+    fn replace_block_in_clean_config_keeps_providers_intact() {
+        let raw = clean_raw();
+        let block = render_enabled_block(&sample_items());
+        let updated = replace_or_insert(raw, &block);
+        assert!(updated.contains("providers:\n  minnimax:\n"), "providers block missing in:\n{}", updated);
+        assert!(updated.contains("    spec: minimax"));
+        assert!(updated.contains("      api_key: gw-x"));
+        assert!(updated.contains("      base_url: https://minnimax.chat/v1"));
+        assert!(updated.contains("    timeout_ms: 120000"));
+        assert!(updated.contains("- provider: minnimax"));
+        assert!(updated.contains("      model: MiniMax-M3"));
+        assert!(updated.contains("      context_window: 1000000"));
+        assert!(updated.contains("      max_tokens: 16384"));
+        for line in updated.lines() {
+            let trimmed = line.trim_start();
+            let count = line.matches(": ").count();
+            let is_list_item = trimmed.starts_with("- ");
+            assert!(count <= 1 || is_list_item, "merged line: {:?} in:\n{}", line, updated);
+        }
+    }
+
+    #[test]
+    fn replace_block_in_corrupted_config_recovers_cleanly() {
+        let raw = corrupted_raw();
+        let block = render_enabled_block(&sample_items());
+        let updated = replace_or_insert(raw, &block);
+        for line in updated.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("stream:") || trimmed.starts_with("max_tokens:") {
+                assert!(
+                    !line.contains("  model:")
+                        && !line.contains("  provider:")
+                        && !line.contains("  context_window:"),
+                    "still merged: {:?} in:\n{}",
+                    line,
+                    updated,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn replace_block_when_no_models_section_inserts_after_default_provider() {
+        let raw = no_models_raw();
+        let block = render_enabled_block(&sample_items());
+        let updated = replace_or_insert(raw, &block);
+        let models_idx = updated.find("\nmodels:").expect("models: should be inserted");
+        let default_idx = updated.find("default_provider:").expect("default_provider still present");
+        assert!(models_idx > default_idx);
+        assert!(updated.contains("- provider: minnimax"));
+        assert!(updated.contains("      model: MiniMax-M3"));
+    }
+
+    #[test]
+    fn empty_items_renders_empty_block() {
+        let block = render_enabled_block(&[]);
+        assert_eq!(block, "  enabled: []\n");
+        let raw = existing_models_raw();
+        let updated = replace_or_insert(raw, &block);
+        assert!(updated.contains("  enabled: []"));
+        assert!(!updated.contains("- provider: a"));
+    }
+
+    #[test]
+    fn rendered_block_is_well_formed_yaml_for_all_caps() {
+        let item = EnabledModel {
+            provider: "minnimax".to_string(),
+            model: "MiniMax-M3".to_string(),
+            context_window: Some(1000000),
+            max_tokens: Some(16384),
+            multimodal: Some(true),
+            capabilities: Some(ModelCapabilities {
+                text: Some(true),
+                image_input: Some(true),
+                audio_input: Some(true),
+                video_input: None,
+                image_output: None,
+                audio_output: None,
+                tool_use: Some(true),
+                stream: Some(true),
+            }),
+            note: Some("hello".to_string()),
+        };
+        let block = render_enabled_block(&[item]);
+        assert!(block.contains("- provider: minnimax\n"));
+        assert!(block.contains("      model: MiniMax-M3\n"));
+        assert!(block.contains("      context_window: 1000000\n"));
+        assert!(block.contains("      max_tokens: 16384\n"));
+        assert!(block.contains("      multimodal: true\n"));
+        assert!(block.contains("      capabilities:\n"));
+        assert!(block.contains("        text: true\n"));
+        assert!(block.contains("        image_input: true\n"));
+        assert!(block.contains("        audio_input: true\n"));
+        assert!(block.contains("        tool_use: true\n"));
+        assert!(block.contains("        stream: true\n"));
+        assert!(!block.contains("video_input:"));
+        assert!(!block.contains("image_output:"));
+        assert!(block.contains("      note: \"hello\"\n"));
+    }
 }
