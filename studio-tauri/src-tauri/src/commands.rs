@@ -13,6 +13,7 @@ pub struct PathInfo {
 
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
+    crate::diag(&format!("[cmd] enter get_config_paths"));
     let p = state.paths.lock();
     PathInfo {
         godex_config: p.godex_config.display().to_string(),
@@ -28,6 +29,7 @@ pub struct SetConfigPathsArgs {
 
 #[tauri::command]
 pub fn set_config_paths(state: State<'_, AppState>, args: SetConfigPathsArgs) -> PathInfo {
+    crate::diag(&format!("[cmd] enter set_config_paths"));
     let config = PathBuf::from(&args.godex_config);
     let binary = PathBuf::from(&args.godex_binary);
     state.godex.set_paths(config.clone(), binary.clone());
@@ -41,6 +43,7 @@ pub fn set_config_paths(state: State<'_, AppState>, args: SetConfigPathsArgs) ->
 
 #[tauri::command]
 pub fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderInfo>, String> {
+    crate::diag(&format!("[cmd] enter list_providers"));
     let path = state.paths.lock().godex_config.clone();
     Ok(config::read_providers(&path))
 }
@@ -56,6 +59,7 @@ pub struct UpsertProviderArgs {
 
 #[tauri::command]
 pub fn upsert_provider(state: State<'_, AppState>, args: UpsertProviderArgs) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter upsert_provider"));
     let path = state.paths.lock().godex_config.clone();
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {}", e))?;
     let block = format!(
@@ -69,6 +73,7 @@ pub fn upsert_provider(state: State<'_, AppState>, args: UpsertProviderArgs) -> 
 
 #[tauri::command]
 pub fn delete_provider(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter delete_provider"));
     let path = state.paths.lock().godex_config.clone();
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {}", e))?;
     let updated = remove_provider_block(&raw, &name);
@@ -129,6 +134,7 @@ fn remove_provider_block(raw: &str, name: &str) -> String {
 
 #[tauri::command]
 pub fn read_enabled_models(state: State<'_, AppState>) -> Result<Vec<EnabledModel>, String> {
+    crate::diag(&format!("[cmd] enter read_enabled_models"));
     let path = state.paths.lock().godex_config.clone();
     Ok(config::read_enabled_models(&path))
 }
@@ -140,6 +146,7 @@ pub struct SaveEnabledModelsArgs {
 
 #[tauri::command]
 pub fn save_enabled_models(state: State<'_, AppState>, args: SaveEnabledModelsArgs) -> Result<usize, String> {
+    crate::diag(&format!("[cmd] enter save_enabled_models"));
     let path = state.paths.lock().godex_config.clone();
     config::save_enabled_models(&path, &args.enabled)?;
     Ok(args.enabled.len())
@@ -158,6 +165,7 @@ pub struct RemoteModel {
 
 #[tauri::command]
 pub async fn fetch_remote_models(args: FetchRemoteArgs) -> Result<Vec<RemoteModel>, String> {
+    crate::diag(&format!("[cmd] enter fetch_remote_models"));
     let url = format!("{}/models", args.base_url.trim_end_matches('/'));
     let req = reqwest_via_ureq(&url, &args.api_key)?;
     let parsed: serde_json::Value = serde_json::from_str(&req).map_err(|e| format!("parse failed: {}", e))?;
@@ -191,16 +199,18 @@ pub struct GodexStatus {
 
 #[tauri::command]
 pub fn godex_status(state: State<'_, AppState>) -> GodexStatus {
-    GodexStatus {
-        running: state.godex.pid().is_some(),
-        pid: state.godex.pid(),
-        config: state.paths.lock().godex_config.display().to_string(),
-        binary: state.paths.lock().godex_binary.display().to_string(),
-    }
+    crate::diag(&format!("[cmd] enter godex_status"));
+    let running = state.godex.pid().is_some();
+    let pid = state.godex.pid();
+    let config = state.paths.lock().godex_config.display().to_string();
+    let binary = state.paths.lock().godex_binary.display().to_string();
+    let s = GodexStatus { running, pid, config, binary };
+    s
 }
 
 #[tauri::command]
 pub fn godex_restart(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+    crate::diag(&format!("[cmd] enter godex_restart"));
     use std::sync::Arc;
     let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
     sup.start(&app)
@@ -208,11 +218,13 @@ pub fn godex_restart(state: State<'_, AppState>, app: AppHandle) -> Result<u32, 
 
 #[tauri::command]
 pub fn godex_kill(state: State<'_, AppState>) {
+    crate::diag(&format!("[cmd] enter godex_kill"));
     state.godex.kill();
 }
 
 #[tauri::command]
 pub fn godex_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+    crate::diag(&format!("[cmd] enter godex_start"));
     use std::sync::Arc;
     let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
     sup.start(&app)
@@ -225,10 +237,12 @@ pub struct LogsTailArgs {
 
 #[tauri::command]
 pub fn godex_logs_tail(state: State<'_, AppState>, args: LogsTailArgs) -> Vec<LogLine> {
+    crate::diag(&format!("[cmd] enter godex_logs_tail"));
     state.godex.tail(args.limit.unwrap_or(200))
 }
 
 #[tauri::command]
 pub fn godex_logs_clear(state: State<'_, AppState>) {
+    crate::diag(&format!("[cmd] enter godex_logs_clear"));
     state.godex.clear();
 }
