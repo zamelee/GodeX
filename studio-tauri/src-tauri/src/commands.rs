@@ -1,7 +1,7 @@
 use crate::config::{self, EnabledModel, ProviderInfo};
 use crate::state::AppState;
 use crate::godex::LogLine;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
@@ -21,18 +21,11 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetConfigPathsArgs {
-    pub godex_config: String,
-    pub godex_binary: String,
-}
-
-#[tauri::command]
-pub fn set_config_paths(state: State<'_, AppState>, args: SetConfigPathsArgs) -> PathInfo {
+#[tauri::command(rename_all = "camelCase")]
+pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_binary: String) -> PathInfo {
     crate::diag(&format!("[cmd] enter set_config_paths"));
-    let config = PathBuf::from(&args.godex_config);
-    let binary = PathBuf::from(&args.godex_binary);
+    let config = PathBuf::from(&godex_config);
+    let binary = PathBuf::from(&godex_binary);
     state.godex.set_paths(config.clone(), binary.clone());
     {
         let mut p = state.paths.lock();
@@ -49,42 +42,26 @@ pub fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderInfo>, S
     Ok(config::read_providers(&path))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpsertProviderArgs {
-    pub name: String,
-    pub base_url: String,
-    pub api_key: String,
-    pub spec: String,
-    pub timeout_ms: u64,
-}
-
-#[tauri::command]
-pub fn upsert_provider(state: State<'_, AppState>, args: UpsertProviderArgs) -> Result<(), String> {
-    crate::diag(&format!("[cmd] enter upsert_provider"));
+#[tauri::command(rename_all = "camelCase")]
+pub fn upsert_provider(state: State<'_, AppState>, name: String, base_url: String, api_key: String, spec: String, timeout_ms: u64) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter upsert_provider name={}", name));
     let path = state.paths.lock().godex_config.clone();
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {}", e))?;
     let block = format!(
         "  {}:\n    spec: {}\n    credentials:\n      api_key: {}\n    endpoint:\n      base_url: {}\n    timeout_ms: {}\n",
-        args.name, args.spec, args.api_key, args.base_url, args.timeout_ms
+        name, spec, api_key, base_url, timeout_ms
     );
-    let updated = replace_provider_block(&raw, &args.name, &block);
+    let updated = replace_provider_block(&raw, &name, &block);
     std::fs::write(&path, updated).map_err(|e| format!("write failed: {}", e))?;
     Ok(())
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteProviderArgs {
-    pub name: String,
-}
-
-#[tauri::command]
-pub fn delete_provider(state: State<'_, AppState>, args: DeleteProviderArgs) -> Result<(), String> {
-    crate::diag(&format!("[cmd] enter delete_provider name={}", args.name));
+#[tauri::command(rename_all = "camelCase")]
+pub fn delete_provider(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter delete_provider name={}", name));
     let path = state.paths.lock().godex_config.clone();
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {}", e))?;
-    let updated = remove_provider_block(&raw, &args.name);
+    let updated = remove_provider_block(&raw, &name);
     std::fs::write(&path, updated).map_err(|e| format!("write failed: {}", e))?;
     Ok(())
 }
@@ -147,25 +124,12 @@ pub fn read_enabled_models(state: State<'_, AppState>) -> Result<Vec<EnabledMode
     Ok(config::read_enabled_models(&path))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveEnabledModelsArgs {
-    pub enabled: Vec<EnabledModel>,
-}
-
-#[tauri::command]
-pub fn save_enabled_models(state: State<'_, AppState>, args: SaveEnabledModelsArgs) -> Result<usize, String> {
-    crate::diag(&format!("[cmd] enter save_enabled_models"));
+#[tauri::command(rename_all = "camelCase")]
+pub fn save_enabled_models(state: State<'_, AppState>, enabled: Vec<EnabledModel>) -> Result<usize, String> {
+    crate::diag(&format!("[cmd] enter save_enabled_models count={}", enabled.len()));
     let path = state.paths.lock().godex_config.clone();
-    config::save_enabled_models(&path, &args.enabled)?;
-    Ok(args.enabled.len())
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FetchRemoteArgs {
-    pub base_url: String,
-    pub api_key: String,
+    config::save_enabled_models(&path, &enabled)?;
+    Ok(enabled.len())
 }
 
 #[derive(Serialize)]
@@ -173,11 +137,11 @@ pub struct RemoteModel {
     pub id: String,
 }
 
-#[tauri::command]
-pub async fn fetch_remote_models(args: FetchRemoteArgs) -> Result<Vec<RemoteModel>, String> {
-    crate::diag(&format!("[cmd] enter fetch_remote_models"));
-    let url = format!("{}/models", args.base_url.trim_end_matches('/'));
-    let req = reqwest_via_ureq(&url, &args.api_key)?;
+#[tauri::command(rename_all = "camelCase")]
+pub async fn fetch_remote_models(base_url: String, api_key: String) -> Result<Vec<RemoteModel>, String> {
+    crate::diag(&format!("[cmd] enter fetch_remote_models base_url={}", base_url));
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let req = reqwest_via_ureq(&url, &api_key)?;
     let parsed: serde_json::Value = serde_json::from_str(&req).map_err(|e| format!("parse failed: {}", e))?;
     let arr = parsed.get("data").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     let models = arr.into_iter()
@@ -240,16 +204,10 @@ pub fn godex_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, St
     sup.start(&app)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LogsTailArgs {
-    pub limit: Option<usize>,
-}
-
-#[tauri::command]
-pub fn godex_logs_tail(state: State<'_, AppState>, args: LogsTailArgs) -> Vec<LogLine> {
-    crate::diag(&format!("[cmd] enter godex_logs_tail"));
-    state.godex.tail(args.limit.unwrap_or(200))
+#[tauri::command(rename_all = "camelCase")]
+pub fn godex_logs_tail(state: State<'_, AppState>, limit: Option<usize>) -> Vec<LogLine> {
+    crate::diag(&format!("[cmd] enter godex_logs_tail limit={:?}", limit));
+    state.godex.tail(limit.unwrap_or(200))
 }
 
 #[tauri::command]
