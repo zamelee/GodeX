@@ -44,7 +44,7 @@ pub fn log_line_error(text: &str) -> crate::godex::LogLine {
 
 pub fn run() {
     let log_path = std::env::var("GODEX_STUDIO_LOG")
-        .unwrap_or_else(|_| String::from(r"C:\Users\Bliss\.godex\studio.log"));
+        .unwrap_or_else(|_| { let home = std::env::var("USERPROFILE").unwrap_or_else(|_| String::from("C:\\Users\\Bliss")); std::path::PathBuf::from(&home).join(".godex").join("studio.log").display().to_string() });
     if let Some(parent) = std::path::Path::new(&log_path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -71,7 +71,7 @@ pub fn run() {
             log::info!("[studio] setup: done");
 
             // On window close: kill godex only in internal (non-external) mode
-            let window = app.get_webview_window("main").unwrap();
+            if let Some(window) = app.get_webview_window("main") {
             let state_manage = app.handle().clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
@@ -85,6 +85,7 @@ pub fn run() {
                     }
                 }
             });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
