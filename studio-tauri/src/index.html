@@ -21,8 +21,8 @@ h1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
 .dot.warn{background:var(--yellow)}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
 .hdr-right code{color:var(--blue);font-family:ui-monospace,monospace}
-main{display:flex;flex:6 1 0;overflow:hidden;min-height:0}
-.col-left{width:240px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
+.col-left{flex:0 0 240px;min-width:120px;max-width:60vw;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .sec{background:var(--bg2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);
   letter-spacing:.05em;border-bottom:1px solid var(--border);
@@ -39,8 +39,9 @@ main{display:flex;flex:6 1 0;overflow:hidden;min-height:0}
 .provider-item .del{position:absolute;top:4px;right:6px;font-size:16px;color:var(--text2);cursor:pointer;opacity:0;transition:opacity .15s;line-height:1;padding:0 4px}
 .provider-item:hover .del{opacity:1}
 .provider-item .del:hover{color:var(--red)}
-.forms-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
-.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.forms-area{flex:1;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;margin:0 0 8px 0}
+#fs-models{margin-bottom:0}
 .form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .form-section-head .badge{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:400;padding:1px 6px;border-radius:3px}
 .form-section-head .right{margin-left:auto;display:flex;gap:6px}
@@ -68,8 +69,26 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .msg{font-size:12px;margin-left:8px}
 .msg.ok{color:var(--green)}
 .msg.err{color:var(--red)}
-/* --- split log panels (Studio + GodeX) --- */
-.log-region{flex:4 1 0;display:flex;flex-direction:column;min-height:160px;background:var(--bg)}
+/* --- sashes (drag to resize adjacent flex siblings) --- */
+.sash{background:var(--bg2);flex-shrink:0;transition:background .12s;position:relative;z-index:5}
+.sash::before{content:"";position:absolute;background:var(--border);transition:background .12s}
+.sash:hover,.sash.dragging{background:var(--bg3)}
+.sash:hover::before,.sash.dragging::before{background:var(--blue)}
+.sash-h{height:6px;width:100%;cursor:row-resize;user-select:none}
+.sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:2px;border-radius:1px}
+.sash-v{width:6px;height:100%;cursor:col-resize;user-select:none}
+.sash-v::before{top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:36px;border-radius:1px}
+
+/* --- visible scrollbars on every scrollable surface --- */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--bg2)}
+*::-webkit-scrollbar-thumb{background:#444c56;border-radius:5px;border:2px solid var(--bg2)}
+*::-webkit-scrollbar-thumb:hover{background:var(--blue)}
+*::-webkit-scrollbar-corner{background:var(--bg2)}
+*{scrollbar-width:thin;scrollbar-color:#444c56 var(--bg2)}
+
+
+.log-region{flex:1 1 0;display:flex;flex-direction:column;min-height:120px;background:var(--bg)}
 .log-panel{display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
 .log-panel-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;height:30px}
 .log-panel-header .lp-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;transition:background .15s}
@@ -136,7 +155,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 </header>
 
 <main>
-  <div class="col-left">
+  <div class="col-left" id="col-left">
     <div class="sec">服务商列表 <span class="right" id="provider-count">0</span></div>
     <div class="provider-list" id="provider-items">
       <div class="empty">加载中...</div>
@@ -146,7 +165,8 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     </div>
   </div>
 
-  <div class="col-right">
+  <div class="sash sash-v" id="sash-cols" title="拖动调整左右比例"></div>
+  <div class="col-right" id="col-right">
     <div id="editor-empty" class="empty" style="flex:1;display:flex;align-items:center;justify-content:center">
       <div>
         <div style="font-size:14px;margin-bottom:8px">未选择服务商</div>
@@ -154,8 +174,8 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
     </div>
     <div id="editor" style="display:none;flex:1;display:flex;flex-direction:column;min-height:0">
-      <div class="forms-area">
-        <div class="form-section">
+      <div class="forms-area" id="forms-area">
+        <div class="form-section" id="fs-provider">
           <div class="form-section-head">
             <span id="form-provider-name">服务商</span>
             <span class="badge" id="form-spec-badge">类型: ?</span>
@@ -191,7 +211,9 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
           </div>
         </div>
 
-        <div class="form-section">
+        <div class="sash sash-v" id="sash-forms" title="拖动调整上下编辑区比例"></div>
+
+        <div class="form-section" id="fs-models">
           <div class="form-section-head">
             <span>已启用的模型</span>
             <span class="badge" id="enabled-count">0 个已选</span>
@@ -224,6 +246,8 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     </div>
   </div>
 </main>
+
+<div class="sash sash-h" id="sash-main-log" title="拖动调整主区与日志区比例"></div>
 
 <div class="log-region" id="log-region">
   <div class="log-panel" id="lp-studio">
@@ -344,7 +368,141 @@ let providers = [];
 let activeProvider = null;
 let enabled = [];
 let remoteModels = [];
-// LogPanel: independent rolling buffer per source (studio / godex).
+// Sash: drag the divider between two flex siblings to resize them.
+// Both siblings must be in the same flex container, side by side.
+// ratio = (size of `before`) / (total size of container) is persisted in localStorage.
+class Sash {
+  constructor({ sashEl, beforeEl, afterEl, dir, storageKey, minBefore = 80, minAfter = 80, defaultRatio = 0.5 }) {
+    this.sash = sashEl;
+    this.before = beforeEl;
+    this.after = afterEl;
+    this.dir = dir; // 'h' (horizontal sash, vertical split) or 'v' (vertical sash, horizontal split)
+    this.storageKey = storageKey;
+    this.minBefore = minBefore;
+    this.minAfter = minAfter;
+    this.defaultRatio = defaultRatio;
+    this.container = sashEl.parentElement;
+    this._onMove = this._onMove.bind(this);
+    this._onUp = this._onUp.bind(this);
+    this._onDown = this._onDown.bind(this);
+    this._onTouchStart = this._onTouchStart.bind(this);
+    sashEl.addEventListener("mousedown", this._onDown);
+    sashEl.addEventListener("touchstart", this._onTouchStart, { passive: false });
+    this.applyRatio(this._loadRatio(), /*persist=*/false);
+  }
+  _loadRatio() {
+    const v = parseFloat(localStorage.getItem(this.storageKey));
+    if (Number.isFinite(v) && v > 0 && v < 1) return v;
+    return this.defaultRatio;
+  }
+  applyRatio(ratio, persist = true) {
+    const r = Math.max(0.05, Math.min(0.95, ratio));
+    if (this.dir === "v") {
+      // sash is vertical (resizes left/right) → container is flex-row
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    } else {
+      // sash is horizontal (resizes top/bottom) → container is flex-column
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    }
+    if (persist) localStorage.setItem(this.storageKey, String(r));
+  }
+  _onMove(ev) {
+    if (!this.dragging) return;
+    const rect = this.container.getBoundingClientRect();
+    const pos = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+    const pos2 = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    let ratio;
+    if (this.dir === "v") {
+      ratio = (pos2 - rect.left) / rect.width;
+    } else {
+      ratio = (pos - rect.top) / rect.height;
+    }
+    // Enforce minimums.
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const minBeforeRatio = this.minBefore / totalPx;
+    const maxBeforeRatio = 1 - (this.minAfter / totalPx);
+    ratio = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
+    this.applyRatio(ratio, /*persist=*/false);
+  }
+  _onUp() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.sash.classList.remove("dragging");
+    document.body.style.cursor = "";
+    // Persist final ratio.
+    const rect = this.container.getBoundingClientRect();
+    const beforeRect = this.before.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+    this.applyRatio(beforePx / totalPx, /*persist=*/true);
+    window.removeEventListener("mousemove", this._onMove);
+    window.removeEventListener("mouseup", this._onUp);
+    window.removeEventListener("touchmove", this._onMove);
+    window.removeEventListener("touchend", this._onUp);
+  }
+  _onDown(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
+    window.addEventListener("mousemove", this._onMove);
+    window.addEventListener("mouseup", this._onUp);
+  }
+  _onTouchStart(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    window.addEventListener("touchmove", this._onMove, { passive: false });
+    window.addEventListener("touchend", this._onUp);
+  }
+}
+
+// Wire up sashes once the DOM is ready.
+const _godexSashes = [];
+function initSashes() {
+  // A: header / main / log-region — between main and log-region.
+  // The parent of #sash-main-log is <body>.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-main-log"),
+    beforeEl: $("main"),
+    afterEl: $("log-region"),
+    dir: "h",
+    storageKey: "godex-studio.mainLogRatio",
+    minBefore: 200, minAfter: 120, defaultRatio: 0.6,
+  }));
+  // D: col-left / col-right — vertical split.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-cols"),
+    beforeEl: $("col-left"),
+    afterEl: $("col-right"),
+    dir: "v",
+    storageKey: "godex-studio.colsRatio",
+    minBefore: 120, minAfter: 240, defaultRatio: 0.22,
+  }));
+  // B: Studio / GodeX panels — horizontal split inside log-region.
+  _godexSashes.push(new Sash({
+    sashEl: $("log-sash"),
+    beforeEl: $("lp-studio"),
+    afterEl: $("lp-godex"),
+    dir: "h",
+    storageKey: "godex-studio.sashRatio",
+    minBefore: 80, minAfter: 80, defaultRatio: 0.5,
+  }));
+  // E: forms area — vertical split between #fs-provider and #fs-models.
+  // The parent of #sash-forms is #forms-area.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-forms"),
+    beforeEl: $("fs-provider"),
+    afterEl: $("fs-models"),
+    dir: "h",
+    storageKey: "godex-studio.formsRatio",
+    minBefore: 100, minAfter: 100, defaultRatio: 0.35,
+  }));
+}
+
+
 // Each panel has its own level filter, wrap toggle, and Clear button.
 const LOG_MAX_LINES = 3000;
 class LogPanel {
@@ -455,57 +613,7 @@ function pushLogLine(line) {
   else studioPanel.push(line); // studio + cmd + anything unknown
 }
 
-// Sash: drag the divider to resize the two log panels.
-// Persists ratio in localStorage.
-(function setupSash() {
-  const sash = $("log-sash");
-  const region = $("log-region");
-  const upper = $("lp-studio");
-  const lower = $("lp-godex");
-  if (!sash || !region || !upper || !lower) return;
-  const STORAGE_KEY = "godex-studio.sashRatio";
-  const applyRatio = (ratio) => {
-    const r = Math.max(0.1, Math.min(0.9, ratio));
-    upper.style.flex = r + " 1 0";
-    lower.style.flex = (1 - r) + " 1 0";
-  };
-  const saved = parseFloat(localStorage.getItem(STORAGE_KEY));
-  if (!isNaN(saved) && saved > 0 && saved < 1) applyRatio(saved);
-  let dragging = false;
-  const onMove = (ev) => {
-    if (!dragging) return;
-    const rect = region.getBoundingClientRect();
-    const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
-    applyRatio(y / rect.height);
-  };
-  const onUp = () => {
-    if (!dragging) return;
-    dragging = false;
-    sash.classList.remove("dragging");
-    document.body.style.cursor = "";
-    const rect = region.getBoundingClientRect();
-    const upperH = upper.getBoundingClientRect().height;
-    localStorage.setItem(STORAGE_KEY, String(upperH / rect.height));
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
-    window.removeEventListener("touchmove", onMove);
-    window.removeEventListener("touchend", onUp);
-  };
-  sash.addEventListener("mousedown", (ev) => {
-    ev.preventDefault();
-    dragging = true;
-    sash.classList.add("dragging");
-    document.body.style.cursor = "row-resize";
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  });
-  sash.addEventListener("touchstart", (ev) => {
-    dragging = true;
-    sash.classList.add("dragging");
-    window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onUp);
-  }, { passive: true });
-})();
+
 
 function showMsg(text, type) {
   const m = $("action-msg");
@@ -862,6 +970,7 @@ async function refreshStatus() {
 
 (async function init() {
   await loadProviders();
+  initSashes();
   refreshStatus();
   setInterval(refreshStatus, 5000);
 
