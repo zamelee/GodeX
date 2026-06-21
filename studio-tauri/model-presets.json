@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "match_rules": {
+    "case_sensitive": false,
+    "strategy_order": ["exact", "alias", "contains", "regex"],
+    "strip_prefixes": ["google/", "openai/", "anthropic/", "deepseek/", "minimax/", "meta/", "alibaba/", "moonshot/", "mistral/", "bytedance/", "zhipu/"],
+    "strip_suffixes": ["-latest", "-exp", "-2024-11-20", "-2024-09-12", "-2026-06", "-20241022", "-20250414", "-chat", "-instruct", "-preview"]
+  },
+  "presets": [
+    {
+      "name": "MiniMax-M3",
+      "aliases": ["MiniMax-M3", "minimax-m3", "m3"],
+      "context_window": 1000000,
+      "max_tokens": 1000000,
+      "multimodal": { "image_input": true, "video_input": true },
+      "notes": "1M输出需用/v1/responses端点或显式传max_tokens:1000000"
+    },
+    {
+      "name": "MiniMax-M2.7",
+      "aliases": ["MiniMax-M2.7", "minimax-m2.7", "MiniMax-M2.7-highspeed", "minimax-m2.7-highspeed", "abab7", "abab7-chat"],
+      "context_window": 204800,
+      "max_tokens": 131072,
+      "multimodal": { "image_input": true },
+      "notes": "highspeed变体参数相同，仅推理速度更快"
+    },
+    {
+      "name": "GPT-5",
+      "aliases": ["gpt-5", "gpt-5-2026-06", "gpt-5-mini", "gpt-5-nano", "oai-gpt-5"],
+      "context_window": 400000,
+      "max_tokens": 131072,
+      "multimodal": { "image_input": true, "audio_input": true },
+      "notes": "Responses API用max_output_tokens; Chat Completions用max_completion_tokens(max_tokens deprecated)"
+    },
+    {
+      "name": "GPT-5.5",
+      "aliases": ["gpt-5.5", "gpt-5.4", "gpt-5-turbo"],
+      "context_window": 1050000,
+      "max_tokens": 131072,
+      "multimodal": { "image_input": true, "audio_input": true },
+      "notes": "GPT-5.5为当前旗舰; 部分中转站gpt-5-turbo实为5.5"
+    },
+    {
+      "name": "GPT-4.1",
+      "aliases": ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"],
+      "context_window": 1048576,
+      "max_tokens": 32768,
+      "multimodal": { "image_input": true },
+      "notes": "1M上下文; 2025年发布"
+    },
+    {
+      "name": "o3",
+      "aliases": ["o3", "o3-mini", "o3-pro", "o3-2026-04"],
+      "context_window": 200000,
+      "max_tokens": 100000,
+      "multimodal": { "image_input": true },
+      "notes": "max_completion_tokens含思考链tokens"
+    },
+    {
+      "name": "o4-mini",
+      "aliases": ["o4-mini", "o4"],
+      "context_window": 200000,
+      "max_tokens": 100000,
+      "multimodal": { "image_input": true },
+      "notes": "最新推理模型"
+    },
+    {
+      "name": "o1",
+      "aliases": ["o1", "o1-mini", "o1-preview"],
+      "context_window": 200000,
+      "max_tokens": 100000,
+      "multimodal": { "image_input": true },
+      "notes": "o1-preview为早期版本，已路由至正式版o1"
+    },
+    {
+      "name": "GPT-4o",
+      "aliases": ["gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-mini"],
+      "context_window": 128000,
+      "max_tokens": 16384,
+      "multimodal": { "image_input": true, "audio_input": true },
+      "notes": "输出上限仅16K，长文本需分段"
+    },
+    {
+      "name": "Gemini 2.5 Pro",
+      "aliases": ["gemini-2.5-pro", "gemini-2.5-pro-exp"],
+      "context_window": 1048576,
+      "max_tokens": 65536,
+      "multimodal": { "image_input": true, "audio_input": true, "video_input": true },
+      "notes": "REST用maxOutputTokens; 思考模式开启时输出含思考内容"
+    },
+    {
+      "name": "Gemini 2.5 Flash",
+      "aliases": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+      "context_window": 1048576,
+      "max_tokens": 65536,
+      "multimodal": { "image_input": true, "audio_input": true, "video_input": true },
+      "notes": "Flash偶发截断问题，生产环境建议加重试"
+    },
+    {
+      "name": "Gemini 2.0 Flash",
+      "aliases": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash-exp"],
+      "context_window": 1048576,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true, "audio_input": true, "video_input": true },
+      "notes": "轻量版，输出上限较低"
+    },
+    {
+      "name": "Gemini 1.5 Pro",
+      "aliases": ["gemini-1.5-pro", "gemini-1.5-pro-latest"],
+      "context_window": 2097152,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true, "audio_input": true, "video_input": true },
+      "notes": "2M上下文但输出仅8K; 已进入维护期"
+    },
+    {
+      "name": "DeepSeek-V3",
+      "aliases": ["deepseek-chat", "deepseek-v3", "ds-v3", "deepseek-v3-0324"],
+      "context_window": 65536,
+      "max_tokens": 8192,
+      "multimodal": {},
+      "notes": "官方API仅64K/8K; 中转站常用deepseek-chat作为V3别名"
+    },
+    {
+      "name": "DeepSeek-R1",
+      "aliases": ["deepseek-reasoner", "deepseek-r1", "ds-r1"],
+      "context_window": 65536,
+      "max_tokens": 8192,
+      "multimodal": {},
+      "notes": "推理tokens计入输出且计费"
+    },
+    {
+      "name": "GLM-4",
+      "aliases": ["glm-4", "glm-4-air", "glm-4-flash", "chatglm_4", "glm-4-long"],
+      "context_window": 128000,
+      "max_tokens": 4096,
+      "multimodal": { "image_input": true },
+      "notes": "所有子版本输出上限仅4K; GLM-4-Long为1M上下文变体"
+    },
+    {
+      "name": "Claude 3.5 Sonnet",
+      "aliases": ["claude-3-5-sonnet", "claude-3.5-sonnet", "claude-3-5-sonnet-20241022"],
+      "context_window": 200000,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "Extended Thinking思考tokens不计入max_tokens但计费"
+    },
+    {
+      "name": "Claude 3.5 Haiku",
+      "aliases": ["claude-3-5-haiku", "claude-3.5-haiku", "claude-3-5-haiku-20241022"],
+      "context_window": 200000,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "适合批量角色提示词生成"
+    },
+    {
+      "name": "Claude 4 Sonnet",
+      "aliases": ["claude-4-sonnet", "claude-sonnet-4", "claude-4-sonnet-20250514"],
+      "context_window": 200000,
+      "max_tokens": 16384,
+      "multimodal": { "image_input": true },
+      "notes": "Anthropic最新旗舰Sonnet; 支持extended thinking"
+    },
+    {
+      "name": "Claude 4 Opus",
+      "aliases": ["claude-4-opus", "claude-opus-4", "claude-4-opus-20250514"],
+      "context_window": 200000,
+      "max_tokens": 32768,
+      "multimodal": { "image_input": true },
+      "notes": "Anthropic最强模型; 支持extended thinking"
+    },
+    {
+      "name": "Claude 3 Opus",
+      "aliases": ["claude-3-opus", "claude-3-opus-20240229"],
+      "context_window": 200000,
+      "max_tokens": 4096,
+      "multimodal": { "image_input": true },
+      "notes": "上一代旗舰; 已被Claude 4系列取代"
+    },
+    {
+      "name": "Llama 4 Maverick",
+      "aliases": ["llama-4-maverick", "meta-llama-4-maverick", "llama4-maverick"],
+      "context_window": 1048576,
+      "max_tokens": 32768,
+      "multimodal": { "image_input": true },
+      "notes": "Meta最新开源旗舰; 400B参数MoE架构"
+    },
+    {
+      "name": "Llama 4 Scout",
+      "aliases": ["llama-4-scout", "meta-llama-4-scout", "llama4-scout"],
+      "context_window": 1048576,
+      "max_tokens": 32768,
+      "multimodal": { "image_input": true },
+      "notes": "Meta轻量版; 17B参数MoE"
+    },
+    {
+      "name": "Llama 3.3 70B",
+      "aliases": ["llama-3.3-70b", "llama-3.3-70b-versatile", "meta-llama-3.3-70b"],
+      "context_window": 131072,
+      "max_tokens": 8192,
+      "multimodal": {},
+      "notes": "上一代开源主力"
+    },
+    {
+      "name": "Qwen3",
+      "aliases": ["qwen3", "qwen-3", "qwen3-235b", "qwen3-235b-a22b", "qwen3-32b", "qwen3-30b-a3b"],
+      "context_window": 131072,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "阿里最新旗舰; 235B为最大版本; 支持thinking模式"
+    },
+    {
+      "name": "Qwen2.5-72B",
+      "aliases": ["qwen2.5-72b", "qwen-2.5-72b", "qwen2.5-72b-instruct"],
+      "context_window": 131072,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "上一代主力; 中转站常用qwen-turbo别名"
+    },
+    {
+      "name": "Kimi K2",
+      "aliases": ["kimi-k2", "moonshot-v1-128k", "kimi-k2-0711"],
+      "context_window": 131072,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "月之暗面最新; 1T MoE架构; 支持tool use"
+    },
+    {
+      "name": "Mistral Large",
+      "aliases": ["mistral-large", "mistral-large-latest", "mistral-large-2"],
+      "context_window": 131072,
+      "max_tokens": 8192,
+      "multimodal": { "image_input": true },
+      "notes": "Mistral旗舰; 支持function calling"
+    },
+    {
+      "name": "Mistral Medium",
+      "aliases": ["mistral-medium", "mistral-medium-latest"],
+      "context_window": 32768,
+      "max_tokens": 8192,
+      "multimodal": {},
+      "notes": "性价比版本"
+    },
+    {
+      "name": "Doubao-1.5-pro",
+      "aliases": ["doubao-1.5-pro", "doubao-1-5-pro", "doubao-pro"],
+      "context_window": 131072,
+      "max_tokens": 16384,
+      "multimodal": { "image_input": true },
+      "notes": "字节豆包系列; 中转站常见"
+    },
+    {
+      "name": "Yi-Lightning",
+      "aliases": ["yi-lightning", "yi-lightning-20241028"],
+      "context_window": 163840,
+      "max_tokens": 4096,
+      "multimodal": { "image_input": true },
+      "notes": "零一万物旗舰"
+    }
+  ]
+}
