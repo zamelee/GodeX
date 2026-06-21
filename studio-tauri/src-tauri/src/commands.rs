@@ -22,6 +22,7 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetConfigPathsArgs {
     pub godex_config: String,
     pub godex_binary: String,
@@ -49,6 +50,7 @@ pub fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderInfo>, S
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpsertProviderArgs {
     pub name: String,
     pub base_url: String,
@@ -71,12 +73,18 @@ pub fn upsert_provider(state: State<'_, AppState>, args: UpsertProviderArgs) -> 
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteProviderArgs {
+    pub name: String,
+}
+
 #[tauri::command]
-pub fn delete_provider(state: State<'_, AppState>, name: String) -> Result<(), String> {
-    crate::diag(&format!("[cmd] enter delete_provider"));
+pub fn delete_provider(state: State<'_, AppState>, args: DeleteProviderArgs) -> Result<(), String> {
+    crate::diag(&format!("[cmd] enter delete_provider name={}", args.name));
     let path = state.paths.lock().godex_config.clone();
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read failed: {}", e))?;
-    let updated = remove_provider_block(&raw, &name);
+    let updated = remove_provider_block(&raw, &args.name);
     std::fs::write(&path, updated).map_err(|e| format!("write failed: {}", e))?;
     Ok(())
 }
@@ -140,6 +148,7 @@ pub fn read_enabled_models(state: State<'_, AppState>) -> Result<Vec<EnabledMode
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveEnabledModelsArgs {
     pub enabled: Vec<EnabledModel>,
 }
@@ -153,6 +162,7 @@ pub fn save_enabled_models(state: State<'_, AppState>, args: SaveEnabledModelsAr
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FetchRemoteArgs {
     pub base_url: String,
     pub api_key: String,
@@ -231,6 +241,7 @@ pub fn godex_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, St
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogsTailArgs {
     pub limit: Option<usize>,
 }
