@@ -30,9 +30,12 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        let defaults = Paths::default_paths();
+        let godex = Arc::new(GodexSupervisor::new());
+        godex.set_paths(defaults.godex_config.clone(), defaults.godex_binary.clone());
         Self {
-            paths: Mutex::new(Paths::default_paths()),
-            godex: Arc::new(GodexSupervisor::new()),
+            paths: Mutex::new(defaults),
+            godex,
         }
     }
 }
