@@ -51,3 +51,10 @@ docs/references/codex/request.json
 docs/superpowers/specs/
 docs/superpowers/plans/
 .vitepress/cache/
+
+# Tauri studio build artifacts
+studio-tauri/__build.log
+studio-tauri/__build.log.err
+studio-tauri/__build.ps1
+studio-tauri/src-tauri/target/
+

@@ -99,7 +99,7 @@ impl GodexSupervisor {
     }
 
     pub fn pid(&self) -> Option<u32> {
-        self.child.lock().as_ref().and_then(|c| c.id())
+        self.child.lock().as_ref().map(|c| c.id())
     }
 
     pub fn kill(&self) {
@@ -158,7 +158,7 @@ impl GodexSupervisor {
             thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines().map_while(Result::ok) {
-                    let ll = LogLine::godex(line);
+                    let mut ll = LogLine::godex(line);
                     ll.level = "error".to_string();
                     sup.push_internal(ll.clone());
                     let _ = app_handle.emit("godex://log", ll);

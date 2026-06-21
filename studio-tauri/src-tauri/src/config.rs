@@ -225,13 +225,14 @@ fn replace_or_insert(raw: &str, new_block: &str) -> String {
         if before.ends_with("models:\n") || before.trim_end().ends_with("models:") {
             // find end: next line whose leftmost non-space is at 0 indent (top-level key)
             let after_start = start;
-            let mut end = raw.len();
+            #[allow(unused_assignments)]
+            let mut end: Option<usize> = None;
             for (i, line) in raw[after_start..].lines().enumerate() {
                 if i == 0 { continue; }
                 if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
-                    end = after_start + i;
+                    end = Some(after_start + i);
                     // back up to start of this line
-                    let mut cut = end;
+                    let mut cut = end.expect("end is set on this branch");
                     while cut > 0 && &raw[cut..cut + 1] != "\n" { cut -= 1; }
                     if cut > 0 { cut += 1; }
                     return format!("{}{}{}", before, new_block.trim_end(), &raw[cut..]);
