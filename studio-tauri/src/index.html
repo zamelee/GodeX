@@ -70,13 +70,13 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .msg.ok{color:var(--green)}
 .msg.err{color:var(--red)}
 /* --- sashes (drag to resize adjacent flex siblings) --- */
-.sash{background:var(--bg2);flex-shrink:0;transition:background .12s;position:relative;z-index:5}
-.sash::before{content:"";position:absolute;background:var(--border);transition:background .12s}
-.sash:hover,.sash.dragging{background:var(--bg3)}
+.sash{background:var(--bg2);flex-shrink:0;transition:background .12s;position:relative;z-index:5;display:flex;align-items:center;justify-content:center}
+.sash::before{content:"";position:absolute;background:var(--blue);transition:background .12s;opacity:0.5}
+.sash:hover,.sash.dragging{background:var(--blue);opacity:0.5}
 .sash:hover::before,.sash.dragging::before{background:var(--blue)}
-.sash-h{height:6px;width:100%;cursor:row-resize;user-select:none}
+.sash-h{height:8px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:2px;border-radius:1px}
-.sash-v{width:6px;height:100%;cursor:col-resize;user-select:none}
+.sash-v{width:8px;height:100%;cursor:col-resize;user-select:none;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
 .sash-v::before{top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:36px;border-radius:1px}
 
 /* --- visible scrollbars on every scrollable surface --- */
@@ -1127,59 +1127,24 @@ async function refreshStatus() {
 }
 
 (async function init() {
-  // Load model presets from Rust (non-blocking, fallback on failure)
-  try {
-    await loadRustPresets();
-  } catch(e) {
-    console.warn('[init] loadRustPresets failed, using JS fallback:', e);
-  }
-
-  // Load provider list
-  try {
-    await loadProviders();
-  } catch(e) {
-    console.error('[init] loadProviders failed:', e);
-  }
-
-  // Initialize sash drag handles
-  try {
-    initSashes();
-  } catch(e) {
-    console.error('[init] initSashes failed:', e);
-  }
-
-  // Start status polling
-  refreshStatus();
-  setInterval(refreshStatus, 5000);
-
-  // Subscribe to live log events from Rust backend.
-  try {
-    await listen('godex://log', (ev) => { pushLogLine(ev.payload); });
-  } catch(e) {
-    console.warn('[init] listen failed:', e);
-  }
-
-  // Fetch buffered log history so the panel is not empty on startup.
-  try {
-    const tail = await invoke('godex_logs_tail', { limit: 500 });
-    for (const line of (tail || [])) pushLogLine(line);
-  } catch(e) {
-    console.warn('[init] godex_logs_tail failed:', e);
-  }
-
-  // Sync editor visibility with whatever provider was selected.
-  if (activeProvider && providers.find((x) => x.name === activeProvider)) {
-    selectProvider(activeProvider);
+  loadProviders().catch(function(e){ console.error("[init] loadProviders:", e); });
+  setTimeout(function(){ if(!providers.length){ console.warn("[init] providers timeout, show empty"); renderProviders(); } }, 3000);
+  var presetTimer = setTimeout(function(){ console.warn("[init] presets timed out"); }, 5000);
+  loadRustPresets().then(function(){ clearTimeout(presetTimer); }).catch(function(e){ clearTimeout(presetTimer); console.warn("[init] loadRustPresets:", e); });
+  try { initSashes(); } catch(e) { console.error("[init] initSashes:", e); }
+  try { refreshStatus(); } catch(e) { console.error("[init] refreshStatus:", e); }
+  setInterval(function(){ try { refreshStatus(); } catch(e){} }, 5000);
+  try { listen("godex://log", function(ev){ pushLogLine(ev.payload); }); } catch(e) { console.warn("[init] listen:", e); }
+  try { invoke("godex_logs_tail", { limit: 500 }).then(function(tail){ if (tail) tail.forEach(function(line){ pushLogLine(line); }); }); } catch(e) { console.warn("[init] tail:", e); }
+  if (activeProvider && providers.find(function(x){ return x.name === activeProvider; })) {
+    try { selectProvider(activeProvider); } catch(e) { console.error("[init] selectProvider:", e); }
   } else {
-    const emptyEl = document.getElementById('editor-empty');
-    const editorEl = document.getElementById('editor');
-    if (emptyEl) emptyEl.style.display = 'flex';
-    if (editorEl) editorEl.style.display = 'none';
+    var emptyEl = document.getElementById("editor-empty"); var editorEl = document.getElementById("editor");
+    if (emptyEl) emptyEl.style.display = "flex";
+    if (editorEl) editorEl.style.display = "none";
   }
-
-  // Force forms-area sash to re-measure now that the editor is visible.
-  const formsSash = _godexSashes.find((s) => s.storageKey === 'godex-studio.formsRatio');
-  if (formsSash) formsSash.applyRatio(formsSash._loadRatio(), false);
+  var formsSash = _godexSashes.find(function(s){ return s.storageKey === "godex-studio.formsRatio"; });
+  if (formsSash) { try { formsSash.applyRatio(formsSash._loadRatio(), false); } catch(e){} }
 })();
 
 // --- Settings modal ---
