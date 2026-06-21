@@ -1124,30 +1124,58 @@ async function refreshStatus() {
 }
 
 (async function init() {
-  await loadRustPresets();
-  await loadProviders();
-  initSashes();
+  // Load model presets from Rust (non-blocking, fallback on failure)
+  try {
+    await loadRustPresets();
+  } catch(e) {
+    console.warn('[init] loadRustPresets failed, using JS fallback:', e);
+  }
+
+  // Load provider list
+  try {
+    await loadProviders();
+  } catch(e) {
+    console.error('[init] loadProviders failed:', e);
+  }
+
+  // Initialize sash drag handles
+  try {
+    initSashes();
+  } catch(e) {
+    console.error('[init] initSashes failed:', e);
+  }
+
+  // Start status polling
   refreshStatus();
   setInterval(refreshStatus, 5000);
 
-  // Subscribe to live log events from Rust and route to the right panel.
-  await listen("godex://log", (ev) => { pushLogLine(ev.payload); });
-
-  // Fetch recent log history (everything pushed so far in the ring buffer).
+  // Subscribe to live log events from Rust backend.
   try {
-    const tail = await invoke("godex_logs_tail", { limit: 500 });
+    await listen('godex://log', (ev) => { pushLogLine(ev.payload); });
+  } catch(e) {
+    console.warn('[init] listen failed:', e);
+  }
+
+  // Fetch buffered log history so the panel is not empty on startup.
+  try {
+    const tail = await invoke('godex_logs_tail', { limit: 500 });
     for (const line of (tail || [])) pushLogLine(line);
-  } catch (e) { /* no-op */ }
-  // Sync editor state with whatever activeProvider is after loadProviders().
+  } catch(e) {
+    console.warn('[init] godex_logs_tail failed:', e);
+  }
+
+  // Sync editor visibility with whatever provider was selected.
   if (activeProvider && providers.find((x) => x.name === activeProvider)) {
     selectProvider(activeProvider);
   } else {
-    $("editor-empty").style.display = "flex";
-    $("editor").style.display = "none";
+    const emptyEl = document.getElementById('editor-empty');
+    const editorEl = document.getElementById('editor');
+    if (emptyEl) emptyEl.style.display = 'flex';
+    if (editorEl) editorEl.style.display = 'none';
   }
+
   // Force forms-area sash to re-measure now that the editor is visible.
-  // This runs AFTER initSashes() so _godexSashes is populated.
-  const formsSash = _godexSashes.find((s) => s.storageKey === "godex-studio.formsRatio");
+  const formsSash = _godexSashes.find((s) => s.storageKey === 'godex-studio.formsRatio');
   if (formsSash) formsSash.applyRatio(formsSash._loadRatio(), false);
 })();
 
