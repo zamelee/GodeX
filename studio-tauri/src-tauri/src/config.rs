@@ -60,6 +60,12 @@ pub fn read_providers(path: &Path) -> Vec<ProviderInfo> {
             in_providers = true;
             continue;
         }
+        // Any other top-level key (e.g. "models:", "default_provider:")
+        // exits the providers: block.
+        if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
+            in_providers = false;
+            continue;
+        }
         if !in_providers {
             continue;
         }

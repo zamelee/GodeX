@@ -66,56 +66,94 @@ pub fn delete_provider(state: State<'_, AppState>, name: String) -> Result<(), S
     Ok(())
 }
 
-fn replace_provider_block(raw: &str, name: &str, new_block: &str) -> String {
+
+// Returns the byte range (start, end) of the provider block named
+// `name` in `raw`. A provider block is a contiguous run of lines
+// starting with "  <name>:" (2-space indent) and ending just before
+// the next line that has either 0-space indent (top-level key) or
+// 2-space indent + "<other>:" (another provider).
+fn find_provider_block(raw: &str, name: &str) -> Option<(usize, usize)> {
     let needle = format!("  {}:", name);
-    if let Some(start) = raw.find(&needle) {
-        let mut cut_end = raw.len();
-        let after = &raw[start + needle.len()..];
-        for line in after.lines() {
-            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
-                if let Some(idx) = raw[start..].find(line) {
-                    let abs = start + idx;
-                    let mut line_start = abs;
-                    while line_start > 0 && &raw[line_start - 1..line_start] != "\n" { line_start -= 1; }
-                    cut_end = line_start;
-                }
-                break;
+    let bytes = raw.as_bytes();
+    let mut search_from = 0;
+    while let Some(rel) = raw[search_from..].find(&needle) {
+        let start = search_from + rel;
+        // Must be at start of a line.
+        let at_line_start = start == 0 || bytes[start - 1] == b'\n';
+        if at_line_start {
+            // Walk subsequent lines to find the end of the block.
+            let mut cursor = start;
+            // Move past the header line and its newline.
+            while cursor < bytes.len() && bytes[cursor] != b'\n' {
+                cursor += 1;
             }
+            if cursor < bytes.len() { cursor += 1; }
+            while cursor < bytes.len() {
+                let line_end = raw[cursor..].find('\n')
+                    .map(|i| cursor + i)
+                    .unwrap_or(bytes.len());
+                let line = &raw[cursor..line_end];
+                if !line.is_empty() {
+                    let trimmed = line.trim_start();
+                    let indent = line.len() - trimmed.len();
+                    if indent == 0 {
+                        break;
+                    }
+                    if indent == 2 && trimmed.ends_with(':') && !trimmed.contains(' ') {
+                        break;
+                    }
+                }
+                cursor = if line_end < bytes.len() { line_end + 1 } else { bytes.len() };
+            }
+            return Some((start, cursor));
         }
-        let mut cut_start = start;
-        if cut_start > 0 && &raw[cut_start - 1..cut_start] == "\n" { cut_start -= 1; }
-        return format!("{}{}{}", &raw[..cut_start], new_block.trim_end(), &raw[cut_end..]);
+        search_from = start + 1;
     }
-    // not found; insert after `providers:` line
-    if let Some(idx) = raw.find("providers:") {
-        let nl = raw[idx..].find('\n').unwrap_or(0) + idx + 1;
-        return format!("{}{}\n{}", &raw[..nl], new_block.trim_end(), &raw[nl..]);
+    None
+}
+
+fn replace_provider_block(raw: &str, name: &str, new_block: &str) -> String {
+    if let Some((start, end)) = find_provider_block(raw, name) {
+        // Eat the preceding newline so the new block sits cleanly.
+        let cut_start = if start > 0 && raw.as_bytes()[start - 1] == b'\n' {
+            start - 1
+        } else {
+            start
+        };
+        return format!("{}{}{}", &raw[..cut_start], new_block.trim_end(), &raw[end..]);
     }
-    format!("providers:\n{}", new_block)
+    // Not found: insert after the `providers:` top-level line.
+    let needle = "providers:";
+    if let Some(idx) = raw.find(needle) {
+        let at_line_start = idx == 0 || raw.as_bytes()[idx - 1] == b'\n';
+        if at_line_start {
+            let nl = raw[idx..].find('\n')
+                .map(|i| idx + i + 1)
+                .unwrap_or(raw.len());
+            let prefix = if nl == 0 || raw.as_bytes()[nl - 1] == b'\n' {
+                &raw[..nl]
+            } else {
+                // Add a newline after the providers: line if missing.
+                &raw[..idx + needle.len()]
+            };
+            return format!("{}\n{}\n{}", prefix, new_block.trim_end(), &raw[nl..]);
+        }
+    }
+    format!("providers:\n{}\n", raw)
 }
 
 fn remove_provider_block(raw: &str, name: &str) -> String {
-    let needle = format!("  {}:", name);
-    if let Some(start) = raw.find(&needle) {
-        let mut cut_end = raw.len();
-        let after = &raw[start + needle.len()..];
-        for line in after.lines() {
-            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
-                if let Some(idx) = raw[start..].find(line) {
-                    let abs = start + idx;
-                    let mut line_start = abs;
-                    while line_start > 0 && &raw[line_start - 1..line_start] != "\n" { line_start -= 1; }
-                    cut_end = line_start;
-                }
-                break;
-            }
-        }
-        let mut cut_start = start;
-        if cut_start > 0 && &raw[cut_start - 1..cut_start] == "\n" { cut_start -= 1; }
-        return format!("{}{}", &raw[..cut_start], &raw[cut_end..]);
+    if let Some((start, end)) = find_provider_block(raw, name) {
+        let cut_start = if start > 0 && raw.as_bytes()[start - 1] == b'\n' {
+            start - 1
+        } else {
+            start
+        };
+        return format!("{}{}", &raw[..cut_start], &raw[end..]);
     }
     raw.to_string()
 }
+
 
 #[tauri::command]
 pub fn read_enabled_models(state: State<'_, AppState>) -> Result<Vec<EnabledModel>, String> {

@@ -147,6 +147,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
             <span id="form-provider-name">服务商</span>
             <span class="badge" id="form-spec-badge">类型: ?</span>
             <div class="right">
+              <button class="btn tiny" onclick="saveProvider()">保存服务商信息</button>
               <button class="btn gray tiny" onclick="reloadProvider()">刷新</button>
             </div>
           </div>
@@ -201,7 +202,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
 
       <div class="action-bar">
-        <button class="btn" onclick="saveProvider()">保存服务商信息</button>
         <button class="btn" onclick="saveEnabled()">保存模型配置</button>
         <button class="btn purple" onclick="saveAndRestart()">保存并重启 godex</button>
         <button class="btn gray" onclick="resetEditor()">重置</button>
@@ -630,6 +630,7 @@ async function createProvider() {
     showMsg("已创建 " + name, "ok");
     closeNewProviderModal();
     await loadProviders();
+      renderProviders();
     selectProvider(name);
   } catch (e) { showMsg("创建失败: " + e, "err"); }
 }
