@@ -21,7 +21,7 @@ h1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
 .dot.warn{background:var(--yellow)}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
 .hdr-right code{color:var(--blue);font-family:ui-monospace,monospace}
-main{display:flex;flex:1;overflow:hidden;min-height:0}
+main{display:flex;flex:6 1 0;overflow:hidden;min-height:0}
 .col-left{width:240px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
 .col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .sec{background:var(--bg2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);
@@ -68,21 +68,37 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .msg{font-size:12px;margin-left:8px}
 .msg.ok{color:var(--green)}
 .msg.err{color:var(--red)}
-.bottom{height:200px;flex-shrink:0;border-top:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg)}
-.bottom-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0}
-.bottom-header span{font-size:11px;color:var(--text2);font-weight:600}
-.bottom-body{flex:1;overflow-y:auto;font-family:"Consolas","Courier New",monospace;font-size:11px}
-.log-line{padding:1px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px;align-items:flex-start}
-.log-line:hover{background:rgba(255,255,255,.02)}
-.log-line .ts{color:#6e7681;flex-shrink:0;font-size:10px;padding-top:2px;font-family:ui-monospace,monospace}
-.log-line .src{font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0;background:var(--bg3);color:var(--text2);margin-top:1px}
-.log-line .src.godex{background:rgba(88,166,255,.15);color:var(--blue)}
-.log-line .src.studio{background:rgba(63,185,80,.12);color:var(--green)}
-.log-line .msg{color:var(--text);word-break:break-all;flex:1;white-space:pre-wrap}
-.log-line.error{background:rgba(248,81,73,.06);border-left:3px solid var(--red)}
+/* --- split log panels (Studio + GodeX) --- */
+.log-region{flex:4 1 0;display:flex;flex-direction:column;min-height:160px;background:var(--bg)}
+.log-panel{display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
+.log-panel-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;height:30px}
+.log-panel-header .lp-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;transition:background .15s}
+.log-panel-header .lp-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:.02em}
+.log-panel-header .lp-sub{font-size:10px;color:var(--text2);font-weight:400}
+.log-panel-header .lp-status{font-family:ui-monospace,"Consolas",monospace;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
+.log-panel-header .lp-status.running{color:var(--green)}
+.log-panel-header .lp-status.stopped{color:var(--yellow)}
+.log-panel-header .lp-status.dead{color:var(--red)}
+.log-panel-header .lp-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.log-panel-header .lp-right select,.log-panel-header .lp-right input{font-size:10px;padding:1px 4px;width:auto;background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--text)}
+.log-panel-header .lp-count{font-size:10px;color:var(--text2);min-width:48px;text-align:right;font-family:ui-monospace,monospace}
+.log-panel-body{flex:1;overflow-y:auto;overflow-x:hidden;font-family:"Consolas","Courier New",monospace;font-size:11px;background:var(--bg);white-space:pre-wrap}
+.log-panel-body.nowrap{white-space:pre;overflow-x:auto;overflow-y:auto}
+.log-line{padding:1px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px;align-items:flex-start;font-family:inherit;word-break:break-word}
+.log-line.nowrap{white-space:pre;word-break:normal}
+.log-line .ts{color:var(--text2);flex-shrink:0;font-variant-numeric:tabular-nums}
+.log-line .src{font-weight:600;flex-shrink:0;text-transform:uppercase;font-size:10px;padding:0 4px;border-radius:2px;align-self:center;letter-spacing:.03em}
+.log-line .src.studio{color:var(--purple);background:rgba(137,87,229,.12)}
+.log-line .src.godex{color:var(--blue);background:rgba(88,166,255,.12)}
+.log-line .src.cmd{color:var(--green);background:rgba(63,185,80,.12)}
+.log-line .msg{color:var(--text);flex:1;word-break:break-word;white-space:pre-wrap}
+.log-line.nowrap .msg{white-space:pre;word-break:normal}
 .log-line.error .msg{color:var(--red)}
-.log-line.warn{border-left:3px solid var(--yellow)}
 .log-line.warn .msg{color:var(--yellow)}
+.log-sash{height:6px;flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:row-resize;display:flex;align-items:center;justify-content:center;user-select:none;transition:background .12s}
+.log-sash:hover,.log-sash.dragging{background:var(--bg3)}
+.log-sash::before{content:"";width:36px;height:2px;background:var(--border);border-radius:1px;transition:background .12s}
+.log-sash:hover::before,.log-sash.dragging::before{background:var(--blue)}
 .model-toolbar{padding:8px 12px;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(48,54,61,.5);flex-wrap:wrap}
 .model-toolbar input[type=text]{flex:1;min-width:120px}
 .model-list{padding:0}
@@ -114,9 +130,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 <body>
 <header>
   <h1>GodeX Studio</h1>
-  <span class="dot" id="dot"></span>
-  <span id="status-text" style="font-size:12px;color:var(--text2)">检查中...</span>
-  <span id="godex-pid" style="font-size:11px;color:var(--text2)"></span>
   <div class="hdr-right">
     <span>原生窗口 &middot; <code>Tauri 2</code></span>
   </div>
@@ -212,24 +225,55 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </main>
 
-<div class="bottom">
-  <div class="bottom-header">
-    <span>运行日志</span>
-    <select id="log-filter" style="font-size:10px;padding:1px 4px;width:auto" onchange="setLogFilters()">
-      <option value="all">全部来源</option>
-      <option value="godex">godex</option>
-      <option value="studio">Studio</option>
-    </select>
-    <select id="log-level" style="font-size:10px;padding:1px 4px;width:auto" onchange="setLogFilters()">
-      <option value="all">全部级别</option>
-      <option value="warn">警告及以上</option>
-      <option value="error">仅错误</option>
-    </select>
-    <button class="btn gray small" onclick="clearLogs()">清空</button>
-    <span id="log-count" style="margin-left:auto;font-size:11px;color:var(--text2)"></span>
+<div class="log-region" id="log-region">
+  <div class="log-panel" id="lp-studio">
+    <div class="log-panel-header">
+      <span class="lp-dot" id="lp-studio-dot"></span>
+      <span class="lp-title">Studio</span>
+      <span class="lp-sub">管理器自身日志</span>
+      <span class="lp-status running" id="lp-studio-status">● ALIVE</span>
+      <div class="lp-right">
+        <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
+          <input type="checkbox" id="lp-studio-wrap" checked style="width:auto;margin:0"/> Wrap
+        </label>
+        <select id="lp-studio-level" title="按级别过滤">
+          <option value="all">全部级别</option>
+          <option value="warn">警告及以上</option>
+          <option value="error">仅错误</option>
+        </select>
+        <button class="btn gray tiny" id="lp-studio-clear">清空</button>
+        <span class="lp-count" id="lp-studio-count">0</span>
+      </div>
+    </div>
+    <div class="log-panel-body" id="lp-studio-body"></div>
   </div>
-  <div class="bottom-body" id="logs-body"></div>
+
+  <div class="log-sash" id="log-sash" title="拖动调整上下日志区域比例"></div>
+
+  <div class="log-panel" id="lp-godex">
+    <div class="log-panel-header">
+      <span class="lp-dot stopped" id="lp-godex-dot"></span>
+      <span class="lp-title">GodeX</span>
+      <span class="lp-sub">网关代理日志</span>
+      <span class="lp-status stopped" id="lp-godex-status">● STOPPED</span>
+      <div class="lp-right">
+        <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
+          <input type="checkbox" id="lp-godex-wrap" checked style="width:auto;margin:0"/> Wrap
+        </label>
+        <select id="lp-godex-level" title="按级别过滤">
+          <option value="all">全部级别</option>
+          <option value="warn">警告及以上</option>
+          <option value="error">仅错误</option>
+        </select>
+        <button class="btn gray tiny" id="lp-godex-clear">清空</button>
+        <button class="btn purple tiny" id="lp-godex-restart" title="重启 godex 进程">↻ 重启</button>
+        <span class="lp-count" id="lp-godex-count">0</span>
+      </div>
+    </div>
+    <div class="log-panel-body" id="lp-godex-body"></div>
+  </div>
 </div>
+
 
 <div id="new-provider-modal" class="modal" style="display:none">
   <div class="modal-box">
@@ -300,9 +344,168 @@ let providers = [];
 let activeProvider = null;
 let enabled = [];
 let remoteModels = [];
-let logFilterSrc = "all";
-let logFilterLevel = "all";
-let logLines = [];
+// LogPanel: independent rolling buffer per source (studio / godex).
+// Each panel has its own level filter, wrap toggle, and Clear button.
+const LOG_MAX_LINES = 3000;
+class LogPanel {
+  constructor({ id, defaultSource, restartBtnId }) {
+    this.id = id;
+    this.bodyEl = $(id + "-body");
+    this.dotEl = $(id + "-dot");
+    this.statusEl = $(id + "-status");
+    this.countEl = $(id + "-count");
+    this.levelEl = $(id + "-level");
+    this.wrapEl = $(id + "-wrap");
+    this.clearEl = $(id + "-clear");
+    this.lines = []; // { ts, source, level, text }
+    this.defaultSource = defaultSource; // for visual chip color
+    const me = this;
+    this.levelEl.addEventListener("change", () => me.render());
+    this.wrapEl.addEventListener("change", () => {
+      me.bodyEl.classList.toggle("nowrap", !me.wrapEl.checked);
+      const lines = me.bodyEl.querySelectorAll(".log-line");
+      lines.forEach((n) => n.classList.toggle("nowrap", !me.wrapEl.checked));
+    });
+    this.clearEl.addEventListener("click", () => { me.lines = []; me.render(); me.countEl.textContent = "0"; });
+    if (restartBtnId) {
+      this.restartBtn = $(restartBtnId);
+      this.restartBtn.addEventListener("click", async () => {
+        const ok = confirm("确认重启 godex 进程?\n\n当前 godex 会被结束并重新拉起,正在进行的 Codex 请求会失败。");
+        if (!ok) return;
+        try {
+          this.restartBtn.disabled = true;
+          const oldText = this.restartBtn.textContent;
+          this.restartBtn.textContent = "重启中...";
+          const pid = await invoke("godex_restart");
+          this.restartBtn.textContent = "pid=" + pid;
+          setTimeout(() => { this.restartBtn.textContent = oldText; this.restartBtn.disabled = false; }, 1500);
+        } catch (e) {
+          this.restartBtn.textContent = "↻ 重启";
+          this.restartBtn.disabled = false;
+          alert("重启失败: " + e);
+        }
+      });
+    }
+  }
+  setStatus(running) {
+    this.dotEl.classList.remove("stopped", "dead");
+    this.statusEl.classList.remove("running", "stopped", "dead");
+    if (running === true) {
+      this.dotEl.style.background = "var(--green)";
+      this.statusEl.textContent = "● RUNNING";
+      this.statusEl.classList.add("running");
+    } else if (running === false) {
+      this.dotEl.style.background = "var(--yellow)";
+      this.statusEl.textContent = "● STOPPED";
+      this.statusEl.classList.add("stopped");
+    } else {
+      this.dotEl.style.background = "var(--red)";
+      this.statusEl.textContent = "● ERROR";
+      this.statusEl.classList.add("dead");
+    }
+  }
+  passesFilter(line) {
+    const lvl = this.levelEl.value;
+    if (lvl === "error" && line.level !== "error") return false;
+    if (lvl === "warn" && !(line.level === "warn" || line.level === "error")) return false;
+    return true;
+  }
+  push(line) {
+    this.lines.push(line);
+    if (this.lines.length > LOG_MAX_LINES) {
+      this.lines.splice(0, this.lines.length - LOG_MAX_LINES);
+    }
+    if (this.passesFilter(line)) {
+      this._appendNode(line);
+    }
+    this.countEl.textContent = String(this.lines.length);
+  }
+  _appendNode(line) {
+    const d = document.createElement("div");
+    d.className = "log-line " + (line.level === "error" ? "error" : line.level === "warn" ? "warn" : "");
+    if (!this.wrapEl.checked) d.classList.add("nowrap");
+    const ts = line.ts ? new Date(line.ts).toTimeString().slice(0, 8) : "--:--:--";
+    const src = (line.source || this.defaultSource || "");
+    d.innerHTML =
+      '<span class="ts">' + ts + '</span>' +
+      '<span class="src ' + esc(src) + '">' + esc(src) + '</span>' +
+      '<span class="msg">' + esc(line.text) + '</span>';
+    this.bodyEl.appendChild(d);
+    while (this.bodyEl.children.length > LOG_MAX_LINES) {
+      this.bodyEl.removeChild(this.bodyEl.firstChild);
+    }
+    this.bodyEl.scrollTop = this.bodyEl.scrollHeight;
+  }
+  render() {
+    this.bodyEl.innerHTML = "";
+    for (const line of this.lines) {
+      if (this.passesFilter(line)) this._appendNode(line);
+    }
+    this.countEl.textContent = String(this.lines.length);
+  }
+  clear() { this.lines = []; this.render(); this.countEl.textContent = "0"; }
+}
+
+const studioPanel = new LogPanel({ id: "lp-studio", defaultSource: "studio" });
+const godexPanel = new LogPanel({ id: "lp-godex", defaultSource: "godex", restartBtnId: "lp-godex-restart" });
+
+function pushLogLine(line) {
+  if (!line || !line.source) return;
+  if (line.source === "godex") godexPanel.push(line);
+  else studioPanel.push(line); // studio + cmd + anything unknown
+}
+
+// Sash: drag the divider to resize the two log panels.
+// Persists ratio in localStorage.
+(function setupSash() {
+  const sash = $("log-sash");
+  const region = $("log-region");
+  const upper = $("lp-studio");
+  const lower = $("lp-godex");
+  if (!sash || !region || !upper || !lower) return;
+  const STORAGE_KEY = "godex-studio.sashRatio";
+  const applyRatio = (ratio) => {
+    const r = Math.max(0.1, Math.min(0.9, ratio));
+    upper.style.flex = r + " 1 0";
+    lower.style.flex = (1 - r) + " 1 0";
+  };
+  const saved = parseFloat(localStorage.getItem(STORAGE_KEY));
+  if (!isNaN(saved) && saved > 0 && saved < 1) applyRatio(saved);
+  let dragging = false;
+  const onMove = (ev) => {
+    if (!dragging) return;
+    const rect = region.getBoundingClientRect();
+    const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+    applyRatio(y / rect.height);
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    sash.classList.remove("dragging");
+    document.body.style.cursor = "";
+    const rect = region.getBoundingClientRect();
+    const upperH = upper.getBoundingClientRect().height;
+    localStorage.setItem(STORAGE_KEY, String(upperH / rect.height));
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    window.removeEventListener("touchmove", onMove);
+    window.removeEventListener("touchend", onUp);
+  };
+  sash.addEventListener("mousedown", (ev) => {
+    ev.preventDefault();
+    dragging = true;
+    sash.classList.add("dragging");
+    document.body.style.cursor = "row-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+  sash.addEventListener("touchstart", (ev) => {
+    dragging = true;
+    sash.classList.add("dragging");
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+  }, { passive: true });
+})();
 
 function showMsg(text, type) {
   const m = $("action-msg");
@@ -639,78 +842,21 @@ function resetEditor() {
   if (activeProvider) selectProvider(activeProvider);
 }
 
-function clearLogs() { $("logs-body").innerHTML = ""; logLines = []; $("log-count").textContent = ""; }
 
-function setLogFilters() {
-  logFilterSrc = $("log-filter").value;
-  logFilterLevel = $("log-level").value;
-  renderLogs();
-}
-
-function fmtTime(ts) {
-  try { return new Date(ts).toTimeString().slice(0, 8); } catch { return "--:--:--"; }
-}
-function levelClass(l) { return l === "error" ? "error" : l === "warn" ? "warn" : ""; }
-
-function appendLogLine(line) {
-  logLines.push(line);
-  if (logLines.length > 500) logLines = logLines.slice(-500);
-  if (!passesLogFilter(line)) return;
-  const el = $("logs-body");
-  const d = document.createElement("div");
-  d.className = "log-line " + levelClass(line.level);
-  d.innerHTML =
-    '<span class="ts">' + fmtTime(line.ts) + '</span>' +
-    '<span class="src ' + line.source + '">' + line.source + '</span>' +
-    '<span class="msg">' + esc(line.text) + '</span>';
-  el.insertBefore(d, el.firstChild);
-  while (el.children.length > 300) el.removeChild(el.lastChild);
-  $("log-count").textContent = logLines.length + " 行";
-}
-
-function renderLogs() {
-  const el = $("logs-body");
-  el.innerHTML = "";
-  for (const line of logLines) {
-    if (!passesLogFilter(line)) continue;
-    const d = document.createElement("div");
-    d.className = "log-line " + levelClass(line.level);
-    d.innerHTML =
-      '<span class="ts">' + fmtTime(line.ts) + '</span>' +
-      '<span class="src ' + line.source + '">' + line.source + '</span>' +
-      '<span class="msg">' + esc(line.text) + '</span>';
-    el.appendChild(d);
-  }
-  $("log-count").textContent = logLines.length + " 行";
-}
-
-function passesLogFilter(line) {
-  if (logFilterSrc !== "all" && line.source !== logFilterSrc) return false;
-  if (logFilterLevel === "error" && line.level !== "error") return false;
-  if (logFilterLevel === "warn" && !(line.level === "warn" || line.level === "error")) return false;
-  return true;
-}
 
 async function refreshStatus() {
-  const dot = $("dot");
-  const text = $("status-text");
-  const pidText = $("godex-pid");
   try {
     const r = await invoke("godex_status");
     if (r.running) {
-      dot.classList.add("ok");
-      text.textContent = "godex 在线";
-      text.style.color = "var(--green)";
+      godexPanel.setStatus(true);
+      $("lp-godex-status").textContent = r.pid ? ("● RUNNING pid=" + r.pid) : "● RUNNING";
     } else {
-      dot.classList.remove("ok");
-      text.textContent = "godex 未运行";
-      text.style.color = "var(--yellow)";
+      godexPanel.setStatus(false);
+      $("lp-godex-status").textContent = "● STOPPED";
     }
-    pidText.textContent = r.pid ? "pid=" + r.pid : "";
   } catch (e) {
-    dot.classList.remove("ok");
-    text.textContent = "状态错误: " + e;
-    text.style.color = "var(--red)";
+    godexPanel.setStatus(null);
+    $("lp-godex-status").textContent = "● ERROR";
   }
 }
 
@@ -719,13 +865,13 @@ async function refreshStatus() {
   refreshStatus();
   setInterval(refreshStatus, 5000);
 
-  // Subscribe to live log events from Rust.
-  await listen("godex://log", (ev) => { appendLogLine(ev.payload); });
+  // Subscribe to live log events from Rust and route to the right panel.
+  await listen("godex://log", (ev) => { pushLogLine(ev.payload); });
 
   // Fetch recent log history (everything pushed so far in the ring buffer).
   try {
-    const tail = await invoke("godex_logs_tail", { limit: 200 });
-    for (const line of (tail || [])) appendLogLine(line);
+    const tail = await invoke("godex_logs_tail", { limit: 500 });
+    for (const line of (tail || [])) pushLogLine(line);
   } catch (e) { /* no-op */ }
 })();
 </script>
