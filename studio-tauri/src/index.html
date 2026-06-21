@@ -349,6 +349,20 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
         <span id="set-port-status" style="font-size:11px;color:var(--text2);min-width:160px"></span>
       </div>
     </div>
+    <div class="row" style="margin-top:12px">
+      <label>外挂模式 <span style="color:var(--text2)">(godex 可见窗口，日志从 trace DB 读)</span></label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px">
+        <input type="checkbox" id="set-external-mode" onchange="onExternalModeToggle()" />
+        <span style="font-size:12px;color:var(--text2)">开启后 godex 窗口可见，Studio 从 trace DB 读日志（适合手动管理 godex 的场景）</span>
+      </label>
+    </div>
+    <div class="row">
+      <label>logging.file <span style="color:var(--text2)">(日志文件路径，可选)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-logging-file" type="text" placeholder="C:\Users\Bliss\.godex\godex.log" style="flex:1"/>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
+    </div>
     <div id="set-error" class="desc" style="color:var(--red);display:none;margin-top:4px"></div>
     <div id="set-hint" class="desc" style="color:var(--text2);margin-top:4px"></div>
     <div class="actions">
@@ -398,20 +412,78 @@ const CAP_LABELS = {
   stream: "流式",
 };
 
-const MODEL_PRESETS = [
-  { match: /^MiniMax-M3$/i, context_window: 1000000, max_tokens: 16384, caps: { text:1, image_input:1, audio_input:1, tool_use:1, stream:1 } },
-  { match: /^MiniMax-M2\.7-highspeed$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^MiniMax-M2\.7$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
-  { match: /^MiniMax-M2\.5$/i, context_window: 204800, max_tokens: 16384, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^deepseek-reasoner$/i, context_window: 64000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^deepseek-chat$/i, context_window: 64000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^gpt-4o/i, context_window: 128000, max_tokens: 16384, caps: { text:1, image_input:1, image_output:1, tool_use:1, stream:1 } },
-  { match: /^o1/i, context_window: 200000, max_tokens: 100000, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^o3/i, context_window: 200000, max_tokens: 100000, caps: { text:1, tool_use:1, stream:1 } },
-  { match: /^glm-4-plus$/i, context_window: 128000, max_tokens: 8192, caps: { text:1, tool_use:1, stream:1 } },
+// ── Rust-backed model presets (loaded from model-presets.json via Tauri) ──
+let _rustPresetData = null;   // { match_rules, presets[] } loaded from Rust
+let _rustPresetReady = false;
+
+// Fallback: tiny JS array used only if Rust loading fails
+const _FALLBACK_PRESETS = [
+  { match: /^MiniMax-M3$/i, ctx: 1000000, out: 16384, caps: { text:1, image_input:1, audio_input:1, tool_use:1, stream:1 } },
+  { match: /^MiniMax-M2\.7/i, ctx: 204800, out: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-reasoner$/i, ctx: 64000, out: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-chat$/i, ctx: 64000, out: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^gpt-4o/i, ctx: 128000, out: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
+  { match: /^o1/i, ctx: 200000, out: 100000, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^o3/i, ctx: 200000, out: 100000, caps: { text:1, tool_use:1, stream:1 } },
 ];
+
+// Load presets from Rust backend (model-presets.json)
+async function loadRustPresets() {
+  try {
+    const data = await invoke("load_model_presets");
+    if (data && data.presets) {
+      _rustPresetData = data;
+      _rustPresetReady = true;
+      console.log("[preset] loaded " + data.presets.length + " presets from Rust");
+    }
+  } catch (e) {
+    console.warn("[preset] Rust load failed, using JS fallback:", e);
+  }
+}
+
+// Normalize a model ID according to match_rules (mirrors Rust logic)
+function _normalizeModelId(id, rules) {
+  let s = rules.case_sensitive ? id : id.toLowerCase();
+  for (const pfx of (rules.strip_prefixes || [])) {
+    const low = rules.case_sensitive ? pfx : pfx.toLowerCase();
+    if (s.startsWith(low)) s = s.slice(low.length);
+  }
+  for (const sfx of (rules.strip_suffixes || [])) {
+    const low = rules.case_sensitive ? sfx : sfx.toLowerCase();
+    if (s.endsWith(low)) s = s.slice(0, -low.length);
+  }
+  return s;
+}
+
+// Match a model ID against loaded presets using strategy_order
 function presetFor(modelId) {
-  for (const p of MODEL_PRESETS) if (p.match.test(modelId)) return p;
+  // Try Rust presets first
+  if (_rustPresetReady && _rustPresetData) {
+    const rules = _rustPresetData.match_rules;
+    const presets = _rustPresetData.presets;
+    const normalized = _normalizeModelId(modelId, rules);
+    for (const strategy of (rules.strategy_order || ["exact","alias","contains"])) {
+      for (const p of presets) {
+        if (strategy === "exact") {
+          if (_normalizeModelId(p.name, rules) === normalized) return p;
+        } else if (strategy === "alias") {
+          for (const a of (p.aliases || [])) {
+            if (_normalizeModelId(a, rules) === normalized) return p;
+          }
+        } else if (strategy === "contains") {
+          const nameN = _normalizeModelId(p.name, rules);
+          if (nameN.includes(normalized) || normalized.includes(nameN)) return p;
+          for (const a of (p.aliases || [])) {
+            const aN = _normalizeModelId(a, rules);
+            if (aN.includes(normalized) || normalized.includes(aN)) return p;
+          }
+        }
+      }
+    }
+    return null;
+  }
+  // Fallback: old JS array
+  for (const p of _FALLBACK_PRESETS) if (p.match.test(modelId)) return p;
   return null;
 }
 
@@ -419,6 +491,7 @@ let providers = [];
 let activeProvider = null;
 let enabled = [];
 let remoteModels = [];
+
 // Sash: drag the divider between two flex siblings to resize them.
 // Both siblings must be in the same flex container, side by side.
 // ratio = (size of `before`) / (total size of container) is persisted in localStorage.
@@ -591,7 +664,8 @@ class LogPanel {
           this.restartBtn.disabled = true;
           const oldText = this.restartBtn.textContent;
           this.restartBtn.textContent = "重启中...";
-          const pid = await invoke("godex_restart");
+    const isExt = $("set-external-mode") && $("set-external-mode").checked;
+    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
           this.restartBtn.textContent = "pid=" + pid;
           setTimeout(() => { this.restartBtn.textContent = oldText; this.restartBtn.disabled = false; }, 1500);
         } catch (e) {
@@ -759,14 +833,19 @@ function reloadProvider() {
 function applyPresetToRow(modelId, row) {
   const p = presetFor(modelId);
   if (!p) return false;
-  if (row.context_window === undefined) row.context_window = p.context_window;
-  if (row.max_tokens === undefined) row.max_tokens = p.max_tokens;
+  const ctx = p.context_window ?? p.ctx;
+  const out = p.max_tokens ?? p.out;
+  const caps = p.multimodal ?? p.caps ?? {};
+  if (row.context_window === undefined && ctx) row.context_window = ctx;
+  if (row.max_tokens === undefined && out) row.max_tokens = out;
   if (!row.capabilities) row.capabilities = {};
   for (const c of CAPS) {
-    if (p.caps && p.caps[c] !== undefined && row.capabilities[c] === undefined) {
-      row.capabilities[c] = !!p.caps[c];
+    if (caps[c] !== undefined && row.capabilities[c] === undefined) {
+      row.capabilities[c] = !!caps[c];
     }
   }
+  return true;
+}
   return true;
 }
 
@@ -952,15 +1031,30 @@ async function saveEnabled() {
   }
 }
 
+async function onExternalModeToggle() {
+  const mode = $("set-external-mode").checked;
+  try {
+    await invoke("set_external_mode", { externalMode: mode });
+    showMsg(mode ? "外挂模式已开启" : "外挂模式已关闭", "ok");
+  } catch(e) { showMsg("保存失败: " + e, "err"); }
+}
+function loadTraceLogs() {
+  invoke("tail_trace_logs", { limit: 300 }).then(lines => {
+    for (const l of (lines || [])) pushLogLine(l);
+  }).catch(() => {});
+}
+
 async function saveAndRestart() {
   await saveEnabled();
   showMsg("正在重启 godex...", "");
   setEditorStatus("重启中...");
   try {
-    const pid = await invoke("godex_restart");
+    const isExt = $("set-external-mode") && $("set-external-mode").checked;
+    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
     showMsg("已重启,pid=" + pid, "ok");
     setEditorStatus("已重启,新 pid=" + pid);
     refreshStatus();
+    if(isExt) loadTraceLogs();
   } catch (e) {
     showMsg("重启失败: " + e, "err");
   }
@@ -1030,6 +1124,7 @@ async function refreshStatus() {
 }
 
 (async function init() {
+  await loadRustPresets();
   await loadProviders();
   initSashes();
   refreshStatus();
@@ -1063,6 +1158,8 @@ async function openSettingsModal() {
     $("set-config").value = p.godex_config;
     $("set-binary").value = p.godex_binary;
     $("set-port").value = p.godex_port || 5678;
+    $("set-external-mode").checked = !!p.external_mode;
+    const logEl = document.getElementById("set-logging-file"); if(logEl) logEl.value = p.logging_file || "";
     $("set-error").style.display = "none";
     $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
     await refreshPortStatus();
@@ -1091,7 +1188,7 @@ async function saveSettings() {
     return;
   }
   try {
-    await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port });
+    const loggingFile = $("#set-logging-file").value.trim();await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port, loggingFile: loggingFile || null });
     showMsg("设置已保存。Config/Binary 需重启 studio 生效;Port 已写入 config.yaml。", "ok");
     closeSettingsModal();
   } catch (e) {
@@ -1107,6 +1204,8 @@ async function resetSettings() {
     $("set-binary").value = p.godex_binary;
     $("set-port").value = p.godex_port || 5678;
     $("set-hint").textContent = "已重置为默认。重启 studio 后 Config/Binary 路径生效;Port 已写入 config.yaml。";
+    $("set-external-mode").checked = false;
+    const logEl2 = document.getElementById("set-logging-file"); if(logEl2) logEl2.value = "";
     showMsg("已恢复默认。", "ok");
     await refreshPortStatus();
   } catch (e) {

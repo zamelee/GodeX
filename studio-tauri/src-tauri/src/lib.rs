@@ -44,16 +44,14 @@ pub fn log_line_error(text: &str) -> crate::godex::LogLine {
 
 pub fn run() {
     let log_path = std::env::var("GODEX_STUDIO_LOG")
-        .unwrap_or_else(|_| String::from("C:\\Users\\Bliss\\.godex\\studio.log"));
+        .unwrap_or_else(|_| String::from(r"C:\Users\Bliss\.godex\studio.log"));
     if let Some(parent) = std::path::Path::new(&log_path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     *LOG_PATH.lock() = Some(log_path.clone());
-    // truncate previous log
     if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(&log_path) {
         let _ = writeln!(f, "[studio] startup log_path={}", log_path);
     }
-    // Also init env_logger to stderr so dev console gets output too.
     let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info"),
     )
@@ -71,6 +69,22 @@ pub fn run() {
             let state = state::AppState::new();
             app.manage(state);
             log::info!("[studio] setup: done");
+
+            // On window close: kill godex only in internal (non-external) mode
+            let window = app.get_webview_window("main").unwrap();
+            let state_manage = app.handle().clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let state_handle = state_manage.state::<state::AppState>();
+                    let is_external = state_handle.godex.is_external_mode();
+                    if !is_external {
+                        diag("[studio] window close: killing internal godex");
+                        state_handle.godex.kill();
+                    } else {
+                        diag("[studio] window close: external mode, letting godex live");
+                    }
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -92,10 +106,12 @@ pub fn run() {
             commands::kill_pid,
             commands::find_free_port,
             commands::reset_paths,
+            commands::set_external_mode,
+            commands::tail_trace_logs,
+            commands::godex_external_start,
+            commands::load_model_presets,
+            commands::match_model_preset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running godex-studio");
 }
-
-
-

@@ -10,6 +10,8 @@ pub struct PathInfo {
     pub godex_config: String,
     pub godex_binary: String,
     pub godex_port: u16,
+    pub external_mode: bool,
+    pub logging_file: Option<String>,
 }
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
@@ -19,6 +21,8 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
         godex_config: p.godex_config.display().to_string(),
         godex_binary: p.godex_binary.display().to_string(),
         godex_port: p.godex_port,
+        external_mode: state.godex.is_external_mode(),
+        logging_file: crate::state::read_logging_file_from_config(&p.godex_config),
     }
 }
 
@@ -96,7 +100,7 @@ fn process_name_for_pid_check(pid: u32) -> Option<String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_binary: String, godex_port: u16) -> Result<PathInfo, String> {
+pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_binary: String, godex_port: u16, logging_file: Option<String>) -> Result<PathInfo, String> {
     crate::diag(&format!("[cmd] enter set_config_paths config={} binary={} port={}", godex_config, godex_binary, godex_port));
     let config_pb = PathBuf::from(&godex_config);
     let binary_pb = PathBuf::from(&godex_binary);
@@ -112,10 +116,18 @@ pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_
             .map_err(|e| format!("write port failed: {}", e))?;
     }
     // Persist binary path (skip when GODEX_BINARY env var is overriding)
+        // Write logging.file if provided
+        if let Some(ref lf) = logging_file {
+            if !lf.is_empty() {
+                crate::state::write_logging_file_to_config(&config_pb, lf)
+                    .map_err(|e| format!("write logging.file failed: {}", e))?;
+            }
+        }
     if std::env::var("GODEX_BINARY").is_err() {
         let persisted = crate::state::PersistedPaths {
             godex_config: Some(godex_config.clone()),
             godex_binary: Some(godex_binary.clone()),
+            external_mode: state.godex.is_external_mode(),
         };
         if let Err(e) = crate::state::save_persisted_paths(&persisted) {
             crate::diag(&format!("[cmd] set_config_paths persist failed: {}", e));
@@ -137,11 +149,14 @@ pub fn reset_paths(state: State<'_, AppState>) -> PathInfo {
     crate::state::clear_persisted_paths();
     let defaults = crate::state::Paths::default_paths();
     state.godex.set_paths(defaults.godex_config.clone(), defaults.godex_binary.clone(), defaults.godex_port);
+    state.godex.set_external_mode(defaults.external_mode);
     *state.paths.lock() = defaults.clone();
     PathInfo {
         godex_config: defaults.godex_config.display().to_string(),
         godex_binary: defaults.godex_binary.display().to_string(),
         godex_port: defaults.godex_port,
+        external_mode: defaults.external_mode,
+        logging_file: crate::state::read_logging_file_from_config(&defaults.godex_config),
     }
 }
 
@@ -405,3 +420,194 @@ pub fn godex_logs_clear(state: State<'_, AppState>) {
     state.godex.clear();
 }
 
+#[tauri::command(rename_all = "camelCase")]
+pub fn set_external_mode(state: State<'_, AppState>, external_mode: bool) -> Result<(), String> {
+    crate::diag(&format!("[cmd] set_external_mode={}", external_mode));
+    let persisted = crate::state::PersistedPaths {
+        godex_config: Some(state.paths.lock().godex_config.display().to_string()),
+        godex_binary: Some(state.paths.lock().godex_binary.display().to_string()),
+        external_mode,
+    };
+    crate::state::save_persisted_paths(&persisted)
+        .map_err(|e| format!("persist failed: {}", e))?;
+    state.godex.set_external_mode(external_mode);
+    { let mut p = state.paths.lock(); p.external_mode = external_mode; }
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn tail_trace_logs(state: State<'_, AppState>, limit: Option<usize>) -> Vec<crate::godex::LogLine> {
+    crate::diag(&format!("[cmd] tail_trace_logs limit={:?}", limit));
+    state.godex.tail_trace_logs(limit.unwrap_or(500))
+}
+
+#[tauri::command]
+pub fn godex_external_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+    crate::diag(&format!("[cmd] enter godex_external_start"));
+    state.godex.set_external_mode(true);
+    use std::sync::Arc;
+    let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
+    sup.start(&app)
+}
+// ── Model Presets ──────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize, Clone, Debug, Serialize, Default)]
+pub struct MultiModalCaps {
+    #[serde(default)]
+    pub image_input: bool,
+    #[serde(default)]
+    pub image_output: bool,
+    #[serde(default)]
+    pub audio_input: bool,
+    #[serde(default)]
+    pub audio_output: bool,
+    #[serde(default)]
+    pub video_input: bool,
+    #[serde(default)]
+    pub video_output: bool,
+    #[serde(default)]
+    pub tool_use: bool,
+    #[serde(default)]
+    pub stream: bool,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, Serialize)]
+pub struct ModelPreset {
+    pub name: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    pub context_window: u64,
+    pub max_tokens: u64,
+    #[serde(default)]
+    pub multimodal: MultiModalCaps,
+    #[serde(default)]
+    pub notes: String,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, Serialize)]
+pub struct MatchRules {
+    #[serde(default = "default_case_sensitive")]
+    pub case_sensitive: bool,
+    #[serde(default = "default_strategy_order")]
+    pub strategy_order: Vec<String>,
+    #[serde(default)]
+    pub strip_prefixes: Vec<String>,
+    #[serde(default)]
+    pub strip_suffixes: Vec<String>,
+}
+
+fn default_case_sensitive() -> bool { false }
+fn default_strategy_order() -> Vec<String> {
+    vec!["exact".into(), "alias".into(), "contains".into(), "regex".into()]
+}
+
+#[derive(serde::Deserialize, Serialize)]
+pub struct PresetFile {
+    pub match_rules: MatchRules,
+    pub presets: Vec<ModelPreset>,
+}
+
+/// Locate model-presets.json: same dir as binary, then ~/.godex/
+fn find_preset_file(godex_binary: &std::path::Path) -> Option<std::path::PathBuf> {
+    if let Some(parent) = godex_binary.parent() {
+        let p = parent.join("model-presets.json");
+        if p.exists() { return Some(p); }
+    }
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        let p = std::path::PathBuf::from(home).join(".godex").join("model-presets.json");
+        if p.exists() { return Some(p); }
+    }
+    None
+}
+
+fn load_preset_file(godex_binary: &std::path::Path) -> Result<PresetFile, String> {
+    let path = find_preset_file(godex_binary)
+        .ok_or_else(|| "model-presets.json not found (check exe dir or ~/.godex/)".to_string())?;
+    crate::diag(&format!("[preset] loaded from {}", path.display()));
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("read {}: {}", path.display(), e))?;
+    let pf: PresetFile = serde_json::from_str(&content)
+        .map_err(|e| format!("parse model-presets.json: {}", e))?;
+    Ok(pf)
+}
+
+fn normalize_model_id(id: &str, rules: &MatchRules) -> String {
+    let mut s = id.to_string();
+    if !rules.case_sensitive { s = s.to_lowercase(); }
+    for prefix in &rules.strip_prefixes {
+        let low = if rules.case_sensitive { prefix.clone() } else { prefix.to_lowercase() };
+        if let Some(rest) = s.strip_prefix(&low) { s = rest.to_string(); }
+    }
+    for suffix in &rules.strip_suffixes {
+        let low = if rules.case_sensitive { suffix.clone() } else { suffix.to_lowercase() };
+        if let Some(rest) = s.strip_suffix(&low) { s = rest.to_string(); }
+    }
+    s
+}
+
+fn match_preset(model_id: &str, pf: &PresetFile) -> Option<ModelPreset> {
+    let rules = &pf.match_rules;
+    let normalized = normalize_model_id(model_id, rules);
+
+    for strategy in &rules.strategy_order {
+        match strategy.as_str() {
+            "exact" => {
+                for preset in &pf.presets {
+                    let name_norm = normalize_model_id(&preset.name, rules);
+                    if name_norm == normalized { return Some(preset.clone()); }
+                }
+            }
+            "alias" => {
+                for preset in &pf.presets {
+                    for alias in &preset.aliases {
+                        let alias_norm = normalize_model_id(alias, rules);
+                        if alias_norm == normalized { return Some(preset.clone()); }
+                    }
+                }
+            }
+            "contains" => {
+                for preset in &pf.presets {
+                    let name_norm = normalize_model_id(&preset.name, rules);
+                    if name_norm.contains(&normalized) || normalized.contains(&name_norm) {
+                        return Some(preset.clone());
+                    }
+                    for alias in &preset.aliases {
+                        let alias_norm = normalize_model_id(alias, rules);
+                        if alias_norm.contains(&normalized) || normalized.contains(&alias_norm) {
+                            return Some(preset.clone());
+                        }
+                    }
+                }
+            }
+            "regex" => {
+                for preset in &pf.presets {
+                    let combined = format!("{}|{}", preset.name, preset.aliases.join("|"));
+                    if let Ok(re) = regex::Regex::new(&combined) {
+                        if re.is_match(model_id) { return Some(preset.clone()); }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn load_model_presets(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    crate::diag("[cmd] enter load_model_presets");
+    let p = state.paths.lock();
+    let pf = load_preset_file(&p.godex_binary)?;
+    serde_json::to_value(&pf).map_err(|e| format!("serialize presets: {}", e))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn match_model_preset(state: State<'_, AppState>, model_id: String) -> Result<serde_json::Value, String> {
+    crate::diag(&format!("[cmd] match_model_preset id={}", model_id));
+    let p = state.paths.lock();
+    let pf = load_preset_file(&p.godex_binary)?;
+    match match_preset(&model_id, &pf) {
+        Some(preset) => serde_json::to_value(&preset).map_err(|e| format!("serialize: {}", e)),
+        None => Ok(serde_json::Value::Null),
+    }
+}
