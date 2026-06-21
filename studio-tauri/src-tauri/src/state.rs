@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-const PERSIST_FILE: &str = r"C:\Users\Bliss\.godex\studio-paths.json";
+fn persist_file() -> std::path::PathBuf { if let Ok(home) = std::env::var("USERPROFILE") { std::path::PathBuf::from(home).join(".godex").join("studio-paths.json") } else { std::path::PathBuf::from(r"C:\Users\Bliss\.godex\studio-paths.json") } }
 const DEFAULT_PORT: u16 = 5678;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -18,23 +18,23 @@ pub struct PersistedPaths {
 }
 
 pub fn load_persisted_paths() -> PersistedPaths {
-    std::fs::read_to_string(PERSIST_FILE)
+    std::fs::read_to_string(persist_file())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
 pub fn save_persisted_paths(p: &PersistedPaths) -> std::io::Result<()> {
-    if let Some(parent) = std::path::Path::new(PERSIST_FILE).parent() {
+    if let Some(parent) = std::path::Path::new(&persist_file()).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     let json = serde_json::to_string_pretty(p)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    std::fs::write(PERSIST_FILE, json)
+    std::fs::write(persist_file(), json)
 }
 
 pub fn clear_persisted_paths() {
-    let _ = std::fs::remove_file(PERSIST_FILE);
+    let _ = std::fs::remove_file(persist_file());
 }
 
 pub fn read_port_from_config(path: &Path) -> u16 {
