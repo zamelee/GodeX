@@ -3,7 +3,7 @@ use crate::state::AppState;
 use crate::godex::LogLine;
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Serialize)]
 pub struct PathInfo {
@@ -176,15 +176,56 @@ pub struct RemoteModel {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn fetch_remote_models(base_url: String, api_key: String) -> Result<Vec<RemoteModel>, String> {
-    crate::diag(&format!("[cmd] enter fetch_remote_models base_url={}", base_url));
+pub async fn fetch_remote_models(
+    app: AppHandle,
+    base_url: String,
+    api_key: String,
+) -> Result<Vec<RemoteModel>, String> {
     let url = format!("{}/models", base_url.trim_end_matches('/'));
-    let req = reqwest_via_ureq(&url, &api_key)?;
-    let parsed: serde_json::Value = serde_json::from_str(&req).map_err(|e| format!("parse failed: {}", e))?;
-    let arr = parsed.get("data").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    let models = arr.into_iter()
-        .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| RemoteModel { id: s.to_string() }))
+    let key_disp = if api_key.is_empty() { "<none>".to_string() } else { format!("{}...", &api_key.chars().take(6).collect::<String>()) };
+    crate::diag(&format!("[cmd] enter fetch_remote_models url={} key={}", url, key_disp));
+    let _ = app.emit("godex://log", crate::log_line_info(&format!("[studio] fetch GET {}", url)));
+
+    let body = match reqwest_via_ureq(&url, &api_key) {
+        Ok(b) => b,
+        Err(e) => {
+            crate::diag(&format!("[fetch] HTTP error: {}", e));
+            let _ = app.emit("godex://log", crate::log_line_error(&format!("[studio] fetch 失败: {}", e)));
+            return Err(format!("上游请求失败: {}", e));
+        }
+    };
+    crate::diag(&format!("[fetch] body bytes={}", body.len()));
+    let preview: String = body.chars().take(200).collect();
+    crate::diag(&format!("[fetch] preview: {}", preview));
+
+    let parsed: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            crate::diag(&format!("[fetch] JSON parse failed: {}", e));
+            let _ = app.emit("godex://log", crate::log_line_error(&format!("[studio] fetch 响应不是合法 JSON: {}", e)));
+            return Err(format!("上游响应解析失败: {}", e));
+        }
+    };
+
+    // OpenAI-compatible /v1/models returns { "data": [{ "id": "..." }, ...] }
+    // Some proxies omit the wrapper and return a bare array. Handle both.
+    let arr: Vec<serde_json::Value> = if let Some(a) = parsed.get("data").and_then(|v| v.as_array()) {
+        a.clone()
+    } else if let Some(a) = parsed.as_array() {
+        a.clone()
+    } else {
+        crate::diag("[fetch] response has no 'data' array and is not an array");
+        let _ = app.emit("godex://log", crate::log_line_warn("[studio] fetch 响应不含 data[] (不是 OpenAI /v1/models 格式?)"));
+        Vec::new()
+    };
+
+    let models: Vec<RemoteModel> = arr.into_iter()
+        .filter_map(|v| {
+            v.get("id").and_then(|id| id.as_str()).map(|s| RemoteModel { id: s.to_string() })
+        })
         .collect();
+    crate::diag(&format!("[fetch] extracted {} model ids", models.len()));
+    let _ = app.emit("godex://log", crate::log_line_info(&format!("[studio] fetch 解析到 {} 个模型", models.len())));
     Ok(models)
 }
 

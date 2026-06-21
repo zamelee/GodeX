@@ -21,6 +21,27 @@ pub fn diag(msg: &str) {
     }
 }
 
+fn make_log_line(level: &str, text: String) -> crate::godex::LogLine {
+    crate::godex::LogLine {
+        ts: chrono::Utc::now().timestamp_millis(),
+        level: level.to_string(),
+        source: "studio".to_string(),
+        text,
+    }
+}
+
+pub fn log_line_info(text: &str) -> crate::godex::LogLine {
+    make_log_line("info", text.to_string())
+}
+
+pub fn log_line_warn(text: &str) -> crate::godex::LogLine {
+    make_log_line("warn", text.to_string())
+}
+
+pub fn log_line_error(text: &str) -> crate::godex::LogLine {
+    make_log_line("error", text.to_string())
+}
+
 pub fn run() {
     let log_path = std::env::var("GODEX_STUDIO_LOG")
         .unwrap_or_else(|_| String::from("C:\\Users\\Bliss\\.godex\\studio.log"));
