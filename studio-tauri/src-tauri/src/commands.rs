@@ -159,7 +159,7 @@ pub struct RemoteModel {
 #[tauri::command]
 pub async fn fetch_remote_models(args: FetchRemoteArgs) -> Result<Vec<RemoteModel>, String> {
     let url = format!("{}/models", args.base_url.trim_end_matches('/'));
-    let mut req = reqwest_via_ureq(&url, &args.api_key)?;
+    let req = reqwest_via_ureq(&url, &args.api_key)?;
     let parsed: serde_json::Value = serde_json::from_str(&req).map_err(|e| format!("parse failed: {}", e))?;
     let arr = parsed.get("data").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     let models = arr.into_iter()
