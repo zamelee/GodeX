@@ -1,6 +1,5 @@
 import { ExchangeError } from "@ahoo-wang/fetcher";
 import {
-	PROVIDER_CONTEXT_WINDOW_EXCEEDED,
 	PROVIDER_UPSTREAM_ERROR,
 	PROVIDER_UPSTREAM_RATE_LIMIT,
 	PROVIDER_UPSTREAM_SERVER_ERROR,
@@ -72,7 +71,7 @@ async function wrapProviderError(
 					? `Upstream returned ${status}`
 					: "Upstream request failed";
 		return new ProviderError(
-			hasResponse ? (isContextWindowExceeded(status, message) ? PROVIDER_CONTEXT_WINDOW_EXCEEDED : providerErrorCode(status)) : PROVIDER_UPSTREAM_ERROR,
+			hasResponse ? providerErrorCode(status) : PROVIDER_UPSTREAM_ERROR,
 			message,
 			{
 				provider,
@@ -96,9 +95,6 @@ async function wrapProviderError(
 	);
 }
 
-function isContextWindowExceeded(status: number, msg: string): boolean {
-	return status === 400 && /context[_\s]?window[_\s]?(exceed|limit|exceeded)/i.test(msg);
-}
 function providerErrorCode(status: number): string {
 	if (status === 408) return PROVIDER_UPSTREAM_TIMEOUT;
 	if (status === 429) return PROVIDER_UPSTREAM_RATE_LIMIT;
