@@ -611,3 +611,19 @@ pub fn match_model_preset(state: State<'_, AppState>, model_id: String) -> Resul
         None => Ok(serde_json::Value::Null),
     }
 }
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn write_codex_model_context(
+    context_window: u64,
+    auto_compact_ratio: Option<f64>,
+) -> Result<(), String> {
+    crate::diag(&format!("[cmd] write_codex_model_context cw={} ratio={:?}", context_window, auto_compact_ratio));
+    crate::state::write_codex_model_context(context_window, auto_compact_ratio)
+        .map_err(|e| format!("write codex config failed: {}", e))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn read_codex_model_context() -> Result<Option<u64>, String> {
+    crate::diag("[cmd] read_codex_model_context");
+    Ok(crate::state::read_codex_model_context_window())
+}
