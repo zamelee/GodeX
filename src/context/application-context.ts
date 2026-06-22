@@ -18,11 +18,13 @@ export class ApplicationContext {
 	readonly traceRecorder: TraceRecorder;
 	readonly traceEnabled: boolean;
 	readonly plugins: readonly GodexPlugin[];
+	readonly configPath?: string;
 
 	constructor(
 		config: GodeXConfig,
 		registrar?: Registrar,
 		plugins: readonly GodexPlugin[] = [],
+		configPath?: string,
 	) {
 		const services = createApplicationServices(config, registrar);
 		this.config = config;
@@ -34,6 +36,7 @@ export class ApplicationContext {
 		this.traceRecorder = services.traceRecorder;
 		this.traceEnabled = services.traceEnabled;
 		this.plugins = plugins;
+		this.configPath = configPath;
 	}
 
 	async close(): Promise<void> {
