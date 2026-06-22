@@ -231,3 +231,70 @@ impl AppState {
         }
     }
 }
+
+/// Get Codex config path (supports CODEX_HOME env var)
+pub fn codex_config_path() -> PathBuf {
+    if let Ok(home) = std::env::var("CODEX_HOME") {
+        PathBuf::from(home).join("config.toml")
+    } else if let Ok(home) = std::env::var("USERPROFILE") {
+        PathBuf::from(home).join(".codex").join("config.toml")
+    } else {
+        PathBuf::from(r"C:\Users\Bliss\.codex\config.toml")
+    }
+}
+
+/// Read model_context_window from Codex config
+pub fn read_codex_model_context_window() -> Option<u64> {
+    let path = codex_config_path();
+    let raw = std::fs::read_to_string(&path).ok()?;
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("model_context_window") {
+            if let Some((_, rest)) = trimmed.split_once("=") {
+                return rest.trim().parse::<u64>().ok();
+            }
+        }
+    }
+    None
+}
+
+/// Write model_context_window and model_auto_compact_token_limit to Codex config
+pub fn write_codex_model_context(
+    context_window: u64,
+    auto_compact_ratio: Option<f64>,
+) -> std::io::Result<()> {
+    let path = codex_config_path();
+    let raw = std::fs::read_to_string(&path)?;
+    let trailing_newline = raw.ends_with('\n');
+    let mut lines: Vec<String> = raw.lines().map(String::from).collect();
+    
+    let auto_compact_limit = if let Some(ratio) = auto_compact_ratio {
+        (context_window as f64 * ratio) as u64
+    } else {
+        (context_window as f64 * 0.8) as u64
+    };
+    
+    // First pass: collect changes
+    let mut changes: Vec<(usize, String)> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("model_context_window") {
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            changes.push((i, format!("{}model_context_window = {}", indent, context_window)));
+        } else if trimmed.starts_with("model_auto_compact_token_limit") {
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            changes.push((i, format!("{}model_auto_compact_token_limit = {}", indent, auto_compact_limit)));
+        }
+    }
+    // Second pass: apply changes
+    for (i, new_line) in changes {
+        lines[i] = new_line;
+    }
+    
+    let mut out = lines.join("\n");
+    if trailing_newline { out.push('\n'); }
+    std::fs::write(&path, out)?;
+    
+    crate::diag(&format!("[codex] wrote model_context_window={} auto_compact={}", context_window, auto_compact_limit));
+    Ok(())
+}
