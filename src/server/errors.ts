@@ -1,5 +1,4 @@
 import type { GodeXError, ProviderError } from "../error";
-import { PROVIDER_CONTEXT_WINDOW_EXCEEDED } from "../error/codes";
 
 export interface ErrorPayload {
 	code: string;
@@ -20,12 +19,6 @@ export function godeXErrorToHttp(err: GodeXError): HttpError {
 
 export function providerErrorToHttp(err: ProviderError): HttpError {
 	const upstreamStatus = err.context.upstreamStatus as number;
-	if (err.code === PROVIDER_CONTEXT_WINDOW_EXCEEDED) {
-		return {
-			status: 400,
-			error: { code: "context_window_exceeded", message: err.message },
-		};
-	}
 	if (upstreamStatus === 429) {
 		return {
 			status: 429,

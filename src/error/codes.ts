@@ -35,9 +35,6 @@ export const PROVIDER_UPSTREAM_RATE_LIMIT = "provider.upstream.rate_limit";
 export const PROVIDER_UPSTREAM_TIMEOUT = "provider.upstream.timeout";
 export const PROVIDER_UPSTREAM_SERVER_ERROR = "provider.upstream.server_error";
 export const PROVIDER_UPSTREAM_ERROR = "provider.upstream.error";
-export const PROVIDER_CONTEXT_WINDOW_EXCEEDED = "provider.context_window_exceeded";
-
-
 
 // --- session domain ---
 export const SESSION_CHAIN_NOT_FOUND = "session.chain.not_found";
