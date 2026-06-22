@@ -54,17 +54,20 @@ describe("GET /v1/models", () => {
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
-			object: string;
-			data: { id: string; object: string; owned_by: string; context_window?: number; max_tokens?: number }[];
+			models: {
+				slug: string;
+				context_window?: number;
+				display_name?: string;
+				visibility?: string;
+			}[];
 		};
 
-		expect(body.object).toBe("list");
-		expect(body.data).toHaveLength(1);
-		expect(body.data[0].id).toBe("gpt-5");
-		expect(body.data[0].object).toBe("model");
-		expect(body.data[0].owned_by).toBe("zhipu");
-		// context_window and max_tokens may be undefined if model-presets.json is not found
-		expect(body.data.some((model) => model.id === "*")).toBe(false);
+		expect(body.models).toHaveLength(1);
+		const model = body.models[0]!;
+		expect(model.slug).toBe("gpt-5");
+		expect(model.display_name).toBe("gpt-5");
+		expect(model.visibility).toBe("list");
+		expect(body.models.some((m) => m.slug === "*")).toBe(false);
 	});
 
 	test("omits aliases pointing to unregistered providers", async () => {
@@ -87,13 +90,11 @@ describe("GET /v1/models", () => {
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
-			object: string;
-			data: { id: string; object: string; owned_by: string }[];
+			models: { slug: string }[];
 		};
 
-		expect(body.object).toBe("list");
-		expect(body.data.some((m) => m.id === "ghost")).toBe(false);
-		expect(body.data.some((m) => m.id === "gpt-5")).toBe(true);
-		expect(body.data.some((m) => m.id === "gpt-4o")).toBe(true);
+		expect(body.models.some((m) => m.slug === "ghost")).toBe(false);
+		expect(body.models.some((m) => m.slug === "gpt-5")).toBe(true);
+		expect(body.models.some((m) => m.slug === "gpt-4o")).toBe(true);
 	});
 });
