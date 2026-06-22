@@ -21,7 +21,7 @@ export async function serve(
 	const pluginPaths = config.plugins?.paths ?? [];
 	const plugins = await loadPlugins(pluginPaths);
 
-	const app = new ApplicationContext(config, registrar, plugins);
+	const app = new ApplicationContext(config, registrar, plugins, configPath);
 
 	app.logger.info("config.loaded", () => ({
 		path: configPath,

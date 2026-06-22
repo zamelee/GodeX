@@ -55,13 +55,15 @@ describe("GET /v1/models", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			object: string;
-			data: { id: string; object: string; owned_by: string }[];
+			data: { id: string; object: string; owned_by: string; context_window?: number; max_tokens?: number }[];
 		};
 
 		expect(body.object).toBe("list");
-		expect(body.data).toEqual([
-			{ id: "gpt-5", object: "model", owned_by: "zhipu" },
-		]);
+		expect(body.data).toHaveLength(1);
+		expect(body.data[0].id).toBe("gpt-5");
+		expect(body.data[0].object).toBe("model");
+		expect(body.data[0].owned_by).toBe("zhipu");
+		// context_window and max_tokens may be undefined if model-presets.json is not found
 		expect(body.data.some((model) => model.id === "*")).toBe(false);
 	});
 
