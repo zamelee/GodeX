@@ -77,3 +77,58 @@ describe("ModelResolver", () => {
 		}
 	});
 });
+
+describe("ModelResolver with enabled list (strict mode)", () => {
+	const enabled = [
+		{ provider: "zhipu", model: "glm-5.1" },
+		{ provider: "deepseek", model: "deepseek-chat" },
+	] as const;
+
+	const strictResolver = new ModelResolver({
+		defaultProvider: "zhipu",
+		aliases: {
+			"gpt-5": "zhipu/glm-5.1",
+		},
+		enabled,
+	});
+
+	test("rejects bare selectors not in enabled list", () => {
+		expectServerErrorCode(
+			() => strictResolver.resolve("unknown-model"),
+			"server.request.model_not_found",
+		);
+	});
+
+	test("rejects bare selectors whose model name is registered to a different provider", () => {
+		// "glm-5.1" is enabled, but only under provider "zhipu" — a bare "glm-5.1" must match.
+		// "deepseek-chat" must match deepseek, not the default provider.
+		expect(strictResolver.resolve("glm-5.1")).toEqual({
+			provider: "zhipu",
+			model: "glm-5.1",
+		});
+		expect(strictResolver.resolve("deepseek-chat")).toEqual({
+			provider: "deepseek",
+			model: "deepseek-chat",
+		});
+	});
+
+	test("accepts provider-qualified selectors that match enabled entries", () => {
+		expect(strictResolver.resolve("zhipu/glm-5.1")).toEqual({
+			provider: "zhipu",
+			model: "glm-5.1",
+		});
+		expect(strictResolver.resolve("deepseek/deepseek-chat")).toEqual({
+			provider: "deepseek",
+			model: "deepseek-chat",
+		});
+	});
+
+	test("rejects provider-qualified selectors whose provider does not match the enabled entry", () => {
+		// glm-5.1 is enabled under zhipu only; sending it under a different provider
+		// must be rejected.
+		expectServerErrorCode(
+			() => strictResolver.resolve("deepseek/glm-5.1"),
+			"server.request.model_not_found",
+		);
+	});
+});

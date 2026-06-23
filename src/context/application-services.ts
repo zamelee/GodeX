@@ -30,6 +30,7 @@ export function createApplicationServices(
 	const resolver = new ModelResolver({
 		defaultProvider: config.default_provider,
 		aliases: config.models?.aliases,
+		enabled: config.models?.enabled,
 	});
 	const configuredRegistrar = createConfiguredRegistrar(
 		config.providers,

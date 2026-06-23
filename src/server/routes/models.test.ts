@@ -56,6 +56,11 @@ describe("GET /v1/models", () => {
 		const body = (await res.json()) as {
 			models: {
 				slug: string;
+				id: string;
+				name: string;
+				description?: string;
+				input_modalities?: string[];
+				supports_image_detail_original?: boolean;
 				context_window?: number;
 				display_name?: string;
 				visibility?: string;
@@ -65,8 +70,15 @@ describe("GET /v1/models", () => {
 		expect(body.models).toHaveLength(1);
 		const model = body.models[0]!;
 		expect(model.slug).toBe("gpt-5");
+		expect(model.id).toBe("gpt-5");
+		expect(model.name).toBe("gpt-5");
 		expect(model.display_name).toBe("gpt-5");
 		expect(model.visibility).toBe("list");
+		// gpt-5 preset has multimodal {image_input: true, audio_input: true}
+		expect(model.input_modalities).toEqual(["text", "image", "audio"]);
+		expect(model.supports_image_detail_original).toBe(true);
+		// gpt-5 preset has notes about max_output_tokens vs max_completion_tokens
+		expect(model.description).toContain("max_output_tokens");
 		expect(body.models.some((m) => m.slug === "*")).toBe(false);
 	});
 
@@ -90,11 +102,81 @@ describe("GET /v1/models", () => {
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
-			models: { slug: string }[];
+			models: {
+				slug: string;
+				id: string;
+				input_modalities?: string[];
+				supports_image_detail_original?: boolean;
+				description?: string;
+			}[];
 		};
 
 		expect(body.models.some((m) => m.slug === "ghost")).toBe(false);
 		expect(body.models.some((m) => m.slug === "gpt-5")).toBe(true);
 		expect(body.models.some((m) => m.slug === "gpt-4o")).toBe(true);
+
+		// gpt-5 has image+audio, so modalities should include both
+		const gpt5 = body.models.find((m) => m.slug === "gpt-5")!;
+		expect(gpt5.input_modalities).toEqual(["text", "image", "audio"]);
+		expect(gpt5.supports_image_detail_original).toBe(true);
+	});
+
+	test("defaults unknown models to text-only modalities and no description", async () => {
+		const cfg: GodeXConfig = {
+			...config,
+			models: {
+				aliases: {
+					"custom-unknown-model": "zhipu/some-model",
+				},
+			},
+		};
+		const registrar = new Registrar();
+		registrar.registerFactory("zhipu", () =>
+			createTestProviderEdge({ name: "zhipu" }),
+		);
+		const app = new ApplicationContext(cfg, registrar);
+		const res = handleModels(app);
+		const body = (await res.json()) as {
+			models: {
+				slug: string;
+				input_modalities?: string[];
+				supports_image_detail_original?: boolean;
+				description?: string;
+			}[];
+		};
+
+		const model = body.models.find((m) => m.slug === "custom-unknown-model")!;
+		expect(model.input_modalities).toEqual(["text"]);
+		expect(model.supports_image_detail_original).toBe(false);
+		expect(model.description).toBeUndefined();
+	});
+
+	test("derives correct modalities for known non-multimodal models", async () => {
+		const cfg: GodeXConfig = {
+			...config,
+			models: {
+				aliases: {
+					"deepseek-v3": "zhipu/deepseek-chat",
+				},
+			},
+		};
+		const registrar = new Registrar();
+		registrar.registerFactory("zhipu", () =>
+			createTestProviderEdge({ name: "zhipu" }),
+		);
+		const app = new ApplicationContext(cfg, registrar);
+		const res = handleModels(app);
+		const body = (await res.json()) as {
+			models: {
+				slug: string;
+				input_modalities?: string[];
+				supports_image_detail_original?: boolean;
+			}[];
+		};
+
+		// deepseek-v3 preset has multimodal: {} (empty) - text only
+		const ds = body.models.find((m) => m.slug === "deepseek-v3")!;
+		expect(ds.input_modalities).toEqual(["text"]);
+		expect(ds.supports_image_detail_original).toBe(false);
 	});
 });

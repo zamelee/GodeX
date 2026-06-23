@@ -3,6 +3,11 @@ import { loadModelPresets, getModelMetadata } from "../../config/model-presets";
 
 interface ModelInfo {
 	slug: string;
+	// id/name are emitted alongside slug so Codex++`s parse_model_payload (which only
+	// recognizes id/model/name) can enumerate the model list. slug is kept for codex.
+	id: string;
+	name: string;
+	description?: string;
 	context_window?: number;
 	max_context_window?: number;
 	auto_compact_token_limit?: number;
@@ -34,9 +39,20 @@ export function handleModels(app: ApplicationContext): Response {
 				}));
 			}
 
+			// Derive input_modalities from preset.multimodal. Unknown models default
+			// to text-only (more conservative than the previous hardcoded ["text","image"]).
+			const input_modalities: string[] = ["text"];
+			if (metadata.multimodal?.image_input) input_modalities.push("image");
+			if (metadata.multimodal?.audio_input) input_modalities.push("audio");
+			if (metadata.multimodal?.video_input) input_modalities.push("video");
+			const supportsImageDetail = metadata.multimodal?.image_input === true;
+
 			return {
 				slug: entry.alias,
+				id: entry.alias,
+				name: entry.alias,
 				display_name: entry.alias,
+				description: metadata.notes,
 				visibility: "list",
 				context_window: metadata.context_window,
 				max_context_window: metadata.context_window,
@@ -46,8 +62,8 @@ export function handleModels(app: ApplicationContext): Response {
 					limit: metadata.max_tokens ?? 8192,
 				},
 				supports_parallel_tool_calls: true,
-				supports_image_detail_original: true,
-				input_modalities: ["text", "image"],
+				supports_image_detail_original: supportsImageDetail,
+				input_modalities,
 				supported_reasoning_levels: [
 					{ effort: "low", description: "Fast responses with lighter reasoning" },
 					{ effort: "medium", description: "Balances speed and reasoning depth" },
