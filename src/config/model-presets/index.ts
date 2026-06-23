@@ -98,16 +98,25 @@ export function matchModelToPreset(
 	return null;
 }
 
+export interface ModelMetadata {
+	context_window?: number;
+	max_tokens?: number;
+	notes?: string;
+	multimodal?: ModelPreset["multimodal"];
+}
+
 export function getModelMetadata(
 	model: string,
 	presets: ModelPresetsConfig | null,
-): { context_window?: number; max_tokens?: number } {
+): ModelMetadata {
 	const preset = matchModelToPreset(model, presets);
 	if (!preset) return {};
 
 	return {
 		context_window: preset.context_window,
 		max_tokens: preset.max_tokens,
+		notes: preset.notes,
+		multimodal: preset.multimodal,
 	};
 }
 

@@ -64,6 +64,7 @@ describe("ChatProviderClient error handling", () => {
 							code,
 							context: expect.objectContaining({
 								provider: "test-provider",
+								model: "test",
 								upstreamStatus: status,
 							}),
 						},
@@ -92,7 +93,7 @@ describe("ChatProviderClient error handling", () => {
 						expect(err.code).toBe(PROVIDER_UPSTREAM_ERROR);
 						expect(err.context).toMatchObject({
 							provider: "test-provider",
-							model: "unknown",
+							model: "test",
 							upstreamStatus: 502,
 						});
 					}
