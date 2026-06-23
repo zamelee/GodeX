@@ -14,7 +14,8 @@ use tauri::Manager;
 static DIAG_TX: std::sync::Mutex<Option<mpsc::Sender<String>>> = std::sync::Mutex::new(None);
 
 pub fn diag(msg: &str) {
-    eprintln!("{}", msg);
+    // Fast path: send to channel without any blocking I/O.
+    // Channel is unbounded so send() never blocks.
     if let Ok(guard) = DIAG_TX.lock() {
         if let Some(ref tx) = *guard {
             let _ = tx.send(msg.to_string());

@@ -4,6 +4,7 @@ use crate::godex::LogLine;
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
+use chrono::Utc;
 
 #[derive(Serialize)]
 pub struct PathInfo {
@@ -387,11 +388,10 @@ pub fn godex_status(state: State<'_, AppState>) -> GodexStatus {
 }
 
 #[tauri::command]
-pub fn godex_restart(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+pub fn godex_restart(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     crate::diag(&format!("[cmd] enter godex_restart"));
-    use std::sync::Arc;
-    let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
-    sup.start(&app)
+    (&state.godex).start(app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -401,11 +401,10 @@ pub fn godex_kill(state: State<'_, AppState>) {
 }
 
 #[tauri::command]
-pub fn godex_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+pub fn godex_start(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     crate::diag(&format!("[cmd] enter godex_start"));
-    use std::sync::Arc;
-    let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
-    sup.start(&app)
+    (&state.godex).start(app);
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -422,32 +421,61 @@ pub fn godex_logs_clear(state: State<'_, AppState>) {
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn set_external_mode(state: State<'_, AppState>, external_mode: bool) -> Result<(), String> {
-    crate::diag(&format!("[cmd] set_external_mode={}", external_mode));
-    let persisted = crate::state::PersistedPaths {
-        godex_config: Some(state.paths.lock().godex_config.display().to_string()),
-        godex_binary: Some(state.paths.lock().godex_binary.display().to_string()),
-        external_mode,
+    let t0 = Utc::now().timestamp_millis();
+    crate::diag(&format!("[cmd] set_external_mode={} t0={}", external_mode, t0));
+
+    // Snapshot paths under the lock, then drop it before any disk I/O so
+    // a slow `std::fs::write` (e.g. while external godex.exe holds a handle
+    // on `%USERPROFILE%\.godex\`) cannot freeze the Tauri IPC thread.
+    let (config_str, binary_str) = {
+        let p = state.paths.lock();
+        (p.godex_config.display().to_string(), p.godex_binary.display().to_string())
     };
-    crate::state::save_persisted_paths(&persisted)
-        .map_err(|e| format!("persist failed: {}", e))?;
-    state.godex.set_external_mode(external_mode);
+
+    // Persist + supervisor flag update happen on a worker thread; we wait
+    // with a 5 s timeout so the JS caller can revert the checkbox instead
+    // of hanging the UI indefinitely.
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    let sup = state.godex.clone();
+    std::thread::spawn(move || {
+        let persisted = crate::state::PersistedPaths {
+            godex_config: Some(config_str),
+            godex_binary: Some(binary_str),
+            external_mode,
+        };
+        if let Err(e) = crate::state::save_persisted_paths(&persisted) {
+            let _ = tx.send(Err(format!("persist failed: {}", e)));
+            return;
+        }
+        sup.set_external_mode(external_mode);
+        let _ = tx.send(Ok(()));
+    });
+
+    let recv_res = rx.recv_timeout(std::time::Duration::from_secs(5));
+    crate::diag(&format!("[cmd] set_external_mode recv t={}ms kind={:?}", Utc::now().timestamp_millis() - t0, match &recv_res { Ok(Ok(())) => "ok", Ok(Err(_)) => "err", Err(_) => "timeout" }));
+    match recv_res {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return Err(e),
+        Err(_) => return Err("persist timed out after 5s".to_string()),
+    }
+
+    // Mirror persisted value into the in-memory state.
     { let mut p = state.paths.lock(); p.external_mode = external_mode; }
     Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn tail_trace_logs(state: State<'_, AppState>, limit: Option<usize>) -> Vec<crate::godex::LogLine> {
-    crate::diag(&format!("[cmd] tail_trace_logs limit={:?}", limit));
-    state.godex.tail_trace_logs(limit.unwrap_or(500))
+pub fn tail_trace_logs(state: State<'_, AppState>, limit: Option<usize>, from_id: Option<i64>) -> Vec<crate::godex::TraceLogLine> {
+    crate::diag(&format!("[cmd] tail_trace_logs limit={:?} from_id={:?}", limit, from_id));
+    state.godex.tail_trace_logs(limit.unwrap_or(500), from_id)
 }
 
 #[tauri::command]
-pub fn godex_external_start(state: State<'_, AppState>, app: AppHandle) -> Result<u32, String> {
+pub fn godex_external_start(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     crate::diag(&format!("[cmd] enter godex_external_start"));
     state.godex.set_external_mode(true);
-    use std::sync::Arc;
-    let sup: Arc<crate::godex::GodexSupervisor> = Arc::clone(&state.godex);
-    sup.start(&app)
+    (&state.godex).start(app);
+    Ok(())
 }
 // ── Model Presets ──────────────────────────────────────────────────────────
 
