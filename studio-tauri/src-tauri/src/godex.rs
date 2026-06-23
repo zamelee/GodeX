@@ -31,6 +31,17 @@ impl LogLine {
     }
 }
 
+/// LogLine variant for `tail_trace_logs`. Carries the sqlite row id so the
+/// JS caller can do incremental polling without re-fetching / deduping.
+#[derive(Clone, Debug, Serialize)]
+pub struct TraceLogLine {
+    pub id: i64,
+    pub ts: i64,
+    pub level: String,
+    pub source: String,
+    pub text: String,
+}
+
 fn classify(text: &str) -> String {
     let lower = text.to_lowercase();
     if lower.contains(" error") || lower.contains("err ") || lower.starts_with("err") {
@@ -104,8 +115,26 @@ impl GodexSupervisor {
         }
     }
 
-    pub fn start(self: &Arc<Self>, app: &AppHandle) -> Result<u32, String> {
+    /// Fire-and-forget start. Returns immediately; actual work runs in a background
+    /// thread to keep the Tauri main thread responsive. UI is updated via
+    /// godex://log events.
+    pub fn start(self: &Arc<Self>, app: AppHandle) {
+        let sup = self.clone();
+        thread::spawn(move || {
+            match GodexSupervisor::start_blocking(&sup, &app) {
+                Ok(pid) => {
+                    sup.push_and_emit(&app, LogLine::studio(format!("[studio] godex pid={} started", pid)));
+                }
+                Err(e) => {
+                    sup.push_and_emit(&app, LogLine::studio(format!("[studio] godex start failed: {}", e)));
+                }
+            }
+        });
+    }
+
+    fn start_blocking(self: &Arc<Self>, app: &AppHandle) -> Result<u32, String> {
         self.kill();
+
         let config = self.config.lock().clone().ok_or("config not set")?;
         let binary = self.binary.lock().clone().ok_or("binary not set")?;
         if !binary.exists() { return Err(format!("binary not found: {}", binary.display())); }
@@ -114,23 +143,38 @@ impl GodexSupervisor {
         let external = *self.external_mode.lock();
         let port = self.port.lock().unwrap_or_else(|| crate::state::read_port_from_config(&config));
 
-        if port > 0 {
-            let killed = kill_process_on_port(port);
-            for (pid, name) in &killed {
-                self.push_and_emit(app, LogLine::studio(format!("[studio] killed pid={} ({}) on port {}", pid, name, port)));
+        if external {
+            // External mode: detect if godex is already running on the port.
+            if let Some((pid, name)) = detect_process_on_port(port) {
+                self.push_and_emit(app, LogLine::studio(format!("[studio] external godex detected pid={} ({}) on port {}", pid, name, port)));
+                return Ok(pid);
             }
-            if !killed.is_empty() {
-                std::thread::sleep(std::time::Duration::from_millis(150));
+            // No external godex; fall through to spawn visible godex.
+            self.push_and_emit(app, LogLine::studio(format!("[studio] no godex on port {}, spawning visible godex", port)));
+        } else {
+            // Internal mode: kill anything on the port, spawn hidden godex.
+            if port > 0 {
+                let killed = kill_process_on_port(port);
+                for (pid, name) in &killed {
+                    eprintln!("[studio] killed pid={} ({}) on port {}", pid, name, port);
+                }
+                if !killed.is_empty() {
+                    thread::sleep(std::time::Duration::from_millis(150));
+                }
             }
         }
 
-        let mut cmd = Command::new(&binary);
-        cmd.arg("--config").arg(&config);
+        GodexSupervisor::spawn_godex_child(self, &config, &binary, external, app)
+    }
+
+    fn spawn_godex_child(self: &Arc<Self>, config: &PathBuf, binary: &PathBuf, external: bool, app: &AppHandle) -> Result<u32, String> {
+        let mut cmd = Command::new(binary);
+        cmd.arg("--config").arg(config);
         cmd.arg("--log-level").arg("info");
         cmd.stdin(Stdio::null());
 
         if external {
-            // External mode: visible window, no pipe - logs from log file or trace DB
+            // External: visible window (no CREATE_NO_WINDOW)
         } else {
             cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
@@ -144,32 +188,30 @@ impl GodexSupervisor {
 
         let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
         let pid = child.id();
-        let mode_label = if external { "external" } else { "internal" };
-        self.push_and_emit(app, LogLine::studio(format!("[studio] godex started pid={} mode={}", pid, mode_label)));
 
         if !external {
             if let Some(stdout) = child.stdout.take() {
-                let app_handle = app.clone();
-                let sup = Arc::clone(self);
+                let sup = self.clone();
+                let app_clone = app.clone();
                 thread::spawn(move || {
                     let reader = BufReader::new(stdout);
                     for line in reader.lines().map_while(Result::ok) {
                         let ll = LogLine::godex(line);
                         sup.push_internal(ll.clone());
-                        let _ = app_handle.emit("godex://log", ll);
+                        let _ = app_clone.emit("godex://log", ll);
                     }
                 });
             }
             if let Some(stderr) = child.stderr.take() {
-                let app_handle = app.clone();
-                let sup = Arc::clone(self);
+                let sup = self.clone();
+                let app_clone = app.clone();
                 thread::spawn(move || {
                     let reader = BufReader::new(stderr);
                     for line in reader.lines().map_while(Result::ok) {
                         let mut ll = LogLine::godex(line);
                         ll.level = "error".into();
                         sup.push_internal(ll.clone());
-                        let _ = app_handle.emit("godex://log", ll);
+                        let _ = app_clone.emit("godex://log", ll);
                     }
                 });
             }
@@ -179,30 +221,24 @@ impl GodexSupervisor {
         Ok(pid)
     }
 
-    /// Tail logs from external godex. Dual fallback:
-    /// 1. logging.file from config.yaml (tail last N lines)
-    /// 2. SQLite trace DB (request/error events)
-    pub fn tail_trace_logs(&self, limit: usize) -> Vec<LogLine> {
+    pub fn tail_trace_logs(&self, limit: usize, from_id: Option<i64>) -> Vec<TraceLogLine> {
         let config = match self.config.lock().clone() {
             Some(c) => c,
             None => return vec![],
         };
-        // Source 1: try logging.file from config YAML
-        if let Some(log_path) = crate::state::read_logging_file_from_config(&config) {
-            let p = std::path::PathBuf::from(&log_path);
-            if p.exists() {
-                if let Ok(lines) = tail_file_last_n(&p, limit) {
-                    if !lines.is_empty() { return lines; }
-                }
-            }
-        }
-        // Source 2: fallback to SQLite trace DB
-        tail_trace_db_from_config(&config, limit)
+        // Note: the logging.file branch is intentionally skipped here —
+        // Studio and godex disagree on the schema (string path vs nested
+        // {enabled, dir, filename} object). Stick with trace.db.
+
+
+
+
+
+        tail_trace_db_from_config(&config, limit, from_id)
     }
 }
 
-// --- External log helpers ---
-
+#[allow(dead_code)]
 fn tail_file_last_n(path: &std::path::Path, n: usize) -> std::io::Result<Vec<LogLine>> {
     use std::io::{BufRead, BufReader};
     let file = std::fs::File::open(path)?;
@@ -222,27 +258,127 @@ fn tail_file_last_n(path: &std::path::Path, n: usize) -> std::io::Result<Vec<Log
     Ok(result)
 }
 
-fn tail_trace_db_from_config(config: &std::path::Path, limit: usize) -> Vec<LogLine> {
+fn tail_trace_db_from_config(config: &std::path::Path, limit: usize, from_id: Option<i64>) -> Vec<TraceLogLine> {
+    // Godex persists trace rows under <config-dir>/data/trace.db in four
+    // tables: trace_requests / trace_usage / trace_events / trace_errors. We
+    // surface events + errors here so the log panel shows what happened when
+    // the upstream call ran, including per-stream deltas and error context.
+    //
+    // Performance: the table has 6+ GB and no `created_at` index. We order by
+    // `id` (the sqlite rowid, indexed automatically) and let the JS caller
+    // pass `from_id` for incremental polling — steady state is O(LIMIT).
     let db_dir = config.parent().unwrap_or(config);
-    let db_path = db_dir.join("data").join("sessions.db");
+    let db_path = db_dir.join("data").join("trace.db");
     if !db_path.exists() { return vec![]; }
-    let conn = match rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    let conn = match rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(c) => c,
         Err(_) => return vec![],
     };
-    let query = format!("SELECT rowid, kind, message, ts FROM trace ORDER BY rowid DESC LIMIT {}", limit);
+
+    // First-time fetch: ORDER BY id DESC LIMIT N (newest N rows).
+    // Incremental fetch: WHERE id > ? ORDER BY id ASC LIMIT N (rows newer than last seen).
+    let since = from_id.unwrap_or(0);
+    let is_incremental = from_id.is_some();
+    let query = if is_incremental {
+        "SELECT id, created_at, event_name, payload_json, is_error, kind FROM (
+            SELECT id, created_at, event_name, payload_json, 0 AS is_error, 'event' AS kind FROM trace_events WHERE id > ?
+            UNION ALL
+            SELECT id, created_at, event_name, message AS payload_json, 1 AS is_error, 'error' AS kind FROM trace_errors WHERE id > ?
+        ) ORDER BY id ASC LIMIT ?"
+    } else {
+        "SELECT id, created_at, event_name, payload_json, is_error, kind FROM (
+            SELECT id, created_at, event_name, payload_json, 0 AS is_error, 'event' AS kind FROM trace_events
+            UNION ALL
+            SELECT id, created_at, event_name, message AS payload_json, 1 AS is_error, 'error' AS kind FROM trace_errors
+        ) ORDER BY id DESC LIMIT ?"
+    };
+
     let mut stmt = match conn.prepare(&query) {
         Ok(s) => s,
         Err(_) => return vec![],
     };
-    let rows: Vec<(i64, String, String, i64)> = stmt.query_map([], |row| {
-        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-    }).ok().map(|r| r.flatten().collect()).unwrap_or_default();
-    let mut lines = Vec::new();
-    for row in rows.into_iter().rev() {
-        lines.push(LogLine { ts: row.3, level: classify(&row.1), source: "trace".into(), text: row.2 });
+
+    let params: Vec<Box<dyn rusqlite::ToSql>> = if is_incremental {
+        vec![Box::new(since), Box::new(since), Box::new(limit as i64)]
+    } else {
+        vec![Box::new(limit as i64)]
+    };
+    let row_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i64>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    });
+    let row_iter = match row_iter {
+        Ok(it) => it,
+        Err(_) => return vec![],
+    };
+
+    let mut rows: Vec<(i64, i64, String, Option<String>, i64, String)> = Vec::new();
+    for r in row_iter.flatten() { rows.push(r); }
+    if !is_incremental { rows.reverse(); }
+
+    let mut out: Vec<TraceLogLine> = Vec::with_capacity(rows.len());
+    for (id, ts, event_name, payload, is_error, kind) in rows {
+        let payload = payload.unwrap_or_default();
+        // Truncate at a char boundary to avoid panic on UTF-8 payloads.
+        // `&payload[..400]` is a BYTE slice and panics if 400 lands inside
+        // a multi-byte codepoint. We use `char_indices` to find the largest
+        // byte index strictly less than 400 that is a char boundary.
+        let trimmed = if payload.len() > 400 {
+            let cut = payload
+                .char_indices()
+                .map(|(i, _)| i)
+                .take_while(|&i| i < 400)
+                .last()
+                .unwrap_or(0);
+            format!("{}...", &payload[..cut])
+        } else {
+            payload
+        };
+        let text = if trimmed.is_empty() {
+            format!("[{}#{}]", event_name, id)
+        } else {
+            format!("[{}#{}] {}", event_name, id, trimmed)
+        };
+        let level = if is_error != 0 { "error".to_string() } else { classify(&text) };
+        let _ = kind;
+        out.push(TraceLogLine {
+            id,
+            ts,
+            level,
+            source: "trace".into(),
+            text,
+        });
     }
-    lines
+    out
+}
+/// Detect the PID and process name of a process listening on the given port.
+/// Returns None if no such process is found.
+fn detect_process_on_port(port: u16) -> Option<(u32, String)> {
+    let self_pid = std::process::id();
+    let out = Command::new("netstat").args(["-ano", "-p", "tcp"]).output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let needle = format!(":{}", port);
+    for line in text.lines() {
+        if !line.contains("LISTENING") || !line.contains(&needle) { continue; }
+        if let Some(pid_str) = line.split_whitespace().last() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if pid != 0 && pid != self_pid {
+                    let name = process_name_for_pid(pid).unwrap_or_else(|| "?".into());
+                    return Some((pid, name));
+                }
+            }
+        }
+    }
+    None
 }
 
 fn kill_process_on_port(port: u16) -> Vec<(u32, String)> {
@@ -277,6 +413,6 @@ fn process_name_for_pid(pid: u32) -> Option<String> {
         .output().ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let first = text.lines().next()?;
-    let name = first.split(',').next()?.trim_matches(|c| c == '"' || c == ' ');
+    let name = first.split(",").next()?.chars().filter(|c| *c != ',' && *c != ' ').collect::<String>();
     if name.is_empty() { None } else { Some(name.to_string()) }
 }

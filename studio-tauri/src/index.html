@@ -99,6 +99,9 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .log-panel-header .lp-status.stopped{color:var(--yellow)}
 .log-panel-header .lp-status.dead{color:var(--red)}
 .log-panel-header .lp-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.log-panel-header .lp-mid-ext{font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;padding:0 4px;border-radius:3px;transition:background .12s}
+.log-panel-header .lp-mid-ext:hover{background:var(--bg3)}
+.log-panel-header .lp-mid-ext input{width:auto;margin:0;cursor:pointer}
 .log-panel-header .lp-right select,.log-panel-header .lp-right input{font-size:10px;padding:1px 4px;width:auto;background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--text)}
 .log-panel-header .lp-count{font-size:10px;color:var(--text2);min-width:48px;text-align:right;font-family:ui-monospace,monospace}
 .log-panel-body{flex:1;overflow-y:auto;overflow-x:hidden;font-family:"Consolas","Courier New",monospace;font-size:11px;background:var(--bg);white-space:pre-wrap}
@@ -280,6 +283,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       <span class="lp-title">GodeX</span>
       <span class="lp-sub">网关代理日志</span>
       <span class="lp-status stopped" id="lp-godex-status">● STOPPED</span>
+      <label class="lp-mid-ext" title="外挂模式 godex 可见窗口运行 Studio 从 trace DB 读日志"><input type="checkbox" id="lp-godex-extmode" onchange="onLogPanelExtModeToggle(this.checked)"/>外挂</label>
       <div class="lp-right">
         <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
           <input type="checkbox" id="lp-godex-wrap" checked style="width:auto;margin:0"/> Wrap
@@ -348,13 +352,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
         <input id="set-port" type="number" min="1" max="65535" placeholder="5678" style="flex:1" oninput="refreshPortStatus()"/>
         <span id="set-port-status" style="font-size:11px;color:var(--text2);min-width:160px"></span>
       </div>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <label>外挂模式 <span style="color:var(--text2)">(godex 可见窗口，日志从 trace DB 读)</span></label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px">
-        <input type="checkbox" id="set-external-mode" onchange="onExternalModeToggle()" />
-        <span style="font-size:12px;color:var(--text2)">开启后 godex 窗口可见，Studio 从 trace DB 读日志（适合手动管理 godex 的场景）</span>
-      </label>
     </div>
     <div class="row">
       <label>logging.file <span style="color:var(--text2)">(日志文件路径，可选)</span></label>
@@ -520,11 +517,11 @@ class Sash {
     sashEl.addEventListener("touchstart", this._onTouchStart, { passive: false });
     // Defer to next frame so the flex layout has computed container size.
     const me = this;
-    requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); });
+    requestAnimationFrame(() => requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); }));
   }
   _loadRatio() {
     const v = parseFloat(localStorage.getItem(this.storageKey));
-    if (Number.isFinite(v) && v > 0 && v < 1) return v;
+    if (Number.isFinite(v) && v >= 0.05 && v <= 0.95) return v;
     return this.defaultRatio;
   }
   applyRatio(ratio, persist = true) {
@@ -669,7 +666,7 @@ class LogPanel {
           this.restartBtn.disabled = true;
           const oldText = this.restartBtn.textContent;
           this.restartBtn.textContent = "重启中...";
-    const isExt = $("set-external-mode") && $("set-external-mode").checked;
+    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
     const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
           this.restartBtn.textContent = "pid=" + pid;
           setTimeout(() => { this.restartBtn.textContent = oldText; this.restartBtn.disabled = false; }, 1500);
@@ -822,6 +819,7 @@ async function loadEnabledForCurrent() {
 
 function normalizeEnabled(o) {
   const out = { provider: o.provider, model: o.model };
+  if (o.id) out.id = String(o.id);
   if (o.context_window !== undefined && o.context_window !== null) out.context_window = Number(o.context_window);
   if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = Number(o.max_tokens);
   if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
@@ -1034,17 +1032,53 @@ async function saveEnabled() {
   }
 }
 
-async function onExternalModeToggle() {
-  const mode = $("set-external-mode").checked;
+// Poll external godex logs from the log file / trace DB every 3 s when in
+// external mode. The ring buffer + stdout pipe path is internal-only.
+// Poll external godex logs from the log file / trace DB every 5 s when in
+// external mode. The ring buffer + stdout pipe path is internal-only.
+async function onLogPanelExtModeToggle(checked) {
+  const sc = $("lp-godex-extmode"); if (sc) sc.checked = !!checked;
   try {
-    await invoke("set_external_mode", { externalMode: mode });
-    showMsg(mode ? "外挂模式已开启" : "外挂模式已关闭", "ok");
-  } catch(e) { showMsg("保存失败: " + e, "err"); }
+    await invoke("set_external_mode", { externalMode: !!checked });
+    showMsg(checked ? "外挂模式已开启" : "外挂模式已关闭", "ok");
+    if (checked) {
+      // First-time (or re-toggle) full fetch, then poll incrementally.
+      loadTraceLogs({ reset: true });
+      if (_tracePollTimer) clearInterval(_tracePollTimer);
+      _tracePollTimer = setInterval(() => { loadTraceLogs(); }, 5000);
+    } else if (_tracePollTimer) {
+      clearInterval(_tracePollTimer);
+      _tracePollTimer = null;
+    }
+    return true;
+  } catch(e) {
+    showMsg("保存失败: " + e, "err");
+    $("lp-godex-extmode").checked = !checked;
+    if (sc) sc.checked = !checked;
+    return false;
+  }
 }
-function loadTraceLogs() {
-  invoke("tail_trace_logs", { limit: 300 }).then(lines => {
-    for (const l of (lines || [])) pushLogLine(l);
-  }).catch(() => {});
+
+let _traceLastId = 0;
+let _traceSeenIds = new Set();
+let _tracePollTimer = null;
+async function loadTraceLogs(opts) {
+  // opts = { fromId?: number, reset?: boolean }
+  // If reset, drop the dedupe set so the panel can be re-rendered from scratch.
+  if (opts && opts.reset) { _traceSeenIds.clear(); _traceLastId = 0; }
+  const params = { limit: 300 };
+  if (!(opts && opts.reset)) { params.fromId = _traceLastId; }
+  try {
+    const lines = await invoke("tail_trace_logs", params);
+    for (const l of (lines || [])) {
+      if (l && l.id != null) {
+        if (_traceSeenIds.has(l.id)) continue;
+        _traceSeenIds.add(l.id);
+        if (l.id > _traceLastId) _traceLastId = l.id;
+      }
+      pushLogLine(l);
+    }
+  } catch (e) { /* swallow */ }
 }
 
 async function saveAndRestart() {
@@ -1052,7 +1086,7 @@ async function saveAndRestart() {
   showMsg("正在重启 godex...", "");
   setEditorStatus("重启中...");
   try {
-    const isExt = $("set-external-mode") && $("set-external-mode").checked;
+    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
     const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
     showMsg("已重启,pid=" + pid, "ok");
     setEditorStatus("已重启,新 pid=" + pid);
@@ -1131,6 +1165,15 @@ async function refreshStatus() {
   setTimeout(function(){ if(!providers.length){ console.warn("[init] providers timeout, show empty"); renderProviders(); } }, 3000);
   var presetTimer = setTimeout(function(){ console.warn("[init] presets timed out"); }, 5000);
   loadRustPresets().then(function(){ clearTimeout(presetTimer); }).catch(function(e){ clearTimeout(presetTimer); console.warn("[init] loadRustPresets:", e); });
+  // Load external mode from config so the GodeX log panel checkbox reflects persisted state
+  // Always start with external mode OFF, regardless of any persisted value.
+  // The user opts in explicitly via the toggle; the server-side persisted
+  // flag will be overwritten by the next set_external_mode call.
+  try {
+    await invoke("set_external_mode", { externalMode: false });
+    const _em = $("lp-godex-extmode");
+    if (_em) _em.checked = false;
+  } catch(e) { console.warn("[init] reset ext mode:", e); }
   try { initSashes(); } catch(e) { console.error("[init] initSashes:", e); }
   try { refreshStatus(); } catch(e) { console.error("[init] refreshStatus:", e); }
   setInterval(function(){ try { refreshStatus(); } catch(e){} }, 5000);
@@ -1154,7 +1197,6 @@ async function openSettingsModal() {
     $("set-config").value = p.godex_config;
     $("set-binary").value = p.godex_binary;
     $("set-port").value = p.godex_port || 5678;
-    $("set-external-mode").checked = !!p.external_mode;
     const logEl = document.getElementById("set-logging-file"); if(logEl) logEl.value = p.logging_file || "";
     $("set-error").style.display = "none";
     $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
@@ -1200,7 +1242,6 @@ async function resetSettings() {
     $("set-binary").value = p.godex_binary;
     $("set-port").value = p.godex_port || 5678;
     $("set-hint").textContent = "已重置为默认。重启 studio 后 Config/Binary 路径生效;Port 已写入 config.yaml。";
-    $("set-external-mode").checked = false;
     const logEl2 = document.getElementById("set-logging-file"); if(logEl2) logEl2.value = "";
     showMsg("已恢复默认。", "ok");
     await refreshPortStatus();
