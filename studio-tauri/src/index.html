@@ -360,6 +360,13 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
     </div>
+    <div class="row">
+      <label>数据库路径 <span style="color:var(--text2)">(只读，跟随 <code>~/.godex/data/</code>)</span></label>
+      <div style="font-size:11px;color:var(--text2);line-height:1.5">
+        <div>Session: <code id="set-session-db" style="word-break:break-all">?</code></div>
+        <div>Trace:&nbsp;&nbsp; <code id="set-trace-db" style="word-break:break-all">?</code></div>
+      </div>
+    </div>
     <div id="set-error" class="desc" style="color:var(--red);display:none;margin-top:4px"></div>
     <div id="set-hint" class="desc" style="color:var(--text2);margin-top:4px"></div>
     <div class="actions">
@@ -1254,6 +1261,8 @@ async function openSettingsModal() {
     $("set-binary").value = p.godex_binary;
     $("set-port").value = p.godex_port || 5678;
     const logEl = document.getElementById("set-logging-file"); if(logEl) logEl.value = p.logging_file || "";
+    $("set-session-db").textContent = p.session_db_path || "?";
+    $("set-trace-db").textContent = p.trace_db_path || "?";
     $("set-error").style.display = "none";
     $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
     await refreshPortStatus();
