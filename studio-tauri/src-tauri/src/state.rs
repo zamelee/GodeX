@@ -225,19 +225,20 @@ impl Paths {
     }
 }
 
-/// Resolve the active godex config path using the same priority
-/// chain as the godex CLI itself (`src/config/paths.ts`):
+/// Resolve the active godex config path. Priority chain:
 ///   1. $GODEX_CONFIG env var (Studio-only convenience)
-///   2. user-persisted choice in studio-paths.json
-///   3. ./godex.yaml in the current working directory
+///   2. ./godex.yaml in the current working directory
+///   3. ~/.godex/studio-paths.json "godex_config" (only if file still exists)
 ///   4. ~/.godex/config.yaml (cross-platform homedir)
+///
+/// Note: cwd (step 2) is checked BEFORE persisted (step 3) so that portable
+/// deployments — where the user double-clicks start-studio.bat from the
+/// portable folder — always use ./godex.yaml in that folder, even if a stale
+/// path from a different machine is still cached in studio-paths.json.
+/// Persisted is only honoured when the file it points to still exists, so
+/// moved/deleted paths silently fall through to the next step.
 fn resolve_godex_config(persisted: &PersistedPaths, home_dot_godex: &Path) -> PathBuf {
     if let Ok(v) = std::env::var("GODEX_CONFIG") {
-        if !v.trim().is_empty() {
-            return PathBuf::from(v);
-        }
-    }
-    if let Some(v) = &persisted.godex_config {
         if !v.trim().is_empty() {
             return PathBuf::from(v);
         }
@@ -248,7 +249,49 @@ fn resolve_godex_config(persisted: &PersistedPaths, home_dot_godex: &Path) -> Pa
             return p;
         }
     }
+    if let Some(v) = &persisted.godex_config {
+        if !v.trim().is_empty() {
+            let p = PathBuf::from(v);
+            if p.exists() {
+                return p;
+            }
+        }
+    }
     home_dot_godex.join("config.yaml")
+}
+
+/// Detected at startup: persisted godex_config pointed somewhere that no
+/// longer exists. Returned to the UI so the user can see what happened.
+#[derive(serde::Serialize, Clone)]
+pub struct PathChangeNotice {
+    pub from: String,
+    pub to: String,
+    pub reason: &'static str,
+}
+
+/// Walk the same priority chain as `resolve_godex_config` and, if the
+/// persisted step was skipped because its target file vanished, return a
+/// notice describing the silent path switch.
+fn detect_path_change(
+    resolved: &Path,
+    persisted: &PersistedPaths,
+) -> Option<PathChangeNotice> {
+    if let Some(v) = &persisted.godex_config {
+        let v = v.trim();
+        if !v.is_empty() {
+            let p = PathBuf::from(v);
+            // Only worth surfacing if the persisted path was used-or-attempted
+            // AND the resolved path is different.
+            if !p.exists() && p != resolved {
+                return Some(PathChangeNotice {
+                    from: v.to_string(),
+                    to: resolved.display().to_string(),
+                    reason: "missing_file",
+                });
+            }
+        }
+    }
+    None
 }
 
 /// Resolve the godex binary path.
@@ -273,11 +316,14 @@ fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> Pa
 pub struct AppState {
     pub paths: Mutex<Paths>,
     pub godex: Arc<GodexSupervisor>,
+    pub path_change_notice: Mutex<Option<PathChangeNotice>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
+        let persisted = load_persisted_paths();
         let defaults = Paths::default_paths();
+        let notice = detect_path_change(&defaults.godex_config, &persisted);
         let godex = Arc::new(GodexSupervisor::new());
         godex.set_paths(
             defaults.godex_config.clone(),
@@ -288,6 +334,7 @@ impl AppState {
         Self {
             paths: Mutex::new(defaults),
             godex,
+            path_change_notice: Mutex::new(notice),
         }
     }
 }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 use chrono::Utc;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct PathInfo {
     pub godex_config: String,
     pub godex_binary: String,
@@ -15,11 +15,14 @@ pub struct PathInfo {
     pub logging_file: Option<String>,
     pub session_db_path: String,
     pub trace_db_path: String,
+    pub path_change_notice: Option<crate::state::PathChangeNotice>,
 }
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
     crate::diag(&format!("[cmd] enter get_config_paths"));
     let p = state.paths.lock();
+    // take() the notice so the user only sees it once per session
+    let notice = state.path_change_notice.lock().take();
     PathInfo {
         godex_config: p.godex_config.display().to_string(),
         godex_binary: p.godex_binary.display().to_string(),
@@ -28,6 +31,7 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
         logging_file: crate::state::read_logging_file_from_config(&p.godex_config),
         session_db_path: p.session_db_path.display().to_string(),
         trace_db_path: p.trace_db_path.display().to_string(),
+        path_change_notice: notice,
     }
 }
 
@@ -164,6 +168,8 @@ pub fn reset_paths(state: State<'_, AppState>) -> PathInfo {
         logging_file: crate::state::read_logging_file_from_config(&defaults.godex_config),
         session_db_path: defaults.session_db_path.display().to_string(),
         trace_db_path: defaults.trace_db_path.display().to_string(),
+        // reset_paths() is the user explicitly wiping state, so no notice needed
+        path_change_notice: None,
     }
 }
 
