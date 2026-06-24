@@ -4,7 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-fn persist_file() -> std::path::PathBuf { if let Ok(home) = std::env::var("USERPROFILE") { std::path::PathBuf::from(home).join(".godex").join("studio-paths.json") } else { std::path::PathBuf::from(r"C:\Users\Bliss\.godex\studio-paths.json") } }
+fn persist_file() -> std::path::PathBuf {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(home).join(".godex").join("studio-paths.json")
+}
 const DEFAULT_PORT: u16 = 5678;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -179,23 +184,31 @@ pub struct Paths {
     pub godex_port: u16,
     pub external_mode: bool,
     pub studio_log: Option<PathBuf>,
+    pub session_db_path: PathBuf,
+    pub trace_db_path: PathBuf,
 }
 
 impl Paths {
     pub fn default_paths() -> Self {
         let persisted = load_persisted_paths();
-        let godex_config = std::env::var("GODEX_CONFIG")
-            .ok()
-            .or(persisted.godex_config.clone())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\Users\Bliss\.godex\config.yaml"));
-        let godex_binary = std::env::var("GODEX_BINARY")
-            .ok()
-            .or(persisted.godex_binary.clone())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(r"D:\Documents\VibeCoding\GodeX\platforms\win32-x64\bin\godex2.exe")
-            });
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .unwrap_or_else(|_| ".".to_string());
+        let home_dot_godex = PathBuf::from(&home).join(".godex");
+
+        // godex_config: env GODEX_CONFIG -> persisted -> cwd/godex.yaml -> ~/.godex/config.yaml
+        let godex_config = resolve_godex_config(&persisted, &home_dot_godex);
+
+        // godex_binary: env GODEX_BINARY -> persisted -> ~/.godex/bin/<godex-binary>
+        let godex_binary = resolve_godex_binary(&persisted, &home_dot_godex);
+
+        // db paths mirror godex prod defaults (src/config/paths.ts):
+        //   session: ~/.godex/data/sessions.db
+        //   trace:   ~/.godex/data/trace.db
+        let data_dir = home_dot_godex.join("data");
+        let session_db_path = data_dir.join("sessions.db");
+        let trace_db_path = data_dir.join("trace.db");
+
         let godex_port = std::env::var("GODEX_PORT")
             .ok()
             .and_then(|s| s.parse::<u16>().ok())
@@ -206,8 +219,55 @@ impl Paths {
             godex_port,
             external_mode: persisted.external_mode,
             studio_log: None,
+            session_db_path,
+            trace_db_path,
         }
     }
+}
+
+/// Resolve the active godex config path using the same priority
+/// chain as the godex CLI itself (`src/config/paths.ts`):
+///   1. $GODEX_CONFIG env var (Studio-only convenience)
+///   2. user-persisted choice in studio-paths.json
+///   3. ./godex.yaml in the current working directory
+///   4. ~/.godex/config.yaml (cross-platform homedir)
+fn resolve_godex_config(persisted: &PersistedPaths, home_dot_godex: &Path) -> PathBuf {
+    if let Ok(v) = std::env::var("GODEX_CONFIG") {
+        if !v.trim().is_empty() {
+            return PathBuf::from(v);
+        }
+    }
+    if let Some(v) = &persisted.godex_config {
+        if !v.trim().is_empty() {
+            return PathBuf::from(v);
+        }
+    }
+    let cwd_candidate = std::env::current_dir().ok().map(|d| d.join("godex.yaml"));
+    if let Some(p) = cwd_candidate {
+        if p.exists() {
+            return p;
+        }
+    }
+    home_dot_godex.join("config.yaml")
+}
+
+/// Resolve the godex binary path.
+///   1. $GODEX_BINARY env var
+///   2. user-persisted choice in studio-paths.json
+///   3. ~/.godex/bin/godex[.exe] (cross-platform convention)
+fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> PathBuf {
+    if let Ok(v) = std::env::var("GODEX_BINARY") {
+        if !v.trim().is_empty() {
+            return PathBuf::from(v);
+        }
+    }
+    if let Some(v) = &persisted.godex_binary {
+        if !v.trim().is_empty() {
+            return PathBuf::from(v);
+        }
+    }
+    let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
+    home_dot_godex.join("bin").join(bin_name)
 }
 
 pub struct AppState {

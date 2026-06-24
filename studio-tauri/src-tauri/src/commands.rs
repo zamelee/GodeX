@@ -13,6 +13,8 @@ pub struct PathInfo {
     pub godex_port: u16,
     pub external_mode: bool,
     pub logging_file: Option<String>,
+    pub session_db_path: String,
+    pub trace_db_path: String,
 }
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
@@ -24,6 +26,8 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
         godex_port: p.godex_port,
         external_mode: state.godex.is_external_mode(),
         logging_file: crate::state::read_logging_file_from_config(&p.godex_config),
+        session_db_path: p.session_db_path.display().to_string(),
+        trace_db_path: p.trace_db_path.display().to_string(),
     }
 }
 
@@ -158,6 +162,8 @@ pub fn reset_paths(state: State<'_, AppState>) -> PathInfo {
         godex_port: defaults.godex_port,
         external_mode: defaults.external_mode,
         logging_file: crate::state::read_logging_file_from_config(&defaults.godex_config),
+        session_db_path: defaults.session_db_path.display().to_string(),
+        trace_db_path: defaults.trace_db_path.display().to_string(),
     }
 }
 
