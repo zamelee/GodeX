@@ -1266,6 +1266,12 @@ async function openSettingsModal() {
     $("set-error").style.display = "none";
     $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
     await refreshPortStatus();
+    if (p.path_change_notice) {
+      const n = p.path_change_notice;
+      const reasonLabel = n.reason === "missing_file" ? "找不到了" : n.reason;
+      $("set-hint").textContent = `⚠ 上次记住的 config 路径 ${n.from} ${reasonLabel}，已自动切到 ${n.to}。下次启动仍然实际使用后者。`;
+      $("set-hint").style.color = "var(--yellow)";
+    }
     $("settings-modal").style.display = "flex";
   } catch (e) {
     showMsg("读取路径失败: " + e, "err");
