@@ -27,6 +27,8 @@ pub struct EnabledModel {
     pub provider: String,
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub context_window: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub max_tokens: Option<u64>,
@@ -133,6 +135,7 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
             current = Some(EnabledModel {
                 provider: rest.trim().to_string(),
                 model: String::new(),
+                id: None,
                 context_window: None,
                 max_tokens: None,
                 multimodal: None,
@@ -144,6 +147,9 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
         if let Some(p) = current.as_mut() {
             if let Some(rest) = trimmed.strip_prefix("model:") {
                 p.model = rest.trim().to_string();
+            } else if let Some(rest) = trimmed.strip_prefix("id:") {
+                let v = rest.trim();
+                p.id = Some(v.trim_matches('"').to_string());
             } else if let Some(rest) = trimmed.strip_prefix("context_window:") {
                 p.context_window = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("max_tokens:") {
@@ -162,10 +168,80 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
     out
 }
 
-pub fn save_enabled_models(path: &Path, items: &[EnabledModel]) -> Result<(), String> {
+pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
+    let raw = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let mut out: Vec<EnabledModel> = Vec::new();
+    let mut in_models = false;
+    let mut in_discovered = false;
+    let mut current: Option<EnabledModel> = None;
+    for line in raw.lines() {
+        let trimmed = line.trim_start();
+        if line.starts_with("models:") {
+            in_models = true;
+            continue;
+        }
+        if in_models && !in_discovered && trimmed.starts_with("discovered:") {
+            in_discovered = true;
+            continue;
+        }
+        if !in_discovered {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("- provider:") {
+            if let Some(prev) = current.take() {
+                out.push(prev);
+            }
+            current = Some(EnabledModel {
+                provider: rest.trim().to_string(),
+                model: String::new(),
+                id: None,
+                context_window: None,
+                max_tokens: None,
+                multimodal: None,
+                capabilities: None,
+                note: None,
+            });
+            continue;
+        }
+        if let Some(p) = current.as_mut() {
+            if let Some(rest) = trimmed.strip_prefix("model:") {
+                p.model = rest.trim().to_string();
+            } else if let Some(rest) = trimmed.strip_prefix("id:") {
+                let v = rest.trim();
+                p.id = Some(v.trim_matches('"').to_string());
+            } else if let Some(rest) = trimmed.strip_prefix("context_window:") {
+                p.context_window = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("max_tokens:") {
+                p.max_tokens = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("multimodal:") {
+                p.multimodal = Some(rest.trim() == "true");
+            } else if let Some(rest) = trimmed.strip_prefix("note:") {
+                let v = rest.trim();
+                p.note = Some(v.trim_matches('"').to_string());
+            }
+        }
+    }
+    if let Some(prev) = current.take() {
+        out.push(prev);
+    }
+    out
+}
+
+pub fn save_enabled_models(
+    path: &Path,
+    enabled: &[EnabledModel],
+    discovered: &[EnabledModel],
+) -> Result<(), String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("read config failed: {}", e))?;
     crate::diag(&format!("[splice] RAW ({}b):\n{}", raw.len(), raw));
-    let new_block = render_enabled_block(items);
+    let new_block = format!(
+        "{}{}",
+        render_enabled_block(enabled),
+        render_discovered_block(discovered)
+    );
     crate::diag(&format!("[splice] BLOCK ({}b):\n{}", new_block.len(), new_block));
     let updated = replace_or_insert(&raw, &new_block);
     crate::diag(&format!("[splice] UPDATED ({}b):\n{}", updated.len(), updated));
@@ -181,6 +257,11 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
     for m in items {
         s.push_str(&format!("    - provider: {}\n", m.provider));
         s.push_str(&format!("      model: {}\n", m.model));
+        if let Some(id) = &m.id {
+            if !id.is_empty() {
+                s.push_str(&format!("      id: \"{}\"\n", id.replace('"', "\\\"")));
+            }
+        }
         if let Some(cw) = m.context_window {
             s.push_str(&format!("      context_window: {}\n", cw));
         }
@@ -211,6 +292,61 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
             }
             if !any {
                 // nothing tracked under capabilities, leave the section off
+                let trim_end = s.len() - "      capabilities:\n".len();
+                s.truncate(trim_end);
+            }
+        }
+        if let Some(note) = &m.note {
+            if !note.is_empty() {
+                s.push_str(&format!("      note: \"{}\"\n", note.replace('"', "\\\"")));
+            }
+        }
+    }
+    s
+}
+
+fn render_discovered_block(items: &[EnabledModel]) -> String {
+    if items.is_empty() {
+        return "  discovered: []\n".to_string();
+    }
+    let mut s = String::from("  discovered:\n");
+    for m in items {
+        s.push_str(&format!("    - provider: {}\n", m.provider));
+        s.push_str(&format!("      model: {}\n", m.model));
+        if let Some(id) = &m.id {
+            if !id.is_empty() {
+                s.push_str(&format!("      id: \"{}\"\n", id.replace('"', "\\\"")));
+            }
+        }
+        if let Some(cw) = m.context_window {
+            s.push_str(&format!("      context_window: {}\n", cw));
+        }
+        if let Some(mt) = m.max_tokens {
+            s.push_str(&format!("      max_tokens: {}\n", mt));
+        }
+        if let Some(mm) = m.multimodal {
+            s.push_str(&format!("      multimodal: {}\n", if mm { "true" } else { "false" }));
+        }
+        if let Some(cap) = &m.capabilities {
+            let mut any = false;
+            s.push_str("      capabilities:\n");
+            let pairs = [
+                ("text", cap.text),
+                ("image_input", cap.image_input),
+                ("audio_input", cap.audio_input),
+                ("video_input", cap.video_input),
+                ("image_output", cap.image_output),
+                ("audio_output", cap.audio_output),
+                ("tool_use", cap.tool_use),
+                ("stream", cap.stream),
+            ];
+            for (k, v) in pairs {
+                if let Some(b) = v {
+                    s.push_str(&format!("        {}: {}\n", k, if b { "true" } else { "false" }));
+                    any = true;
+                }
+            }
+            if !any {
                 let trim_end = s.len() - "      capabilities:\n".len();
                 s.truncate(trim_end);
             }
