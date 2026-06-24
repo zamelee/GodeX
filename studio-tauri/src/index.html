@@ -492,6 +492,7 @@ function presetFor(modelId) {
 let providers = [];
 let activeProvider = null;
 let enabled = [];
+let discovered = [];
 let remoteModels = [];
 
 // Sash: drag the divider between two flex siblings to resize them.
@@ -802,6 +803,7 @@ function selectProvider(name) {
   $("f-spec").value = p.spec || "minimax";
   $("f-timeout_ms").value = p.timeout_ms || 120000;
   enabled = [];
+  discovered = [];
   remoteModels = [];
   loadEnabledForCurrent();
   setEditorStatus("");
@@ -811,9 +813,10 @@ async function loadEnabledForCurrent() {
   if (!activeProvider) return;
   try {
     const all = await invoke("read_enabled_models");
-    enabled = (all || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
+    enabled = ((all && all.enabled) || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
+    discovered = ((all && all.discovered) || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
     renderModels();
-    setEditorStatus("已加载 " + enabled.length + " 个已启用模型");
+    setEditorStatus("已加载 " + enabled.length + " 个已启用, " + discovered.length + " 个已禁用模型");
   } catch (e) { setEditorStatus("加载失败: " + e); }
 }
 
@@ -864,17 +867,33 @@ async function fetchRemoteModels() {
     remoteModels = ids;
     let added = 0;
     let updated = 0;
-    for (const id of ids) {
-      const existing = enabled.find((e) => e.model === id);
-      if (existing) { if (applyPresetToRow(id, existing)) updated++; continue; }
+    let skippedDup = 0;
+    for (const remote of (list || [])) {
+      const id = remote.id;
+      // enabled 已存在:不重复,只填空字段
+      const enIdx = enabled.findIndex((e) => e.model === id);
+      if (enIdx >= 0) {
+        if (applyPresetToRow(id, enabled[enIdx])) updated++;
+        continue;
+      }
+      // discovered 已存在:看参数是否跟 remote 完全一样
+      const disIdx = discovered.findIndex((d) => d.model === id);
+      if (disIdx >= 0) {
+        if (rowEqualsRemote(discovered[disIdx], remote)) {
+          skippedDup++;
+        }
+        // 不一样(用户编辑过):保留 discovered 版本,不动
+        continue;
+      }
+      // 都没有:加 enabled(默认勾选)
       const row = { provider: activeProvider, model: id };
       applyPresetToRow(id, row);
       enabled.push(row);
       added++;
     }
     renderModels();
-    setEditorStatus("已拉取 " + ids.length + " 个,新增 " + added + " 个,更新 " + updated + " 个");
-    showMsg("已拉取 " + ids.length + " 个 (新增 " + added + ")", "ok");
+    setEditorStatus("已拉取 " + ids.length + " 个,新增 " + added + " 个,跳过重复 " + skippedDup + " 个,更新 " + updated + " 个");
+    showMsg("已拉取 " + ids.length + " 个 (新增 " + added + ",跳过重复 " + skippedDup + ")", "ok");
   } catch (e) {
     setEditorStatus("拉取失败: " + e);
     showMsg("拉取失败: " + e, "err");
@@ -882,6 +901,13 @@ async function fetchRemoteModels() {
     btn.disabled = false;
     btn.textContent = "从上游拉取";
   }
+}
+
+// 判断 row 的参数是否跟 remote 默认完全一样
+function rowEqualsRemote(row, remote) {
+  if ((row.context_window || null) !== (remote.context_window || null)) return false;
+  if ((row.max_tokens || null) !== (remote.max_tokens || null)) return false;
+  return true;
 }
 
 function addManualModel() {
@@ -907,82 +933,109 @@ function clearEnabled() {
   setEditorStatus("已清空 (尚未保存)");
 }
 
-function toggleModel(idx) {
-  if (enabled[idx]._deleted) delete enabled[idx]._deleted;
-  else enabled[idx]._deleted = true;
+function toggleModel(modelId) {
+  // 在 enabled 找
+  const enIdx = enabled.findIndex((e) => e.model === modelId);
+  if (enIdx >= 0) {
+    const [removed] = enabled.splice(enIdx, 1);
+    discovered.push(removed);
+    renderModels();
+    return;
+  }
+  // 在 discovered 找
+  const disIdx = discovered.findIndex((d) => d.model === modelId);
+  if (disIdx >= 0) {
+    const [removed] = discovered.splice(disIdx, 1);
+    enabled.push(removed);
+    renderModels();
+    return;
+  }
+}
+
+function removeModel(modelId) {
+  const enIdx = enabled.findIndex((e) => e.model === modelId);
+  if (enIdx >= 0) { enabled.splice(enIdx, 1); renderModels(); return; }
+  const disIdx = discovered.findIndex((d) => d.model === modelId);
+  if (disIdx >= 0) { discovered.splice(disIdx, 1); renderModels(); return; }
+}
+
+function setModelCap(modelId, cap, val) {
+  const row = enabled.find((e) => e.model === modelId) || discovered.find((d) => d.model === modelId);
+  if (!row) return;
+  if (!row.capabilities) row.capabilities = {};
+  row.capabilities[cap] = !!val;
   renderModels();
 }
 
-function removeModel(idx) {
-  enabled.splice(idx, 1);
-  renderModels();
-}
-
-function setModelCap(idx, cap, val) {
-  if (!enabled[idx].capabilities) enabled[idx].capabilities = {};
-  enabled[idx].capabilities[cap] = !!val;
-  renderModels();
-}
-
-function setModelParam(idx, key, val) {
+function setModelParam(modelId, key, val) {
+  const row = enabled.find((e) => e.model === modelId) || discovered.find((d) => d.model === modelId);
+  if (!row) return;
   if (val === "" || val === null || val === undefined) {
-    delete enabled[idx][key];
+    delete row[key];
   } else {
     const n = Number(val);
-    if (!Number.isFinite(n)) { delete enabled[idx][key]; }
-    else enabled[idx][key] = n;
+    if (!Number.isFinite(n)) { delete row[key]; }
+    else row[key] = n;
   }
   renderModels();
 }
 function renderModels() {
   const list = $("model-list");
   const filter = ($("model-filter").value || "").toLowerCase();
-  const rows = enabled.map((m, i) => ({ m, i })).filter((r) => !r.m._deleted);
-  if (!rows.length) {
+  // 合并 enabled + discovered,保留各自操作顺序
+  const allRows = [
+    ...enabled.map((m) => ({ m, state: "enabled" })),
+    ...discovered.map((m) => ({ m, state: "discovered" })),
+  ];
+  if (!allRows.length) {
     list.innerHTML = '<div class="empty">暂无模型。点击"从上游拉取"或"+ 手动添加"。</div>';
     $("enabled-count").textContent = "0 个已选";
     $("model-stats").textContent = "";
     return;
   }
-  const filtered = filter ? rows.filter((r) => r.m.model.toLowerCase().includes(filter)) : rows;
+  const filtered = filter ? rows.filter((r) => r.m.model.toLowerCase().includes(filter)) : allRows;
   if (!filtered.length) {
     list.innerHTML = '<div class="empty">无匹配 "' + esc(filter) + '"</div>';
-    $("enabled-count").textContent = rows.length + " 个已选";
-    $("model-stats").textContent = "0 / " + rows.length;
+    $("enabled-count").textContent = enabled.length + " 个已选 / " + discovered.length + " 个已禁用";
+    $("model-stats").textContent = "0 / " + allRows.length;
     return;
   }
   let html = "";
-  for (const { m, i } of filtered) {
+  for (const { m, state } of filtered) {
+    const isEnabled = state === "enabled";
     const preset = presetFor(m.model);
-    html += '<div class="model-row">';
-    html += '<input type="checkbox" checked onchange="toggleModel(' + i + ')" title="启用"/>';
+    const mid = esc(m.model);
+    html += '<div class="model-row' + (isEnabled ? '' : ' disabled') + '">';
+    html += `<input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleModel('${mid}')" title="${isEnabled ? '取消勾选' : '勾选'}"/>`;
     html += '<div>';
     html += '<div class="name">' + esc(m.model);
     html += ' <span class="src">' + esc(m.provider) + '</span>';
     if (preset) html += ' <span class="preset">预设</span>';
+    if (!isEnabled) html += ' <span class="disabled-tag">已禁用</span>';
     html += '</div>';
     html += '<div class="params">';
-    html += '<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="' + (m.context_window ?? "") + '" oninput="setModelParam(' + i + ',\'context_window\',this.value)"/>';
-    html += '<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="' + (m.max_tokens ?? "") + '" oninput="setModelParam(' + i + ',\'max_tokens\',this.value)"/>';
+    html += `<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="${m.context_window ?? ""}" oninput="setModelParam('${mid}','context_window',this.value)"/>`;
+    html += `<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="${m.max_tokens ?? ""}" oninput="setModelParam('${mid}','max_tokens',this.value)"/>`;
     html += '</div>';
     html += '<div class="caps">';
     for (const c of CAPS) {
       const on = !!(m.capabilities && m.capabilities[c]);
       const label = CAP_LABELS[c] || c;
-      html += '<span class="cap ' + (on ? "on" : "off") + '" onclick="setModelCap(' + i + ',\'' + c + '\',' + (on ? "false" : "true") + ')" title="点击切换">' + label + '</span>';
+      html += `<span class="cap ${on ? 'on' : 'off'}" onclick="setModelCap('${mid}','${c}',${on ? 'false' : 'true'})" title="点击切换">${label}</span>`;
     }
     html += '</div>';
     html += '</div>';
-    html += '<div class="actions"><button class="btn gray tiny" onclick="removeModel(' + i + ')">删除</button></div>';
+    html += `<div class="actions"><button class="btn gray tiny" onclick="removeModel('${mid}')">删除</button></div>`;
     html += '</div>';
   }
   list.innerHTML = html;
-  $("enabled-count").textContent = rows.length + " 个已选";
-  $("model-stats").textContent = filtered.length + " / " + rows.length + (remoteModels.length ? " (上游 " + remoteModels.length + ")" : "");
+  $("enabled-count").textContent = enabled.length + " 个已选 / " + discovered.length + " 个已禁用";
+  $("model-stats").textContent = filtered.length + " / " + allRows.length + (remoteModels.length ? " (上游 " + remoteModels.length + ")" : "");
 }
 
 function stripUndef(o) {
   const out = { provider: o.provider, model: o.model };
+  if (o.id) out.id = String(o.id);
   if (o.context_window !== undefined && o.context_window !== null) out.context_window = o.context_window;
   if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = o.max_tokens;
   if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
@@ -1020,11 +1073,14 @@ async function saveEnabled() {
   let all;
   try { all = await invoke("read_enabled_models"); }
   catch (e) { showMsg("读取失败: " + e, "err"); return; }
-  const others = (all || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
-  const mine = enabled.filter((m) => !m._deleted).map(stripUndef);
-  const merged = others.concat(mine);
+  const othersEnabled = ((all && all.enabled) || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
+  const othersDiscovered = ((all && all.discovered) || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
+  const myEnabled = enabled.map(stripUndef);
+  const myDiscovered = discovered.map(stripUndef);
+  const mergedEnabled = othersEnabled.concat(myEnabled);
+  const mergedDiscovered = othersDiscovered.concat(myDiscovered);
   try {
-    const count = await invoke("save_enabled_models", { enabled: merged });
+    const count = await invoke("save_enabled_models", { enabled: mergedEnabled, discovered: mergedDiscovered });
     showMsg("已保存 " + count + " 个模型 (未重启)", "ok");
     setEditorStatus("保存于 " + new Date().toLocaleTimeString());
   } catch (e) {

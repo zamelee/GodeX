@@ -281,29 +281,57 @@ fn remove_provider_block(raw: &str, name: &str) -> String {
 }
 
 
+#[derive(serde::Serialize)]
+pub struct EnabledModelsResponse {
+    pub enabled: Vec<EnabledModel>,
+    pub discovered: Vec<EnabledModel>,
+}
+
 #[tauri::command]
-pub fn read_enabled_models(state: State<'_, AppState>) -> Result<Vec<EnabledModel>, String> {
+pub fn read_enabled_models(state: State<'_, AppState>) -> Result<EnabledModelsResponse, String> {
     crate::diag(&format!("[cmd] enter read_enabled_models"));
     let path = state.paths.lock().godex_config.clone();
-    Ok(config::read_enabled_models(&path))
+    Ok(EnabledModelsResponse {
+        enabled: config::read_enabled_models(&path),
+        discovered: config::read_discovered_models(&path),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn save_enabled_models(state: State<'_, AppState>, enabled: Vec<EnabledModel>) -> Result<usize, String> {
-    crate::diag(&format!("[cmd] enter save_enabled_models count={}", enabled.len()));
+pub fn save_enabled_models(
+    state: State<'_, AppState>,
+    enabled: Vec<EnabledModel>,
+    discovered: Vec<EnabledModel>,
+) -> Result<usize, String> {
+    crate::diag(&format!(
+        "[cmd] enter save_enabled_models enabled={} discovered={}",
+        enabled.len(),
+        discovered.len()
+    ));
     let path = state.paths.lock().godex_config.clone();
-    config::save_enabled_models(&path, &enabled)?;
-    Ok(enabled.len())
+    config::save_enabled_models(&path, &enabled, &discovered)?;
+    Ok(enabled.len() + discovered.len())
 }
 
 #[derive(Serialize)]
 pub struct RemoteModel {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub input_modalities: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub max_tokens: Option<u64>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn fetch_remote_models(
     app: AppHandle,
+    state: State<'_, AppState>,
     base_url: String,
     api_key: String,
 ) -> Result<Vec<RemoteModel>, String> {
@@ -345,12 +373,39 @@ pub async fn fetch_remote_models(
         Vec::new()
     };
 
-    let models: Vec<RemoteModel> = arr.into_iter()
-        .filter_map(|v| {
-            v.get("id").and_then(|id| id.as_str()).map(|s| RemoteModel { id: s.to_string() })
-        })
+    // 收集 id 列表
+    let ids: Vec<String> = arr.into_iter()
+        .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
         .collect();
-    crate::diag(&format!("[fetch] extracted {} model ids", models.len()));
+    crate::diag(&format!("[fetch] extracted {} model ids", ids.len()));
+
+    // 用 preset 派生 name/description/input_modalities/context_window/max_tokens
+    let pf = load_preset_file(&state.paths.lock().godex_binary).ok();
+    let models: Vec<RemoteModel> = ids.into_iter().map(|id| {
+        let mut m = RemoteModel {
+            id: id.clone(),
+            name: None,
+            description: None,
+            input_modalities: None,
+            context_window: None,
+            max_tokens: None,
+        };
+        if let Some(ref pf) = pf {
+            if let Some(p) = match_preset(&id, pf) {
+                m.name = Some(p.name);
+                if p.context_window > 0 { m.context_window = Some(p.context_window); }
+                if p.max_tokens > 0 { m.max_tokens = Some(p.max_tokens); }
+                if !p.notes.is_empty() { m.description = Some(p.notes); }
+                let mut mods = vec!["text".to_string()];
+                if p.multimodal.image_input { mods.push("image".to_string()); }
+                if p.multimodal.audio_input { mods.push("audio".to_string()); }
+                if p.multimodal.video_input { mods.push("video".to_string()); }
+                m.input_modalities = Some(mods);
+            }
+        }
+        m
+    }).collect();
+    crate::diag(&format!("[fetch] enriched {} models via preset", models.len()));
     let _ = app.emit("godex://log", crate::log_line_info(&format!("[studio] fetch 解析到 {} 个模型", models.len())));
     Ok(models)
 }
