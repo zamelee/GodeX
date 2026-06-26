@@ -449,12 +449,18 @@ fn detect_path_change(
 /// Resolve the godex binary path. Priority chain (same shape as
 /// `resolve_godex_config`):
 ///   1. $GODEX_BINARY env var (highest)
-///   2. ./godex.exe (or ./godex) in the current working directory
+///   2. ./godex.exe (or ./godex) in the current working directory if it exists
 ///      (portable-friendly: godex-studio.exe launched from a portable
 ///      folder automatically picks up its sibling godex.exe)
-///   3. ~/.godex/studio-paths.json "godex_binary" (only if file still exists)
-///   4. ~/.godex/bin/godex[.exe] (cross-platform convention, last resort)
+///   3. ~/.godex/studio-paths.json "godex_binary" only if the file still exists
+///   4. ./godex.exe (or ./godex) in cwd, even if it doesn't exist
+///      (portable-friendly default: when nothing matches, return the cwd
+///      path so any subsequent 'binary not found' error points to the
+///      obvious location rather than `~/.godex/bin/godex.exe` which the
+///      user is unlikely to have on a new machine)
+///   5. ~/.godex/bin/godex[.exe] (legacy convention, absolute last resort)
 fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> PathBuf {
+    let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
     if let Ok(v) = std::env::var("GODEX_BINARY") {
         if !v.trim().is_empty() {
             return PathBuf::from(v);
@@ -462,7 +468,6 @@ fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> Pa
     }
     // cwd: ./godex.exe (Windows) or ./godex (POSIX)
     if let Ok(cwd) = std::env::current_dir() {
-        let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
         let cwd_candidate = cwd.join(bin_name);
         if cwd_candidate.exists() {
             return cwd_candidate;
@@ -476,7 +481,12 @@ fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> Pa
             }
         }
     }
-    let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
+    // Step 4: fallback to cwd path even if it doesn't exist. The eventual
+    // 'binary not found' error then points at the obvious location.
+    if let Ok(cwd) = std::env::current_dir() {
+        return cwd.join(bin_name);
+    }
+    // Step 5: last resort.
     home_dot_godex.join("bin").join(bin_name)
 }
 

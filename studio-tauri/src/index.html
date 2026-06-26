@@ -1301,13 +1301,23 @@ async function saveSettings() {
     $("set-error").style.display = "block";
     return;
   }
+  // Defensive: any of these DOM lookups can return null in odd startup
+  // states (e.g. partial modal render before first openSettingsModal).
+  const loggingEl = document.getElementById("set-logging-file");
+  const loggingFile = loggingEl ? loggingEl.value.trim() : "";
   try {
-    const loggingFile = $("#set-logging-file").value.trim();await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port, loggingFile: loggingFile || null });
+    await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port, loggingFile: loggingFile || null });
     showMsg("设置已保存。Config/Binary 需重启 studio 生效;Port 已写入 config.yaml。", "ok");
     closeSettingsModal();
   } catch (e) {
-    $("set-error").textContent = "保存失败: " + e;
-    $("set-error").style.display = "block";
+    const msg = (e && e.message) ? e.message : String(e);
+    // Show via both showMsg (visible banner) and set-error (modal slot),
+    // and guard set-error in case the modal isn't in the DOM.
+    showMsg("保存失败: " + msg, "err");
+    try {
+      const errEl = document.getElementById("set-error");
+      if (errEl) { errEl.textContent = "保存失败: " + msg; errEl.style.display = "block"; }
+    } catch (_) { /* ignore */ }
   }
 }
 async function resetSettings() {
