@@ -1,4 +1,4 @@
-# AGENTS.md - GodeX
+﻿# AGENTS.md - GodeX
 
 Coding-agent instructions for the GodeX repository.
 
@@ -226,3 +226,14 @@ Never:
 - Commit secrets, API keys, local trace databases, or session databases.
 - Hand-edit generated build output.
 - Add another test framework.
+
+## Remote Repository Rules
+
+**绝对禁止：**
+- 禁止向 `origin`（Ahoo-Wang/GodeX）推送代码
+- 禁止向 `origin` 创建 PR
+- 只能推送到 `fork`（zamelee/GodeX.git）
+
+当前远程配置：
+- `origin` → https://github.com/Ahoo-Wang/GodeX.git（只读）
+- `fork` → https://github.com/zamelee/GodeX.git（可写）
