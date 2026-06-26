@@ -194,6 +194,7 @@ pub fn upsert_provider(state: State<'_, AppState>, name: String, base_url: Strin
         name, spec, api_key, base_url, timeout_ms
     );
     let updated = replace_provider_block(&raw, &name, &block);
+    let updated = sync_default_provider(&updated, &name);
     std::fs::write(&path, updated).map_err(|e| format!("write failed: {}", e))?;
     Ok(())
 }
@@ -208,6 +209,51 @@ pub fn delete_provider(state: State<'_, AppState>, name: String) -> Result<(), S
     Ok(())
 }
 
+
+// Keep `default_provider` pointing at a provider that actually exists.
+// When the user adds a brand-new provider whose name does not match the
+// existing `default_provider` (e.g. `minnimax.chat` vs the minimal-yaml
+// default `minimax`), the runtime config check would fail with
+// "Default provider is not configured". Auto-promote the freshly added
+// provider to be the new default in that case, so the user does not
+// have to manually edit YAML before their first request can flow.
+fn sync_default_provider(raw: &str, new_provider_name: &str) -> String {
+    let parsed: Result<serde_yaml::Value, _> = serde_yaml::from_str(raw);
+    let Ok(value) = parsed else { return raw.to_string() };
+    let current_default = value
+        .get("default_provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let configured_names: Vec<String> = value
+        .get("providers")
+        .and_then(|v| v.as_mapping())
+        .map(|m| m.keys().filter_map(|k| k.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    let needs_update = current_default.is_empty()
+        || !configured_names.iter().any(|n| n == current_default);
+    if !needs_update {
+        return raw.to_string();
+    }
+    crate::diag(&format!(
+        "[cmd] sync_default_provider: '{}' -> '{}'",
+        current_default, new_provider_name
+    ));
+    raw.replacen(
+        &format!("default_provider: {}", current_default),
+        &format!("default_provider: {}", new_provider_name),
+        1,
+    )
+}
+
+// Strip a trailing inline empty mapping on the `providers:` top-level line.
+// e.g. turn `providers: {}\n` into `providers:\n`. Idempotent and safe to
+// call on already-clean documents. Without this, old buggy configs with
+// `providers: {}\n\n  <name>:` would let find_provider_block match the
+// orphan and bypass the insert-after strip path, leaving the document in
+// a state js-yaml rejects ("bad indentation of a mapping entry").
+fn strip_inline_empty_providers_block(raw: &str) -> String {
+    raw.replace("providers: {}\n", "providers:\n")
+}
 
 // Returns the byte range (start, end) of the provider block named
 // `name` in `raw`. A provider block is a contiguous run of lines
@@ -255,14 +301,20 @@ fn find_provider_block(raw: &str, name: &str) -> Option<(usize, usize)> {
 }
 
 fn replace_provider_block(raw: &str, name: &str, new_block: &str) -> String {
-    if let Some((start, end)) = find_provider_block(raw, name) {
+    // Strip any inline empty mapping `providers: {}` first so the rest of
+    // this function always operates on a `providers:` header followed by
+    // children or whitespace, never a closed `{}` token. Without this, an
+    // old buggy config with `providers: {}\n\n  <name>:` would let
+    // find_provider_block match the orphan and bypass the insert-after strip.
+    let raw = strip_inline_empty_providers_block(&raw);
+    if let Some((start, end)) = find_provider_block(&raw, name) {
         // Eat the preceding newline so the new block sits cleanly.
         let cut_start = if start > 0 && raw.as_bytes()[start - 1] == b'\n' {
             start - 1
         } else {
             start
         };
-        return format!("{}{}{}", &raw[..cut_start], new_block.trim_end(), &raw[end..]);
+        return format!("{}\n{}\n{}", &raw[..cut_start], new_block.trim_end(), &raw[end..]);
     }
     // Not found: insert after the `providers:` top-level line.
     let needle = "providers:";
@@ -272,6 +324,8 @@ fn replace_provider_block(raw: &str, name: &str, new_block: &str) -> String {
             let nl = raw[idx..].find('\n')
                 .map(|i| idx + i + 1)
                 .unwrap_or(raw.len());
+            // raw was already stripped of `providers: {}` at function entry,
+            // so we can simply use the whole `providers:` line as the prefix.
             let prefix = if nl == 0 || raw.as_bytes()[nl - 1] == b'\n' {
                 &raw[..nl]
             } else {
@@ -725,4 +779,186 @@ pub fn write_codex_model_context(
 pub fn read_codex_model_context() -> Result<Option<u64>, String> {
     crate::diag("[cmd] read_codex_model_context");
     Ok(crate::state::read_codex_model_context_window())
+}
+
+#[cfg(test)]
+mod upsert_provider_inline_empty_tests {
+    use super::{replace_provider_block, sync_default_provider};
+
+    #[test]
+    fn insert_after_providers_with_inline_empty_mapping_yields_parsable_yaml() {
+        // Mimics the minimal yaml ensure_godex_config used to write on first
+        // launch (before the MINIMAL_GODEX_CONFIG fix).
+        let raw = "server:\n  host: 0.0.0.0\n  port: 5678\n\ndefault_provider: minimax\n\nproviders: {}\n\nsession:\n  backend: memory\n\nlogging:\n  level: info\n\ntrace:\n  enabled: true\n\nmodels:\n  enabled: []\n";
+        let block = "  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-c-44b1\n    endpoint:\n      base_url: https://minnimax.chat/v1\n    timeout_ms: 120000\n";
+        let updated = replace_provider_block(raw, "minnimax", block);
+
+        // The inline `{}` must be stripped, so `providers:` is followed by
+        // an indented mapping entry, not by `{}` and then orphan entries.
+        assert!(
+            !updated.contains("providers: {}"),
+            "inline empty mapping must be stripped, got:\n{}",
+            updated
+        );
+        assert!(
+            updated.contains("\n  minnimax:\n"),
+            "provider block must start on its own indented line, got:\n{}",
+            updated
+        );
+
+        // The updated document must be parseable as YAML.
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&updated)
+            .expect("updated yaml must parse");
+        let providers = parsed.get("providers").and_then(|v| v.as_mapping()).expect("providers mapping");
+        let entry = providers.get("minnimax").and_then(|v| v.as_mapping()).expect("minnimax entry");
+        assert_eq!(entry.get("spec").and_then(|v| v.as_str()), Some("minimax"));
+        assert_eq!(
+            entry.get("credentials")
+                .and_then(|c| c.get("api_key"))
+                .and_then(|k| k.as_str()),
+            Some("gw-c-44b1")
+        );
+        assert_eq!(
+            entry.get("endpoint")
+                .and_then(|e| e.get("base_url"))
+                .and_then(|u| u.as_str()),
+            Some("https://minnimax.chat/v1")
+        );
+    }
+
+    #[test]
+    fn insert_after_providers_without_inline_mapping_is_unchanged() {
+        // Pre-existing users whose config has `providers:` followed by
+        // existing provider blocks must not be touched by the strip path.
+        let raw = "providers:\n  openai:\n    spec: openai\n    credentials:\n      api_key: gw-x\n";
+        let block = "  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-c-44b1\n";
+        let updated = replace_provider_block(raw, "minnimax", block);
+
+        // The new provider should be inserted alongside the existing one.
+        assert!(updated.contains("providers:\n"));
+        assert!(updated.contains("  openai:\n"));
+        assert!(updated.contains("  minnimax:\n"));
+
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&updated).expect("parse");
+        let providers = parsed.get("providers").and_then(|v| v.as_mapping()).expect("providers mapping");
+        assert!(providers.contains_key("openai"));
+        assert!(providers.contains_key("minnimax"));
+    }
+
+    #[test]
+    fn upsert_on_old_broken_yaml_with_orphan_provider_recovers() {
+        // This is the exact broken shape the previous Studio bug produced:
+        // `providers: {}` was not stripped, so the inserted provider block
+        // landed as an orphan below the inline empty mapping.
+        let raw = "server:\n  host: 0.0.0.0\n  port: 5678\n\ndefault_provider: minimax\n\nproviders: {}\n\n  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-c-OLD\n    endpoint:\n      base_url: https://minnimax.chat/v1\n    timeout_ms: 120000\n\nsession:\n  backend: memory\n\nlogging:\n  level: info\n\ntrace:\n  enabled: true\n\nmodels:\n  enabled: []\n";
+        let block = "  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-c-NEW\n    endpoint:\n      base_url: https://minnimax.chat/v1\n    timeout_ms: 120000\n";
+        let updated = replace_provider_block(raw, "minnimax", block);
+
+        assert!(
+            !updated.contains("providers: {}"),
+            "inline empty mapping must be stripped, got:\n{}",
+            updated
+        );
+        assert!(
+            !updated.contains("gw-c-OLD"),
+            "old api key must be replaced, got:\n{}",
+            updated
+        );
+
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&updated)
+            .expect("updated yaml must parse");
+        let providers = parsed.get("providers").and_then(|v| v.as_mapping()).expect("providers mapping");
+        let entry = providers.get("minnimax").and_then(|v| v.as_mapping()).expect("minnimax entry");
+        assert_eq!(
+            entry.get("credentials")
+                .and_then(|c| c.get("api_key"))
+                .and_then(|k| k.as_str()),
+            Some("gw-c-NEW")
+        );
+    }
+    #[test]
+    fn update_existing_provider_block_replaces_in_place() {
+        // Happy path: a clean config with `providers:` followed by an
+        // existing `  minnimax:` block, plus a `session:` block below.
+        // The existing block must be replaced and a newline preserved
+        // between `timeout_ms` and `session:` (regression test for a
+        // previous `block.trim_end() + &raw[end..]` join that glued the
+        // two together).
+        let raw = "providers:\n  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-OLD\n    endpoint:\n      base_url: https://minnimax.chat/v1\n    timeout_ms: 120000\n\nsession:\n  backend: memory\n";
+        let block = "  minnimax:\n    spec: minimax\n    credentials:\n      api_key: gw-NEW\n    endpoint:\n      base_url: https://minnimax.chat/v1\n    timeout_ms: 120000\n";
+        let updated = replace_provider_block(raw, "minnimax", block);
+
+        assert!(
+            !updated.contains("gw-OLD"),
+            "old api key must be replaced, got:\n{}",
+            updated
+        );
+        assert!(
+            updated.contains("gw-NEW"),
+            "new api key must be present, got:\n{}",
+            updated
+        );
+        // The most important regression assertion: there must be a
+        // newline between `timeout_ms: 120000` and `session:`.
+        assert!(
+            updated.contains("timeout_ms: 120000\nsession:"),
+            "missing newline between block end and next section, got:\n{}",
+            updated
+        );
+
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&updated).expect("parse");
+        let providers = parsed.get("providers").and_then(|v| v.as_mapping()).expect("providers mapping");
+        let entry = providers.get("minnimax").and_then(|v| v.as_mapping()).expect("minnimax entry");
+        assert_eq!(
+            entry.get("credentials")
+                .and_then(|c| c.get("api_key"))
+                .and_then(|k| k.as_str()),
+            Some("gw-NEW")
+        );
+        assert_eq!(parsed.get("session").and_then(|s| s.get("backend")).and_then(|b| b.as_str()), Some("memory"));
+    }
+
+    #[test]
+    fn sync_default_provider_updates_when_old_default_does_not_exist() {
+        let raw = "server:\n  port: 5678\ndefault_provider: minimax\nproviders:\n  minnimax.chat:\n    spec: minimax\n";
+        let updated = sync_default_provider(raw, "minnimax.chat");
+        assert!(
+            updated.contains("default_provider: minnimax.chat"),
+            "default_provider must point to the new provider, got:\n{}",
+            updated
+        );
+        assert!(
+            !updated.contains("default_provider: minimax\n"),
+            "old default_provider must be replaced, got:\n{}",
+            updated
+        );
+        // Idempotent when the new provider is already the default.
+        let again = sync_default_provider(&updated, "minnimax.chat");
+        assert_eq!(again, updated);
+    }
+
+    #[test]
+    fn sync_default_provider_leaves_valid_default_unchanged() {
+        let raw = "default_provider: openai\nproviders:\n  openai:\n    spec: openai\n  anthropic:\n    spec: anthropic\n";
+        let updated = sync_default_provider(raw, "minnimax.chat");
+        assert_eq!(updated, raw);
+    }
+
+    #[test]
+    fn sync_default_provider_fills_empty_default() {
+        let raw = "default_provider: \"\"\nproviders:\n  minnimax.chat:\n    spec: minimax\n";
+        let updated = sync_default_provider(raw, "minnimax.chat");
+        assert!(
+            updated.contains("default_provider: minnimax.chat"),
+            "empty default must be filled in, got:\n{}",
+            updated
+        );
+    }
+
+    #[test]
+    fn sync_default_provider_returns_raw_unchanged_on_parse_failure() {
+        let raw = "this is :: not [ valid yaml";
+        let updated = sync_default_provider(raw, "minnimax.chat");
+        assert_eq!(updated, raw);
+    }
 }

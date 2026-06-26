@@ -24,7 +24,10 @@ export function loadConfigFromFile(
 	try {
 		parsed = yaml.load(raw);
 	} catch (error) {
-		throw new Error(`Failed to parse config file: ${configPath}`, {
+		const detail = (error as { reason?: string; mark?: { line?: number; column?: number } }).reason ?? (error as Error).message;
+		const mark = (error as { mark?: { line?: number; column?: number } }).mark;
+		const where = mark?.line !== undefined ? ` (line ${mark.line + 1}, column ${(mark.column ?? 0) + 1})` : "";
+		throw new Error(`Failed to parse config file: ${configPath}${where}: ${detail}`, {
 			cause: error,
 		});
 	}

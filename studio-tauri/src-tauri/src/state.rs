@@ -281,7 +281,7 @@ pub struct PathProvisionNotice {
 /// Minimum-viable godex config used when no example file is available either.
 /// Memory session backend, no providers, server on 5678 — enough for the UI
 /// to open and let the user add a provider through the New Provider dialog.
-const MINIMAL_GODEX_CONFIG: &str = "server:\n  host: 0.0.0.0\n  port: 5678\n\ndefault_provider: minimax\n\nproviders: {}\n\nsession:\n  backend: memory\n\nlogging:\n  level: info\n\ntrace:\n  enabled: true\n\nmodels:\n  enabled: []\n";
+const MINIMAL_GODEX_CONFIG: &str = "server:\n  host: 0.0.0.0\n  port: 5678\n\ndefault_provider: minimax\n\nproviders:\n\nsession:\n  backend: memory\n\nlogging:\n  level: info\n\ntrace:\n  enabled: true\n\nmodels:\n  enabled: []\n";
 
 #[cfg(test)]
 mod provision_tests {
