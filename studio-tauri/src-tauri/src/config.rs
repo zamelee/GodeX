@@ -494,6 +494,7 @@ models:
         vec![EnabledModel {
             provider: "minnimax".to_string(),
             model: "MiniMax-M3".to_string(),
+            id: None,
             context_window: Some(1000000),
             max_tokens: Some(16384),
             multimodal: None,
@@ -571,6 +572,7 @@ models:
         let item = EnabledModel {
             provider: "minnimax".to_string(),
             model: "MiniMax-M3".to_string(),
+            id: None,
             context_window: Some(1000000),
             max_tokens: Some(16384),
             multimodal: Some(true),
@@ -663,6 +665,7 @@ models:
         let raw = "server:\r\n  port: 5678\r\ndefault_provider: minimax\r\nproviders:\r\n  minimax:\r\n    spec: minimax\r\n    credentials:\r\n      api_key: gw-x\r\n    endpoint:\r\n      base_url: https://minnimax.chat/v1\r\nmodels:\r\n  aliases:\r\n    '*': minimax/MiniMax-M3\r\nsession:\r\n  backend: sqlite\r\n";        let items = vec![EnabledModel {
             provider: "minimax".to_string(),
             model: "MiniMax-M3".to_string(),
+            id: None,
             context_window: Some(1000000),
             max_tokens: Some(16384),
             multimodal: None,

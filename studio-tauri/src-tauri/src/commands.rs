@@ -16,6 +16,7 @@ pub struct PathInfo {
     pub session_db_path: String,
     pub trace_db_path: String,
     pub path_change_notice: Option<crate::state::PathChangeNotice>,
+    pub path_provision_notice: Option<crate::state::PathProvisionNotice>,
 }
 #[tauri::command]
 pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
@@ -23,6 +24,7 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
     let p = state.paths.lock();
     // take() the notice so the user only sees it once per session
     let notice = state.path_change_notice.lock().take();
+    let provision = state.path_provision_notice.lock().take();
     PathInfo {
         godex_config: p.godex_config.display().to_string(),
         godex_binary: p.godex_binary.display().to_string(),
@@ -32,6 +34,7 @@ pub fn get_config_paths(state: State<'_, AppState>) -> PathInfo {
         session_db_path: p.session_db_path.display().to_string(),
         trace_db_path: p.trace_db_path.display().to_string(),
         path_change_notice: notice,
+        path_provision_notice: provision,
     }
 }
 
@@ -170,6 +173,7 @@ pub fn reset_paths(state: State<'_, AppState>) -> PathInfo {
         trace_db_path: defaults.trace_db_path.display().to_string(),
         // reset_paths() is the user explicitly wiping state, so no notice needed
         path_change_notice: None,
+        path_provision_notice: None,
     }
 }
 

@@ -1271,6 +1271,11 @@ async function openSettingsModal() {
       const reasonLabel = n.reason === "missing_file" ? "找不到了" : n.reason;
       $("set-hint").textContent = `⚠ 上次记住的 config 路径 ${n.from} ${reasonLabel}，已自动切到 ${n.to}。下次启动仍然实际使用后者。`;
       $("set-hint").style.color = "var(--yellow)";
+    } else if (p.path_provision_notice) {
+      const pn = p.path_provision_notice;
+      const sourceLabel = pn.source === "copied_from_example" ? "已从 godex.example.yaml 复制出" : "已创建一份最小可用的";
+      $("set-hint").textContent = `✦ ${sourceLabel} config: ${pn.path}（仅含 server 与 minimax 默认 provider，请在设置里补充 api_key）。`;
+      $("set-hint").style.color = "var(--blue)";
     }
     $("settings-modal").style.display = "flex";
   } catch (e) {
