@@ -1,5 +1,5 @@
-import type { ApplicationContext } from "../../context/application-context";
 import type { EnabledModel } from "../../config/schema";
+import type { ApplicationContext } from "../../context/application-context";
 
 export interface EnabledModelItem {
 	provider: string;
@@ -19,10 +19,12 @@ export function handleEnabledModels(app: ApplicationContext): Response {
 
 function stripUndef(item: EnabledModel): EnabledModelItem {
 	const out: EnabledModelItem = { provider: item.provider, model: item.model };
-	if (item.context_window !== undefined) out.context_window = item.context_window;
+	if (item.context_window !== undefined)
+		out.context_window = item.context_window;
 	if (item.max_tokens !== undefined) out.max_tokens = item.max_tokens;
 	if (item.multimodal !== undefined) out.multimodal = item.multimodal;
-	if (item.capabilities !== undefined) out.capabilities = item.capabilities as Record<string, boolean>;
+	if (item.capabilities !== undefined)
+		out.capabilities = item.capabilities as Record<string, boolean>;
 	if (item.note !== undefined) out.note = item.note;
 	return out;
 }

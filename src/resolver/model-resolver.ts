@@ -1,10 +1,7 @@
-import {
-	SERVER_MODEL_NOT_FOUND,
-	ServerError,
-} from "../error";
 import type { EnabledModel } from "../config/schema";
-import type { ResolvedModel } from "./model-reference";
+import { SERVER_MODEL_NOT_FOUND, ServerError } from "../error";
 import { ModelAliasCatalog, type ModelAliasEntry } from "./model-aliases";
+import type { ResolvedModel } from "./model-reference";
 import { parseModelSelector } from "./model-selector";
 
 export interface ModelResolverOptions {
@@ -36,7 +33,8 @@ export class ModelResolver {
 						`Model not found: ${selector.resolved.provider}/${selector.resolved.model}`,
 						{
 							model: selector.selector,
-							reason: "selector did not match any registered alias or enabled model",
+							reason:
+								"selector did not match any registered alias or enabled model",
 							hint: "check GET /v1/models for the list of supported aliases",
 						},
 					);
@@ -65,7 +63,8 @@ export class ModelResolver {
 				`Model not found: ${bareModel}`,
 				{
 					model: bareModel,
-					reason: "selector did not match any registered alias or enabled model",
+					reason:
+						"selector did not match any registered alias or enabled model",
 					hint: "check GET /v1/models for the list of supported aliases",
 				},
 			);

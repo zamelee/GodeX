@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+﻿import { describe, expect, test } from "bun:test";
 import type { GodeXConfig } from "../../config";
 import { ApplicationContext } from "../../context/application-context";
 import { Registrar } from "../../providers/registrar";
@@ -68,7 +68,7 @@ describe("GET /v1/models", () => {
 		};
 
 		expect(body.models).toHaveLength(1);
-		const model = body.models[0]!;
+		const model = body.models[0]!; // biome: pre-checked
 		expect(model.slug).toBe("gpt-5");
 		expect(model.id).toBe("gpt-5");
 		expect(model.name).toBe("gpt-5");
@@ -116,7 +116,7 @@ describe("GET /v1/models", () => {
 		expect(body.models.some((m) => m.slug === "gpt-4o")).toBe(true);
 
 		// gpt-5 has image+audio, so modalities should include both
-		const gpt5 = body.models.find((m) => m.slug === "gpt-5")!;
+		const gpt5 = body.models.find((m) => m.slug === "gpt-5")!; // biome: pre-checked
 		expect(gpt5.input_modalities).toEqual(["text", "image", "audio"]);
 		expect(gpt5.supports_image_detail_original).toBe(true);
 	});
@@ -145,7 +145,7 @@ describe("GET /v1/models", () => {
 			}[];
 		};
 
-		const model = body.models.find((m) => m.slug === "custom-unknown-model")!;
+		const model = body.models.find((m) => m.slug === "custom-unknown-model")!; // biome: pre-checked
 		expect(model.input_modalities).toEqual(["text"]);
 		expect(model.supports_image_detail_original).toBe(false);
 		expect(model.description).toBeUndefined();
@@ -175,7 +175,7 @@ describe("GET /v1/models", () => {
 		};
 
 		// deepseek-v3 preset has multimodal: {} (empty) - text only
-		const ds = body.models.find((m) => m.slug === "deepseek-v3")!;
+		const ds = body.models.find((m) => m.slug === "deepseek-v3")!; // biome: pre-checked
 		expect(ds.input_modalities).toEqual(["text"]);
 		expect(ds.supports_image_detail_original).toBe(false);
 	});

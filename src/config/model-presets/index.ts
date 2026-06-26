@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface ModelPreset {
@@ -27,7 +27,9 @@ export interface ModelPresetsConfig {
 
 let cachedPresets: ModelPresetsConfig | null = null;
 
-export function loadModelPresets(configPath?: string): ModelPresetsConfig | null {
+export function loadModelPresets(
+	configPath?: string,
+): ModelPresetsConfig | null {
 	if (cachedPresets) return cachedPresets;
 
 	// Try multiple locations for model-presets.json

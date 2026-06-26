@@ -1,4 +1,4 @@
-// Studio UI HTTP server on 56791
+﻿// Studio UI HTTP server on 56791
 // Reads profiles.yaml, proxies to godex /v1/models, provides static HTML
 // Configured via env: STUDIO_PROFILES, STUDIO_HTML, GODEX_BASE
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -200,5 +200,4 @@ setInterval(loadLogs, 5000);
 `;
 
 export { HTML, PORT, PROFILES_PATH };
-export type { StudioConfig };
-export function createStudioHandler() { return async (req) => new Response(HTML, { headers: { "Content-Type": "text/html" } }); }
+export function createStudioHandler() { return async (req: Request) => new Response(HTML, { headers: { "Content-Type": "text/html" } }); }

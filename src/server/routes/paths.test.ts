@@ -58,10 +58,15 @@ describe("GET /admin/paths", () => {
 	test("session_db_path is reported when sqlite backend is configured", async () => {
 		const cfg: GodeXConfig = {
 			...baseConfig,
-			session: { backend: "sqlite", sqlite: { path: "/tmp/godex-sessions.db" } },
+			session: {
+				backend: "sqlite",
+				sqlite: { path: "/tmp/godex-sessions.db" },
+			},
 		};
 		const registrar = new Registrar();
-		registrar.registerFactory("zhipu", () => createTestProviderEdge({ name: "zhipu" }));
+		registrar.registerFactory("zhipu", () =>
+			createTestProviderEdge({ name: "zhipu" }),
+		);
 		const app = new ApplicationContext(cfg, registrar, [], "/tmp/godex.yaml");
 		const res = handlePaths(app);
 		const body = (await res.json()) as { session_db_path: string | null };

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+﻿import { describe, expect, test } from "bun:test";
 import { parseModelsConfig } from "./models";
 
 describe("parseModelsConfig", () => {
@@ -80,26 +80,35 @@ describe("parseModelsConfig", () => {
 	});
 });
 
-
 describe("parseModelsConfig enabled[]", () => {
 	test("expands enabled[] into aliases with provider/model keys", () => {
 		const out = parseModelsConfig(
 			{
 				enabled: [
 					{ provider: "zhipu", model: "glm-4" },
-					{ provider: "zhipu", model: "glm-5", context_window: 128000, max_tokens: 8192 },
+					{
+						provider: "zhipu",
+						model: "glm-5",
+						context_window: 128000,
+						max_tokens: 8192,
+					},
 				],
 			},
 			new Set(["zhipu"]),
 		);
 		expect(out).toBeDefined();
-		expect(out!.aliases).toEqual({
+		expect(out?.aliases).toEqual({
 			"zhipu/glm-4": "zhipu/glm-4",
 			"zhipu/glm-5": "zhipu/glm-5",
 		});
-		expect(out!.enabled).toEqual([
+		expect(out?.enabled).toEqual([
 			{ provider: "zhipu", model: "glm-4" },
-			{ provider: "zhipu", model: "glm-5", context_window: 128000, max_tokens: 8192 },
+			{
+				provider: "zhipu",
+				model: "glm-5",
+				context_window: 128000,
+				max_tokens: 8192,
+			},
 		]);
 	});
 
@@ -112,7 +121,7 @@ describe("parseModelsConfig enabled[]", () => {
 			new Set(["zhipu"]),
 		);
 		// 'myfast' is the explicit user alias; the auto-expanded "zhipu/glm-4" is also present
-		expect(out!.aliases).toEqual({
+		expect(out?.aliases).toEqual({
 			myfast: "zhipu/glm-4",
 			"zhipu/glm-4": "zhipu/glm-4",
 		});
@@ -131,7 +140,7 @@ describe("parseModelsConfig enabled[]", () => {
 			},
 			new Set(["zhipu"]),
 		);
-		expect(out!.enabled![0].capabilities).toEqual({
+		expect(out!.enabled![0]!.capabilities).toEqual({
 			text: true,
 			image_input: true,
 			tool_use: false,

@@ -1,4 +1,4 @@
-# dependencies (bun install)
+﻿# dependencies (bun install)
 node_modules
 
 # output
@@ -9,7 +9,7 @@ data
 *.tgz
 
 # platform binary outputs (package.json in these dirs IS tracked)
-platforms/*/bin/
+platforms/*/bin/**
 
 # postinstall symlink/copy target
 bin/godex-binary
@@ -52,7 +52,10 @@ docs/superpowers/specs/
 docs/superpowers/plans/
 .vitepress/cache/
 
-# Tauri studio build artifacts
+# Tauri app data (contains API keys and runtime data)
+.studio-data/
+
+
 studio-tauri/__build.log
 studio-tauri/__build.log.err
 studio-tauri/__build.ps1

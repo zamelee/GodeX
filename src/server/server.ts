@@ -5,9 +5,9 @@ import type { Logger } from "../logger";
 import { GODEX_VERSION } from "../version";
 import { jsonError } from "./errors";
 import { handleEnabledModels } from "./routes/enabled-models";
-import { handlePaths } from "./routes/paths";
 import { handleHealth } from "./routes/health";
 import { handleModels } from "./routes/models";
+import { handlePaths } from "./routes/paths";
 import { handleResponses } from "./routes/responses";
 
 export type RouteHandler = (req: Request) => Response | Promise<Response>;

@@ -1,10 +1,12 @@
-// Studio Hooks — Layer 3
+﻿// Studio Hooks — Layer 3
 //
 // Each hook is migrated from godex hardcode.
 // All hooks run async, chain in registration order, errors propagate.
 
 // ─── args.ts ────────────────────────────────────────────────────────────────
 // Hook B helpers: canonicalize tool call arguments.
+
+import type { ChatCompletionMessageParam } from "../../../src/protocol/openai/completions";
 
 const EMPTY_OBJECT = "{}";
 
@@ -41,8 +43,8 @@ export function isValidFunctionArguments(argumentsValue: string): boolean {
  * Only touches assistant messages with tool_calls.
  */
 export function canonicalizeMessageToolArguments(
-	messages: readonly { role: string; tool_calls?: readonly unknown[] }[],
-): typeof messages {
+	messages: readonly ChatCompletionMessageParam[],
+): ChatCompletionMessageParam[] {
 	return messages.map((message) => {
 		if (message.role !== "assistant") return message;
 		const calls = message.tool_calls;
@@ -50,16 +52,15 @@ export function canonicalizeMessageToolArguments(
 		return {
 			...message,
 			tool_calls: calls.map((call) => {
-				const c = call as { type?: string; function?: { arguments?: string } };
-				if (c.type !== undefined && c.type !== "function") return call;
+				if (call.type !== "function") return call;
 				return {
 					...call,
 					function: {
-						...c.function,
-						arguments: canonicalizeFunctionArguments(c.function?.arguments ?? ""),
+						...call.function!,
+						arguments: canonicalizeFunctionArguments(call.function?.arguments ?? ""),
 					},
 				};
 			}),
-		};
+		} as ChatCompletionMessageParam;
 	});
 }
