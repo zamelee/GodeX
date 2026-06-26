@@ -1,4 +1,4 @@
-// Studio Hooks — Layer 3
+﻿// Studio Hooks — Layer 3
 //
 // stream.ts
 // Hook C: transformStreamDelta
@@ -10,6 +10,8 @@
 //
 // MiniMax sometimes sends continuation chunks with id=null, name=null, and only
 // arguments carrying the new fragment. The bridge must never see null fields.
+import type { GodexPluginContext } from "../../../src/bridge/plugins";
+
 export interface ChatStreamToolCallDeltaLike {
 	readonly index?: number | null;
 	readonly id?: string | null;
@@ -39,19 +41,17 @@ function isPresent(value: unknown): boolean {
  * Filter null fields from a tool call delta.
  * MiniMax sends id=null, name=null in continuation chunks — we drop those.
  */
-function sanitizeToolCall(
-	call: ChatStreamToolCallDeltaLike,
-): ChatStreamToolCallDeltaLike {
-	const result: ChatStreamToolCallDeltaLike = {};
+function sanitizeToolCall(call: ChatStreamToolCallDeltaLike): ChatStreamToolCallDeltaLike {
+	const result: ChatStreamToolCallDeltaLike = {} as ChatStreamToolCallDeltaLike;
 
-	if (isPresent(call.index)) result.index = call.index as number;
-	if (isPresent(call.id)) result.id = call.id as string;
-	if (isPresent(call.type)) result.type = call.type as string;
+	if (isPresent(call.index)) (result as Record<string, unknown>).index = call.index as number;
+	if (isPresent(call.id)) (result as Record<string, unknown>).id = call.id as string;
+	if (isPresent(call.type)) (result as Record<string, unknown>).type = call.type as string;
 	if (call.function) {
 		const fn: { name?: string; arguments?: string } = {};
 		if (isPresent(call.function.name)) fn.name = call.function.name as string;
 		if (isPresent(call.function.arguments)) fn.arguments = call.function.arguments as string;
-		result.function = fn;
+		(result as Record<string, unknown>).function = fn;
 	}
 
 	return result;

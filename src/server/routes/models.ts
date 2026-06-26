@@ -1,5 +1,5 @@
+import { getModelMetadata, loadModelPresets } from "../../config/model-presets";
 import type { ApplicationContext } from "../../context/application-context";
-import { loadModelPresets, getModelMetadata } from "../../config/model-presets";
 
 interface ModelInfo {
 	slug: string;
@@ -65,9 +65,18 @@ export function handleModels(app: ApplicationContext): Response {
 				supports_image_detail_original: supportsImageDetail,
 				input_modalities,
 				supported_reasoning_levels: [
-					{ effort: "low", description: "Fast responses with lighter reasoning" },
-					{ effort: "medium", description: "Balances speed and reasoning depth" },
-					{ effort: "high", description: "Greater reasoning depth for complex problems" },
+					{
+						effort: "low",
+						description: "Fast responses with lighter reasoning",
+					},
+					{
+						effort: "medium",
+						description: "Balances speed and reasoning depth",
+					},
+					{
+						effort: "high",
+						description: "Greater reasoning depth for complex problems",
+					},
 				],
 				supported_in_api: true,
 			};

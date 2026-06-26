@@ -1,4 +1,4 @@
-// Studio Hooks — Layer 3
+﻿// Studio Hooks — Layer 3
 //
 // request.ts
 // Hook B: patchRequest
@@ -16,8 +16,8 @@ import type {
 	ChatCompletionCreateRequest,
 	ChatCompletionMessageParam,
 	ChatCompletionThinking,
-} from "../../../godex/src/protocol/openai/completions";
-import type { GodexPluginContext } from "../../../godex/src/bridge/plugins";
+} from "../../../src/protocol/openai/completions";
+import type { GodexPluginContext } from "../../../src/bridge/plugins";
 
 export interface MiniMaxRequest {
 	model?: string;
@@ -58,28 +58,17 @@ export async function patchRequest(
 ): Promise<ChatCompletionCreateRequest> {
 	if (ctx.provider !== "minimax") return request;
 
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-	const req = request as unknown as Record<string, unknown>;
+	// Build MiniMax request, dropping incompatible thinking field first
+	const { reasoning_effort, thinking, max_tokens, ...rest } = request;
 	const miniMax: MiniMaxRequest = {
-		...request,
-	};
-
-	// Remove reasoning_effort (OpenAI-only field)
-	delete miniMax.reasoning_effort;
-
-	// Set reasoning_split=true for MiniMax
-	miniMax.reasoning_split = true;
-
-	// Normalize thinking: "enabled" → "adaptive", "disabled" → "disabled"
-	if ("thinking" in req) {
-		const thinking = req.thinking as ChatCompletionThinking | undefined;
-		miniMax.thinking = normalizeMiniMaxThinking(thinking);
-	}
+		...rest,
+		reasoning_split: true,
+		thinking: normalizeMiniMaxThinking(thinking),
+	} as MiniMaxRequest;
 
 	// Convert max_tokens → max_completion_tokens
-	if (typeof request.max_tokens === "number") {
-		miniMax.max_completion_tokens = request.max_tokens;
-		delete miniMax.max_tokens;
+	if (typeof max_tokens === "number") {
+		miniMax.max_completion_tokens = max_tokens;
 	}
 
 	return miniMax as unknown as ChatCompletionCreateRequest;

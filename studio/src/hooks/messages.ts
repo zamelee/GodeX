@@ -1,4 +1,4 @@
-// Studio Hooks — Layer 3
+﻿// Studio Hooks — Layer 3
 //
 // messages.ts
 // Hook A: transformChatMessages
@@ -14,8 +14,8 @@ import type {
 	ChatCompletionAssistantMessageParam,
 	ChatCompletionCreateRequest,
 	ChatCompletionMessageParam,
-} from "../../../godex/src/protocol/openai/completions";
-import type { GodexPluginContext } from "../../../godex/src/bridge/plugins";
+} from "../../../src/protocol/openai/completions";
+import type { GodexPluginContext } from "../../../src/bridge/plugins";
 import {
 	canonicalizeFunctionArguments,
 	canonicalizeMessageToolArguments,
