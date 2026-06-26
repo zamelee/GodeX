@@ -269,7 +269,114 @@ pub struct PathChangeNotice {
     pub reason: &'static str,
 }
 
+/// Detected at startup: godex_config resolved to a path whose file did
+/// not exist. Studio may have created it for the user; UI surfaces the action.
+#[derive(serde::Serialize, Clone)]
+pub struct PathProvisionNotice {
+    pub path: String,
+    /// "copied_from_example" | "created_minimal" | "existed"
+    pub source: String,
+}
+
+/// Minimum-viable godex config used when no example file is available either.
+/// Memory session backend, no providers, server on 5678 — enough for the UI
+/// to open and let the user add a provider through the New Provider dialog.
+const MINIMAL_GODEX_CONFIG: &str = "server:\n  host: 0.0.0.0\n  port: 5678\n\ndefault_provider: minimax\n\nproviders: {}\n\nsession:\n  backend: memory\n\nlogging:\n  level: info\n\ntrace:\n  enabled: true\n\nmodels:\n  enabled: []\n";
+
+#[cfg(test)]
+mod provision_tests {
+    use super::*;
+    use std::fs;
+
+    fn fresh_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join("godex-studio-provision-tests").join(name);
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn returns_none_when_file_already_exists() {
+        let dir = fresh_dir("exists");
+        let target = dir.join("godex.yaml");
+        fs::write(&target, "server: { port: 5678 }\n").unwrap();
+        assert!(ensure_godex_config(&target).is_none());
+    }
+
+    #[test]
+    fn copies_sibling_example_when_present() {
+        let dir = fresh_dir("example");
+        fs::write(dir.join("godex.example.yaml"), "server:\n  port: 9999\n").unwrap();
+        let target = dir.join("godex.yaml");
+        let notice = ensure_godex_config(&target).expect("expected notice");
+        assert_eq!(notice.source, "copied_from_example");
+        assert_eq!(notice.path, target.display().to_string());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "server:\n  port: 9999\n");
+    }
+
+    #[test]
+    fn writes_minimal_yaml_when_no_example() {
+        let dir = fresh_dir("minimal");
+        let target = dir.join("subdir").join("godex.yaml");
+        let notice = ensure_godex_config(&target).expect("expected notice");
+        assert_eq!(notice.source, "created_minimal");
+        let written = fs::read_to_string(&target).unwrap();
+        assert!(written.contains("server:"));
+        assert!(written.contains("port: 5678"));
+        assert!(written.contains("backend: memory"));
+        assert!(!written.contains("REPLACE_ME"));
+    }
+
+    #[test]
+    fn prefers_example_over_minimal() {
+        // Both example and target slot exist; example should win.
+        let dir = fresh_dir("both");
+        fs::write(dir.join("godex.example.yaml"), "from: example\n").unwrap();
+        let target = dir.join("godex.yaml");
+        let notice = ensure_godex_config(&target).unwrap();
+        assert_eq!(notice.source, "copied_from_example");
+    }
+}
+
+/// Make sure the resolved godex_config exists on disk. If the resolved path's
+/// file is missing, try to:
+///   1. Copy a sibling `godex.example.yaml` next to it (portable case), or
+///   2. Write a minimal-viable yaml to it (fallback when no example exists).
+/// Returns a `PathProvisionNotice` describing what happened, or None if the
+/// file already existed (or could not be created at all).
+fn ensure_godex_config(resolved: &Path) -> Option<PathProvisionNotice> {
+    if resolved.exists() { return None; }
+    let parent = match resolved.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => return None,
+    };
+    if !parent.exists() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            crate::diag(&format!("[provision] create_dir_all({}) failed: {}", parent.display(), e));
+            return None;
+        }
+    }
+    let example = parent.join("godex.example.yaml");
+    if example.exists() {
+        if std::fs::copy(&example, resolved).is_ok() {
+            return Some(PathProvisionNotice {
+                path: resolved.display().to_string(),
+                source: "copied_from_example".to_string(),
+            });
+        }
+    }
+    if std::fs::write(resolved, MINIMAL_GODEX_CONFIG).is_ok() {
+        Some(PathProvisionNotice {
+            path: resolved.display().to_string(),
+            source: "created_minimal".to_string(),
+        })
+    } else {
+        None
+    }
+}
+
 /// Walk the same priority chain as `resolve_godex_config` and, if the
+
 /// persisted step was skipped because its target file vanished, return a
 /// notice describing the silent path switch.
 fn detect_path_change(
@@ -317,6 +424,7 @@ pub struct AppState {
     pub paths: Mutex<Paths>,
     pub godex: Arc<GodexSupervisor>,
     pub path_change_notice: Mutex<Option<PathChangeNotice>>,
+    pub path_provision_notice: Mutex<Option<PathProvisionNotice>>,
 }
 
 impl AppState {
@@ -324,6 +432,7 @@ impl AppState {
         let persisted = load_persisted_paths();
         let defaults = Paths::default_paths();
         let notice = detect_path_change(&defaults.godex_config, &persisted);
+        let provision = ensure_godex_config(&defaults.godex_config);
         let godex = Arc::new(GodexSupervisor::new());
         godex.set_paths(
             defaults.godex_config.clone(),
@@ -335,6 +444,7 @@ impl AppState {
             paths: Mutex::new(defaults),
             godex,
             path_change_notice: Mutex::new(notice),
+            path_provision_notice: Mutex::new(provision),
         }
     }
 }
