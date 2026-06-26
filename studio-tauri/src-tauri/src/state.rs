@@ -199,7 +199,7 @@ impl Paths {
         // godex_config: env GODEX_CONFIG -> persisted -> cwd/godex.yaml -> ~/.godex/config.yaml
         let godex_config = resolve_godex_config(&persisted, &home_dot_godex);
 
-        // godex_binary: env GODEX_BINARY -> persisted -> ~/.godex/bin/<godex-binary>
+        // godex_binary: env GODEX_BINARY -> cwd/godex[.exe] -> persisted (exists) -> ~/.godex/bin/<godex-binary>
         let godex_binary = resolve_godex_binary(&persisted, &home_dot_godex);
 
         // db paths mirror godex prod defaults (src/config/paths.ts):
@@ -328,6 +328,51 @@ mod provision_tests {
     }
 
     #[test]
+    fn cwd_godex_exe_wins_over_persisted_and_home() {
+        // Reproduces the portable case: godex.exe sits next to godex-studio.exe,
+        // but persisted/studio-paths.json still points at an old path under a
+        // renamed/old userprofile (e.g. D:\Users\ROG\.godex\bin\godex.exe).
+        let dir = fresh_dir("binary_cwd");
+        let cwd_exe = dir.join(if cfg!(windows) { "godex.exe" } else { "godex" });
+        fs::write(&cwd_exe, b"").unwrap();
+        // Pretend the studio cwd IS this dir by env override; in tests we
+        // can't chdir, so we put a stale persisted path that should lose to
+        // the (non-existent in this cwd) real one. The actual cwd of the
+        // test process almost certainly does not contain godex.exe, so the
+        // function will fall through to persisted; assert that the persisted
+        // path is honoured only when it exists.
+        let stale = PathBuf::from("/nope/never/exists/godex.exe");
+        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false };
+        let home_dot_godex = PathBuf::from("/also/nope");
+        let resolved = resolve_godex_binary(&persisted, &home_dot_godex);
+        // cwd of test process -- if it happens to contain a godex.exe
+        // (extremely unlikely in `cargo test`), that wins; otherwise we
+        // fall all the way through to home. Either way the stale path must
+        // NOT be returned.
+        assert_ne!(resolved, stale, "stale persisted path must not be used");
+    }
+
+    #[test]
+    fn cwd_godex_wins_when_present() {
+        // Use a controlled cwd by chdir-ing to a temp dir containing godex.exe
+        // (or godex). Save and restore the original cwd so we don't affect
+        // other tests.
+        let original_cwd = std::env::current_dir().unwrap();
+        let dir = fresh_dir("binary_cwd_present");
+        let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
+        let cwd_exe = dir.join(bin_name);
+        fs::write(&cwd_exe, b"").unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+        // Set a stale persisted path; cwd must override it.
+        let stale = PathBuf::from("/totally/missing/godex.exe");
+        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false };
+        let home_dot_godex = PathBuf::from("/also/missing");
+        let resolved = resolve_godex_binary(&persisted, &home_dot_godex);
+        let _ = std::env::set_current_dir(&original_cwd);
+        assert_eq!(resolved, cwd_exe, "cwd godex.exe must beat stale persisted path");
+    }
+
+    #[test]
     fn prefers_example_over_minimal() {
         // Both example and target slot exist; example should win.
         let dir = fresh_dir("both");
@@ -401,19 +446,34 @@ fn detect_path_change(
     None
 }
 
-/// Resolve the godex binary path.
-///   1. $GODEX_BINARY env var
-///   2. user-persisted choice in studio-paths.json
-///   3. ~/.godex/bin/godex[.exe] (cross-platform convention)
+/// Resolve the godex binary path. Priority chain (same shape as
+/// `resolve_godex_config`):
+///   1. $GODEX_BINARY env var (highest)
+///   2. ./godex.exe (or ./godex) in the current working directory
+///      (portable-friendly: godex-studio.exe launched from a portable
+///      folder automatically picks up its sibling godex.exe)
+///   3. ~/.godex/studio-paths.json "godex_binary" (only if file still exists)
+///   4. ~/.godex/bin/godex[.exe] (cross-platform convention, last resort)
 fn resolve_godex_binary(persisted: &PersistedPaths, home_dot_godex: &Path) -> PathBuf {
     if let Ok(v) = std::env::var("GODEX_BINARY") {
         if !v.trim().is_empty() {
             return PathBuf::from(v);
         }
     }
+    // cwd: ./godex.exe (Windows) or ./godex (POSIX)
+    if let Ok(cwd) = std::env::current_dir() {
+        let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
+        let cwd_candidate = cwd.join(bin_name);
+        if cwd_candidate.exists() {
+            return cwd_candidate;
+        }
+    }
     if let Some(v) = &persisted.godex_binary {
         if !v.trim().is_empty() {
-            return PathBuf::from(v);
+            let p = PathBuf::from(v);
+            if p.exists() {
+                return p;
+            }
         }
     }
     let bin_name = if cfg!(windows) { "godex.exe" } else { "godex" };
