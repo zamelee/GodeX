@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "build": {
     "frontendDist": "../src",
-    "devUrl": "http://localhost:1420"
+    "devUrl": null
   },
   "bundle": {
     "active": true,
@@ -14,8 +14,10 @@
     "windows": {}
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "模型能力探测",
         "width": 900,
         "height": 750,
@@ -24,6 +26,9 @@
         "minWidth": 800,
         "minHeight": 600
       }
-    ]
+    ],
+    "security": {
+      "csp": null
+    }
   }
 }
