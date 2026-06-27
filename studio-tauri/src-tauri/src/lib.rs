@@ -155,6 +155,10 @@ pub fn run() {
             commands::write_codex_model_context,
             commands::read_codex_model_context,
             commands::open_in_editor,
+            commands::set_replica_mode,
+            commands::get_replica_status,
+            commands::start_godex_replica,
+            commands::kill_godex_replica,
         ])
         .run(tauri::generate_context!());
 

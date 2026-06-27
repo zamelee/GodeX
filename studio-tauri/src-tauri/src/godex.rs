@@ -4,6 +4,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
@@ -60,6 +61,9 @@ pub struct GodexSupervisor {
     binary: Mutex<Option<PathBuf>>,
     port: Mutex<Option<u16>>,
     external_mode: Mutex<bool>,
+    replica_mode: Mutex<bool>,
+    replica_binary: Mutex<Option<PathBuf>>,
+    replica_pid: Mutex<Option<u32>>,
 }
 
 impl GodexSupervisor {
@@ -71,6 +75,9 @@ impl GodexSupervisor {
             binary: Mutex::new(None),
             port: Mutex::new(None),
             external_mode: Mutex::new(false),
+            replica_mode: Mutex::new(false),
+            replica_binary: Mutex::new(None),
+            replica_pid: Mutex::new(None),
         }
     }
 
@@ -113,6 +120,116 @@ impl GodexSupervisor {
             let _ = child.kill();
             let _ = child.wait();
         }
+    }
+
+    pub fn set_replica_mode(&self, enabled: bool) {
+        *self.replica_mode.lock() = enabled;
+    }
+
+    pub fn is_replica_mode(&self) -> bool {
+        *self.replica_mode.lock()
+    }
+
+    pub fn get_replica_binary(&self) -> Option<PathBuf> {
+        self.replica_binary.lock().clone()
+    }
+
+    /// Compute the replica path: {original_dir}/{original_name}-{date}-temp-copy.exe
+    fn compute_replica_path(original: &Path) -> Option<PathBuf> {
+        let parent = original.parent()?;
+        let stem = original.file_stem()?.to_str()?;
+        let ext = original.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let date = chrono::Utc::now().format("%Y-%m-%d");
+        let name = if ext.is_empty() {
+            format!("{}-{:?}-temp-copy", stem, date)
+        } else {
+            format!("{}-{:?}-temp-copy.{}", stem, date, ext)
+        };
+        Some(parent.join(name))
+    }
+
+    /// Check if replica exists and matches the original's MD5
+    fn is_replica_fresh(replica: &Path, original: &Path) -> Option<bool> {
+        use std::fs::File;
+        use std::io::{BufReader, Read};
+
+        fn md5_of(path: &Path) -> Option<String> {
+            let file = File::open(path).ok()?;
+            let mut reader = BufReader::new(file);
+            let mut ctx = md5::Context::new();
+            let mut buf = [0u8; 8192];
+            loop {
+                let n = reader.read(&mut buf).ok()?;
+                if n == 0 { break; }
+                ctx.consume(&buf[..n]);
+            }
+            Some(format!("{:x}", ctx.compute()))
+        }
+
+        let orig_md5 = md5_of(original)?;
+        let repl_md5 = md5_of(replica)?;
+        Some(orig_md5 == repl_md5)
+    }
+
+    /// Ensure replica exists and is fresh, then start it.
+    /// Returns (replica_pid, replica_path).
+    pub fn ensure_and_start_replica(&self, app: &AppHandle) -> Result<(u32, PathBuf), String> {
+        let original = self.binary.lock().clone()
+            .ok_or("binary not set")?;
+        let config = self.config.lock().clone()
+            .ok_or("config not set")?;
+
+        let replica_path = Self::compute_replica_path(&original)
+            .ok_or("cannot compute replica path")?;
+
+        // Kill existing replica if running
+        self.kill_replica();
+
+        // Copy if needed
+        if !replica_path.exists() || Self::is_replica_fresh(&replica_path, &original) != Some(true) {
+            self.push_and_emit(app, LogLine::studio(format!(
+                "[replica] copying {} -> {}",
+                original.display(), replica_path.display()
+            )));
+            std::fs::copy(&original, &replica_path)
+                .map_err(|e| format!("copy failed: {}", e))?;
+        }
+
+        let port = self.port.lock().unwrap_or_else(|| crate::state::read_port_from_config(&config));
+        let port_arg = format!("--port={}", port);
+
+        let child = std::process::Command::new(&replica_path)
+            .arg("--config")
+            .arg(&config)
+            .arg(&port_arg)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("spawn replica failed: {}", e))?;
+
+        let pid = child.id();
+        *self.replica_pid.lock() = Some(pid);
+        *self.replica_binary.lock() = Some(replica_path.clone());
+
+        self.push_and_emit(app, LogLine::studio(format!(
+            "[replica] started pid={} at {}", pid, replica_path.display()
+        )));
+
+        Ok((pid, replica_path))
+    }
+
+    pub fn kill_replica(&self) {
+        if let Some(pid) = self.replica_pid.lock().take() {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .output();
+        }
+        *self.replica_binary.lock() = None;
+    }
+
+    pub fn replica_pid(&self) -> Option<u32> {
+        *self.replica_pid.lock()
     }
 
     /// Fire-and-forget start. Returns immediately; actual work runs in a background
