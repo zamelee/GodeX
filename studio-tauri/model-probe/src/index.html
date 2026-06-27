@@ -128,14 +128,12 @@ td.error { color: var(--fail); font-size: 10px; }
         <label class="check-item" id="chk-reasoning"><input type="checkbox" onchange="renderTable()"/>推理模式</label>
       </div>
       <div class="row" style="margin-top:8px">
-        <span class="label">余量:</span>
-        <input type="range" id="margin-slider" min="0" max="100" value="95" style="width:100px" oninput="updateMarginLabel()"/>
-        <span id="margin-label" style="font-size:11px;color:var(--text2);min-width:32px">95%</span>
-        <span class="label" style="margin-left:20px">API:</span>
+        <span class="label">API:</span>
         <select id="api-format">
           <option value="chat_completions">Chat Completions (默认)</option>
           <option value="responses_api">Responses API</option>
         </select>
+        <span class="label" style="margin-left:20px;color:var(--text2)" title="余量在 Studio 主界面模型列表中调整；探测窗口只测真实能力，不再覆盖">探测 → 余量: Studio 设置</span>
       </div>
     </div>
   </div>
@@ -296,10 +294,6 @@ function getCols() {
 
 function checked(id) { return document.getElementById(id).querySelector("input").checked; }
 
-function updateMarginLabel() {
-  document.getElementById("margin-label").textContent = document.getElementById("margin-slider").value + "%";
-}
-
 // === Table ===
 function renderTable() {
   const cols = getCols();
@@ -343,7 +337,8 @@ async function startProbe() {
   document.getElementById("btn-stop").style.display = "inline-block";
   document.getElementById("btn-save").disabled = true;
   
-  const margin = parseInt(document.getElementById("margin-slider").value) / 100;
+  // Margin is read from godex.yaml in the Rust backend (read_margin_from_yaml);
+  // the probe window no longer owns it.
   const apiFormat = document.getElementById("api-format").value;
   const baseUrl = prov.base_url || `${API_BASE}/v1`;
   const models = Array.from(selectedModels);
