@@ -341,8 +341,8 @@ fn upsert_probe_comments(lines: &mut Vec<String>, ctx_idx: usize, raw: u64) {
     let mut insert_at = ctx_idx + 1;
     for desired in [&raw_line, &at_line, &method_line] {
         let mut existing: Option<usize> = None;
-        for k in insert_at..lines.len().min(insert_at + 8) {
-            let t = lines[k].trim_start();
+        for (k, line) in lines.iter().enumerate().skip(insert_at).take(8) {
+            let t = line.trim_start();
             if t == desired.trim_start() { existing = Some(k); break; }
             if !t.is_empty() && !t.starts_with("#")
                 && !t.starts_with("context_window") && !t.starts_with("max_tokens") { break; }
