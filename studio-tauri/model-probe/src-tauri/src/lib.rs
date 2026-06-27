@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::fs;
 use std::net::TcpStream;
 use std::path::PathBuf;
@@ -217,11 +218,34 @@ fn get_godex_url() -> String {
     std::env::var("GODEX_URL").unwrap_or_else(|_| "http://localhost:5678".to_string())
 }
 
+static CLI_CONFIG_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Parse --config=<path> (or --config <path>) from std::env::args().
+/// Stored in CLI_CONFIG_PATH for run() to read.
+pub fn parse_cli_args() {
+    let args: Vec<String> = std::env::args().collect();
+    let mut config_path: Option<PathBuf> = None;
+    let mut i = 1;
+    while i < args.len() {
+        let arg = &args[i];
+        if let Some(rest) = arg.strip_prefix("--config=") {
+            config_path = Some(PathBuf::from(rest));
+        } else if arg == "--config" {
+            if i + 1 < args.len() {
+                config_path = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
+        }
+        i += 1;
+    }
+    let _ = CLI_CONFIG_PATH.set(config_path);
+}
+
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    
+
     let state = AppState {
-        config_path: Mutex::new(None),
+        config_path: Mutex::new(CLI_CONFIG_PATH.get().cloned().unwrap_or(None).filter(|p| p.exists())),
     };
     
     tauri::Builder::default()
@@ -235,7 +259,16 @@ pub fn run() {
             get_godex_url,
         ])
         .setup(|app| {
-            // Try to auto-load default godex.yaml
+            // 1) If --config was provided and the file exists, use it.
+            if let Some(Some(cli_path)) = CLI_CONFIG_PATH.get().map(|p| p.as_ref()) {
+                if cli_path.exists() {
+                    if let Some(s) = app.try_state::<AppState>() {
+                        *s.config_path.lock().unwrap() = Some(cli_path.clone());
+                    }
+                    return Ok(());
+                }
+            }
+            // 2) Fall back: USERPROFILE/.godex/config.yaml
             if let Ok(home) = std::env::var("USERPROFILE") {
                 let p = PathBuf::from(&home).join(".godex").join("config.yaml");
                 if p.exists() {
@@ -245,6 +278,7 @@ pub fn run() {
                     return Ok(());
                 }
             }
+            // 3) Fall back: cwd/godex.yaml
             if let Ok(cwd) = std::env::current_dir() {
                 let p = cwd.join("godex.yaml");
                 if p.exists() {
