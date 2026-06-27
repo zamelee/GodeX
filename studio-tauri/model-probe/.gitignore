@@ -1,0 +1,3 @@
+# Build outputs
+src-tauri/target/
+src-tauri/Cargo.lock
