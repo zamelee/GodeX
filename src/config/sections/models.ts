@@ -68,12 +68,14 @@ function parseEnabledModels(
 		}
 		const contextWindow = numberOrUndefined(obj.context_window);
 		const maxTokens = numberOrUndefined(obj.max_tokens);
+		const margin = numberOrUndefined(obj.margin);
 		const multimodal = boolOrUndefined(obj.multimodal);
 		const capabilities = parseCapabilities(obj.capabilities);
 		const note = typeof obj.note === "string" ? obj.note : undefined;
 		const entry: EnabledModel = { provider, model };
 		if (contextWindow !== undefined) entry.context_window = contextWindow;
 		if (maxTokens !== undefined) entry.max_tokens = maxTokens;
+		if (margin !== undefined) entry.margin = margin;
 		if (multimodal !== undefined) entry.multimodal = multimodal;
 		if (capabilities) entry.capabilities = capabilities;
 		if (note !== undefined) entry.note = note;
