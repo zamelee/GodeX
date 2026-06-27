@@ -123,8 +123,8 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .log-sash:hover::before,.log-sash.dragging::before{background:var(--blue)}
 .model-toolbar{padding:8px 12px;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(48,54,61,.5);flex-wrap:wrap}
 .model-toolbar input[type=text]{flex:1;min-width:120px}
-.model-list{padding:0}
-.model-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px}
+.model-list{padding:0;contain:strict}
+.model-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px;contain:layout style}
 .model-row:hover{background:rgba(255,255,255,.02)}
 .model-row .name{font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .model-row .name .src{font-size:9px;color:var(--text2);background:var(--bg3);padding:1px 4px;border-radius:3px}
@@ -969,7 +969,7 @@ function toggleModel(modelId) {
   if (enIdx >= 0) {
     const [removed] = enabled.splice(enIdx, 1);
     discovered.push(removed);
-    renderModels();
+    scheduleRender();
     return;
   }
   // 在 discovered 找
@@ -977,16 +977,16 @@ function toggleModel(modelId) {
   if (disIdx >= 0) {
     const [removed] = discovered.splice(disIdx, 1);
     enabled.push(removed);
-    renderModels();
+    scheduleRender();
     return;
   }
 }
 
 function removeModel(modelId) {
   const enIdx = enabled.findIndex((e) => e.model === modelId);
-  if (enIdx >= 0) { enabled.splice(enIdx, 1); renderModels(); return; }
+  if (enIdx >= 0) { enabled.splice(enIdx, 1); scheduleRender(); return; }
   const disIdx = discovered.findIndex((d) => d.model === modelId);
-  if (disIdx >= 0) { discovered.splice(disIdx, 1); renderModels(); return; }
+  if (disIdx >= 0) { discovered.splice(disIdx, 1); scheduleRender(); return; }
 }
 
 function setModelCap(modelId, cap, val) {
@@ -994,7 +994,7 @@ function setModelCap(modelId, cap, val) {
   if (!row) return;
   if (!row.capabilities) row.capabilities = {};
   row.capabilities[cap] = !!val;
-  renderModels();
+  scheduleRender();
 }
 
 function setModelParam(modelId, key, val) {
@@ -1007,7 +1007,15 @@ function setModelParam(modelId, key, val) {
     if (!Number.isFinite(n)) { delete row[key]; }
     else row[key] = n;
   }
-  renderModels();
+  scheduleRender();
+}
+let _renderTimer = null;
+function scheduleRender() {
+  if (_renderTimer) return;
+  _renderTimer = requestAnimationFrame(() => {
+    _renderTimer = null;
+    renderModels();
+  });
 }
 function renderModels() {
   const list = $("model-list");
