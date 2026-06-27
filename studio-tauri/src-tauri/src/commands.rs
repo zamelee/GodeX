@@ -589,6 +589,16 @@ pub fn set_external_mode(state: State<'_, AppState>, external_mode: bool) -> Res
     Ok(())
 }
 
+#[tauri::command]
+pub fn open_in_editor(path: String) -> Result<(), String> {
+    crate::diag(&format!("[cmd] open_in_editor {}", path));
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path])
+        .spawn()
+        .map_err(|e| format!("failed to open: {}", e))?;
+    Ok(())
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn tail_trace_logs(state: State<'_, AppState>, limit: Option<usize>, from_id: Option<i64>) -> Vec<crate::godex::TraceLogLine> {
     crate::diag(&format!("[cmd] tail_trace_logs limit={:?} from_id={:?}", limit, from_id));
