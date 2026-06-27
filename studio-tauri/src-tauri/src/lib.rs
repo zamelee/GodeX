@@ -148,6 +148,7 @@ pub fn run() {
             commands::find_free_port,
             commands::reset_paths,
             commands::set_external_mode,
+            commands::set_godex_mode,
             commands::tail_trace_logs,
             commands::godex_external_start,
             commands::load_model_presets,
