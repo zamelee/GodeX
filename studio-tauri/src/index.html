@@ -362,7 +362,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
     </div>
-    <div class="row" id="replica-section" style="display:none">
+    <div class="row" id="replica-section">
       <label>
         <input type="checkbox" id="set-replica-mode" onchange="onReplicaModeChange()"/>
         GodeX 副本运行
@@ -1031,7 +1031,7 @@ function renderModels() {
     $("model-stats").textContent = "";
     return;
   }
-  const filtered = filter ? rows.filter((r) => r.m.model.toLowerCase().includes(filter)) : allRows;
+  const filtered = filter ? allRows.filter((r) => r.m.model.toLowerCase().includes(filter)) : allRows;
   if (!filtered.length) {
     list.innerHTML = '<div class="empty">无匹配 "' + esc(filter) + '"</div>';
     $("enabled-count").textContent = enabled.length + " 个已选 / " + discovered.length + " 个已禁用";
@@ -1434,10 +1434,8 @@ async function resetSettings() {
 async function loadReplicaStatus() {
   try {
     const s = await invoke("get_replica_status");
-    $("set-replica-mode").checked = s.enabled;
-    const section = $("replica-section");
-    section.style.display = s.enabled ? "block" : "none";
-    if (s.replica_path) $("set-replica-path").textContent = s.replica_path;
+    $('set-replica-mode').checked = s.enabled;
+    if (s.replica_path) $('set-replica-path').textContent = s.replica_path;
     $("set-replica-pid").textContent = s.pid ?? "---";
     if (s.running) {
       $("btn-start-replica").style.display = "none";
