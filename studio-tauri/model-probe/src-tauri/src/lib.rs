@@ -144,7 +144,7 @@ fn save_probe_results(state: State<'_, AppState>, results: Vec<ProbeResult>) -> 
     let config_path = state.config_path.lock().unwrap().clone().ok_or("config path not set")?;
     let raw = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
     let mut lines: Vec<String> = raw.lines().map(String::from).collect();
-    let margin = 0.95f64;
+    let margin = read_margin_from_yaml(&raw).unwrap_or(0.95);
     
     for result in &results {
         let model_name = &result.model;
@@ -257,4 +257,24 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+
+/// Read first margin: value found in models.enabled[*].margin section.
+/// Returns None if the key is absent or unparseable.
+fn read_margin_from_yaml(raw: &str) -> Option<f64> {
+    let mut in_models = false;
+    let mut in_enabled = false;
+    for line in raw.lines() {
+        let trimmed = line.trim_start();
+        if trimmed == "models:" { in_models = true; continue; }
+        if in_models && trimmed.starts_with("enabled:") { in_enabled = true; continue; }
+        if in_models && !in_enabled && !trimmed.is_empty() && !trimmed.starts_with(" ") && !trimmed.starts_with("	") { break; }
+        if in_models && in_enabled {
+            if let Some(rest) = trimmed.strip_prefix("margin:") {
+                return rest.trim().parse().ok();
+            }
+        }
+    }
+    None
 }

@@ -46,10 +46,9 @@ export function handleModels(app: ApplicationContext): Response {
 			const ctxWindow = metadata.context_window ?? 0;
 			const maxTokens = metadata.max_tokens ?? 0;
 			// Look up margin from godex.yaml models.enabled (margin defaults to 0.95)
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const margin = (app.config.models?.enabled as any)?.find(
-				(m: { model: string; margin?: number }) => m.model.toLowerCase() === entry.alias.toLowerCase(),
-			)?.margin ?? 0.95;
+			const margin = (app.config.models?.enabled ?? [])
+				.find(m => m.model.toLowerCase() === entry.alias.toLowerCase())
+				?.margin ?? 0.95;
 			const effectiveCtxWindow = Math.floor(ctxWindow * margin);
 			const effectiveMaxTokens = Math.floor(maxTokens * margin);
 			const compactLimit = Math.max(effectiveCtxWindow - effectiveMaxTokens, 0);

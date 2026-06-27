@@ -147,6 +147,22 @@ describe("parseModelsConfig enabled[]", () => {
 		});
 	});
 
+
+	test("accepts margin on enabled items", () => {
+		const out = parseModelsConfig(
+			{
+				enabled: [
+					{
+						provider: "zhipu",
+						model: "glm-4v",
+						margin: 0.8,
+					},
+				],
+			},
+			new Set(["zhipu"]),
+		);
+		expect(out!.enabled![0]!.margin).toBe(0.8);
+	});
 	test("rejects enabled entry with unknown provider", () => {
 		expect(() =>
 			parseModelsConfig(
