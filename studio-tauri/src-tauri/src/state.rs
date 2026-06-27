@@ -20,6 +20,8 @@ pub struct PersistedPaths {
     pub godex_binary: Option<String>,
     #[serde(default)]
     pub external_mode: bool,
+    #[serde(default)]
+    pub replica_mode: bool,
 }
 
 pub fn load_persisted_paths() -> PersistedPaths {
@@ -342,7 +344,7 @@ mod provision_tests {
         // function will fall through to persisted; assert that the persisted
         // path is honoured only when it exists.
         let stale = PathBuf::from("/nope/never/exists/godex.exe");
-        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false };
+        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false, replica_mode: false };
         let home_dot_godex = PathBuf::from("/also/nope");
         let resolved = resolve_godex_binary(&persisted, &home_dot_godex);
         // cwd of test process -- if it happens to contain a godex.exe
@@ -365,7 +367,7 @@ mod provision_tests {
         std::env::set_current_dir(&dir).unwrap();
         // Set a stale persisted path; cwd must override it.
         let stale = PathBuf::from("/totally/missing/godex.exe");
-        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false };
+        let persisted = PersistedPaths { godex_config: None, godex_binary: Some(stale.display().to_string()), external_mode: false, replica_mode: false };
         let home_dot_godex = PathBuf::from("/also/missing");
         let resolved = resolve_godex_binary(&persisted, &home_dot_godex);
         let _ = std::env::set_current_dir(&original_cwd);

@@ -361,6 +361,19 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
     </div>
+    <div class="row" id="replica-section" style="display:none">
+      <label>
+        <input type="checkbox" id="set-replica-mode" onchange="onReplicaModeChange()"/>
+        GodeX 副本运行
+      </label>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px">
+        <div>副本路径: <code id="set-replica-path" style="word-break:break-all">—</code></div>
+        <div>PID: <span id="set-replica-pid">—</span></div>
+        <div id="replica-status" style="margin-top:4px"></div>
+        <button class="btn gray small" onclick="startReplica()" id="btn-start-replica" style="margin-top:6px">启动副本</button>
+        <button class="btn gray small" onclick="killReplica()" id="btn-kill-replica" style="margin-top:6px;display:none">停止副本</button>
+      </div>
+    </div>
     <div class="row">
       <label>数据库路径 <span style="color:var(--text2)">(只读，跟随 <code>~/.godex/data/</code>)</span></label>
       <div style="font-size:11px;color:var(--text2);line-height:1.5">
@@ -1284,6 +1297,7 @@ async function openSettingsModal() {
       $("set-hint").style.color = "var(--blue)";
     }
     $("settings-modal").style.display = "flex";
+    loadReplicaStatus();
   } catch (e) {
     showMsg("读取路径失败: " + e, "err");
   }
@@ -1340,6 +1354,54 @@ async function resetSettings() {
   } catch (e) {
     showMsg("恢复失败: " + e, "err");
   }
+}
+
+async function loadReplicaStatus() {
+  try {
+    const s = await invoke("get_replica_status");
+    $("set-replica-mode").checked = s.enabled;
+    const section = $("replica-section");
+    section.style.display = s.enabled ? "block" : "none";
+    if (s.replica_path) $("set-replica-path").textContent = s.replica_path;
+    $("set-replica-pid").textContent = s.pid ?? "---";
+    if (s.running) {
+      $("btn-start-replica").style.display = "none";
+      $("btn-kill-replica").style.display = "inline-block";
+      $("replica-status").innerHTML = '<span style="color:var(--green)">运行中</span>';
+    } else {
+      $("btn-start-replica").style.display = "inline-block";
+      $("btn-kill-replica").style.display = "none";
+      $("replica-status").innerHTML = '<span style="color:var(--text2)">未运行</span>';
+    }
+  } catch(e) { console.warn("replica status:", e); }
+}
+
+async function onReplicaModeChange() {
+  const enabled = $("set-replica-mode").checked;
+  try {
+    await invoke("set_replica_mode", { enabled });
+    await loadReplicaStatus();
+  } catch(e) { showMsg("设置失败: " + e, "err"); }
+}
+
+async function startReplica() {
+  $("btn-start-replica").disabled = true;
+  $("replica-status").innerHTML = '<span style="color:var(--yellow)">启动中...</span>';
+  try {
+    await invoke("start_godex_replica");
+    await loadReplicaStatus();
+  } catch(e) {
+    showMsg("启动副本失败: " + e, "err");
+    $("replica-status").innerHTML = '<span style="color:var(--red)">启动失败</span>';
+    $("btn-start-replica").disabled = false;
+  }
+}
+
+async function killReplica() {
+  try {
+    await invoke("kill_godex_replica");
+    await loadReplicaStatus();
+  } catch(e) { showMsg("停止失败: " + e, "err"); }
 }
 
 // --- Port helpers ---

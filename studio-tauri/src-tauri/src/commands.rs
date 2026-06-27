@@ -140,6 +140,7 @@ pub fn set_config_paths(state: State<'_, AppState>, godex_config: String, godex_
             godex_config: Some(godex_config.clone()),
             godex_binary: Some(godex_binary.clone()),
             external_mode: state.godex.is_external_mode(),
+            replica_mode: state.godex.is_replica_mode(),
         };
         if let Err(e) = crate::state::save_persisted_paths(&persisted) {
             crate::diag(&format!("[cmd] set_config_paths persist failed: {}", e));
@@ -549,12 +550,12 @@ pub fn set_external_mode(state: State<'_, AppState>, external_mode: bool) -> Res
     let t0 = Utc::now().timestamp_millis();
     crate::diag(&format!("[cmd] set_external_mode={} t0={}", external_mode, t0));
 
-    // Snapshot paths under the lock, then drop it before any disk I/O so
+    // Snapshot paths and replica_mode under the lock, then drop it before any disk I/O so
     // a slow `std::fs::write` (e.g. while external godex.exe holds a handle
     // on `%USERPROFILE%\.godex\`) cannot freeze the Tauri IPC thread.
-    let (config_str, binary_str) = {
+    let (config_str, binary_str, replica_mode_val) = {
         let p = state.paths.lock();
-        (p.godex_config.display().to_string(), p.godex_binary.display().to_string())
+        (p.godex_config.display().to_string(), p.godex_binary.display().to_string(), state.godex.is_replica_mode())
     };
 
     // Persist + supervisor flag update happen on a worker thread; we wait
@@ -567,6 +568,7 @@ pub fn set_external_mode(state: State<'_, AppState>, external_mode: bool) -> Res
             godex_config: Some(config_str),
             godex_binary: Some(binary_str),
             external_mode,
+            replica_mode: replica_mode_val,
         };
         if let Err(e) = crate::state::save_persisted_paths(&persisted) {
             let _ = tx.send(Err(format!("persist failed: {}", e)));
@@ -596,6 +598,59 @@ pub fn open_in_editor(path: String) -> Result<(), String> {
         .args(["/C", "start", "", &path])
         .spawn()
         .map_err(|e| format!("failed to open: {}", e))?;
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct ReplicaStatus {
+    pub enabled: bool,
+    pub running: bool,
+    pub pid: Option<u32>,
+    pub replica_path: Option<String>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn set_replica_mode(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    crate::diag(&format!("[cmd] set_replica_mode {}", enabled));
+    state.godex.set_replica_mode(enabled);
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_replica_status(state: State<'_, AppState>) -> ReplicaStatus {
+    crate::diag("[cmd] get_replica_status");
+    let godex = &state.godex;
+    let enabled = godex.is_replica_mode();
+    let pid = godex.replica_pid();
+    let replica_path = godex.get_replica_binary().map(|p| p.display().to_string());
+    ReplicaStatus {
+        enabled,
+        running: pid.is_some(),
+        pid,
+        replica_path,
+    }
+}
+
+#[tauri::command]
+pub fn start_godex_replica(state: State<'_, AppState>, app: AppHandle) -> Result<ReplicaStatus, String> {
+    crate::diag("[cmd] start_godex_replica");
+    if !state.godex.is_replica_mode() {
+        return Err("replica mode not enabled".to_string());
+    }
+    let (pid, path) = state.godex.ensure_and_start_replica(&app)
+        .map_err(|e| e)?;
+    Ok(ReplicaStatus {
+        enabled: true,
+        running: true,
+        pid: Some(pid),
+        replica_path: Some(path.display().to_string()),
+    })
+}
+
+#[tauri::command]
+pub fn kill_godex_replica(state: State<'_, AppState>) -> Result<(), String> {
+    crate::diag("[cmd] kill_godex_replica");
+    state.godex.kill_replica();
     Ok(())
 }
 
