@@ -307,3 +307,139 @@ studio-tauri/model-probe/
 | MiniMax-M2.7-highspeed | 204,800 | 266,240 | 131,072 | 196,608 |
 
 （已更新到 godex.yaml，当前 working directory 状态）
+
+
+---
+
+## 二、本轮讨论确认结论（2026-06-27 14:00-15:00，第二轮）
+
+### A. ⚠️ 关键 BUG：margin 字段在 godex 端被静默丢弃
+
+**症状**：用户在 Studio 把 margin 改成 80%，godex 端 /v1/models 仍按 0.95 算 effective 值。
+
+**根因链**：
+1. ✅ Studio src/index.html:1073 stripUndef 正确写出 out.margin
+2. ✅ Studio src-tauri/src/config.rs save_enabled_models 正确写 yaml（margin: 0.80）
+3. ❌ godex 端 src/config/schema.ts:33 EnabledModel 接口**没有** margin 字段
+4. ❌ godex 端 src/config/sections/models.ts parseEnabledModels **没有读** obj.margin
+5. ❌ godex 端 src/server/routes/models.ts:54 用 s any 强行读 .margin，运行时永远 undefined，永远 fallback 0.95
+
+**修复**（3 个文件）：
+- src/config/schema.ts — EnabledModel 加 margin?: number
+- src/config/sections/models.ts — parseEnabledModels 加 const margin = numberOrUndefined(obj.margin); if (margin !== undefined) entry.margin = margin;
+- src/server/routes/models.ts — 删 s any、清理类型断言
+- studio-tauri/model-probe/src-tauri/src/lib.rs:140 — let margin = 0.95f64; 改为读 yaml 里的 margin，没有再 0.95
+
+**风险**：低；需重启 godex 验证 effective 值变化。
+
+### B. model-probe 的 --config=<path> 参数没生效
+
+**根因**：model-probe/src-tauri/src/lib.rs:240 的 setup() 硬编码扫 USERPROFILE/.godex/config.yaml 和 cwd/godex.yaml，**没有读** std::env::args()，所以 studio 传的 --config= 被无视。
+
+**修复**：
+1. main.rs 在调 un() 前 parse_args() 拿到 --config=<path>，存 OnceLock<PathBuf>
+2. un() 把 OnceLock 里的路径作为 config_path 初值塞进 AppState
+3. setup() 降级为兜底（仅在显式路径不存在时扫 USERPROFILE/cwd）
+4. 前端 UI 的"Config 路径"输入框继续保留，作运行时修改入口
+
+### C. 探测窗口职责分离（去掉余量控件）
+
+**决定**：探测窗口内**完全删除**余量滑块。原因：
+- 探测语义 = 测出"模型真实上限"（原始字节数）
+- 余量是消费侧（godex.yaml → /v1/responses）的事
+- raw 值已经通过 yaml 注释行（见 D）持久化
+- 余量调整在 Studio 主界面单点控制
+
+**改动**：model-probe/src/index.html 删掉"余量" slider 行和 label。
+
+### D. raw 探测值的持久化方式（"或"——只做 yaml 注释行）
+
+**方案**：model-probe 写 yaml 时在 context_window 行**紧跟其后**插入三行注释：
+`yaml
+- provider: minimax
+  model: MiniMax-M3
+  context_window: 1235000
+  # probe_raw: 1300000
+  # probed_at: 2026-06-27T14:00:00Z
+  # probe_method: chat_completions
+  margin: 0.95
+`
+
+**优势**：
+- js-yaml 默认丢弃注释，godex 完全无感知
+- Studio 扫 # probe_raw: 行就能 UI 展示"raw 1.3M / 探测于 14:00"
+- git diff 友好，raw 值跨提交历史可追溯
+- 与 	ools/logs/probe-*.jsonl 是"或"关系（已有历史日志，不动）
+
+**兼容矩阵**（yaml 各种状态）：
+
+| yaml 状态 | godex | Studio | model-probe |
+|----------|-------|--------|-------------|
+| 裸 yaml（裸 provider/model） | ✅ | ✅ | ✅ |
+| + context_window | ✅ | ✅ | ✅ |
+| + margin | ✅（修后） | ✅ | ✅ |
+| + # probe_raw 注释 | ✅（js-yaml 忽略） | ✅ 显示 raw | ✅ |
+| 删了 # probe_raw | ✅ | ⚠️ 显示"未探测" | ✅ |
+
+### E. 已启用模型行的字段决策
+
+**保留**：上下文、输出上限、余量、capabilities、reasoning
+**不要**：temperature、top_p、tool_choice、pricing（这些会让 Studio 与 Codex 默认值冲突，适得其反；计费/预估也不做）
+
+**关于 reasoning**：上一轮讨论中提到，本轮确认加入；具体三态为 
+one / nabled / max，UI 用下拉切换。
+
+### F. 上下中布局 sasha 修复（保留调试边框）
+
+**根因**：#fs-provider { flex: 0 0 auto } 高度由内容决定，无法被 inline style 强压。
+**修复**（保留调试边框/背景）：
+`css
+#fs-provider{ flex:0 0 auto; min-height:0; overflow:hidden; border:1px solid red; background:rgba(255,0,0,.05) }
+#fs-models{ flex:1 1 0; min-height:0; margin-bottom:0; border:1px solid lime; background:rgba(0,255,0,.05) }
+`
+**Sash 配置**：minBefore: 100, minAfter: 100, mode: "pct"（保留响应式缩放）
+
+**调试边框/背景**：保留不动（开发期排错依赖）。
+
+### G. 输入卡顿 + 渲染优化
+
+**根因**：oninput 触发 setModelParam → enderModels() 整表 innerHTML 重写，输入框被销毁重建。
+
+**优化方案**：
+1. setModelParam 用 equestAnimationFrame 节流（200ms），仅 idle 时再重渲
+2. model-row 加 contain: layout style; 告诉浏览器离屏渲染
+3. model-list 加 contain: strict
+4. 排版微调：行高 32px → 26px；不换行模型名 + ellipsis
+
+### H. ABE 校验（输入防呆）
+
+**A. 上下文必须 ≥ 1**：HTML5 min=1（已加）
+**B. 上下文 ≥ 输出上限**：Studio 保存前 JS 校验
+`js
+function validateModel(m) {
+  if (m.context_window != null && m.context_window < 1) return "上下文必须 ≥ 1";
+  if (m.max_tokens != null && m.context_window != null && m.max_tokens > m.context_window) {
+    return "输出上限不能超过上下文";
+  }
+  return null;
+}
+`
+**E. 探测时间超过 30 天加黄标**：Studio UI 显示"探测时间"，过期提醒重测
+
+**D（godex 启动失败时给清晰错误）不做**：Studio 的 ead_enabled_models 命令读 yaml 失败时直接报错即可。
+
+---
+
+## 三、实施顺序（确认后动手）
+
+| # | 改动 | 文件数 | 风险 | 预计时间 |
+|---|------|--------|------|----------|
+| 1 | 修 margin bug（A） | 4 | 低 | 30 min |
+| 2 | fs-provider 修复（F） | 1（仅 CSS） | 极低 | 5 min |
+| 3 | model-probe CLI 参数（B） | 2 | 低 | 30 min |
+| 4 | setModelParam 节流 + CSS contain（G） | 1（仅 index.html） | 低 | 20 min |
+| 5 | 探测窗口去余量（C） | 1（model-probe/src/index.html） | 极低 | 5 min |
+| 6 | yaml 注释行（D） | 1（model-probe/lib.rs） | 低 | 20 min |
+| 7 | ABE 校验 + reasoning（H+E） | 1（studio/src/index.html） | 低 | 30 min |
+
+**总预计**：~2.5h；按此顺序每步独立可验证。
