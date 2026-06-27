@@ -212,6 +212,11 @@ fn get_default_config_path() -> Option<String> {
         .map(|p| p.display().to_string())
 }
 
+#[tauri::command]
+fn get_godex_url() -> String {
+    std::env::var("GODEX_URL").unwrap_or_else(|_| "http://localhost:5678".to_string())
+}
+
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     
@@ -221,6 +226,14 @@ pub fn run() {
     
     tauri::Builder::default()
         .manage(state)
+        .invoke_handler(tauri::generate_handler![
+            get_config,
+            save_probe_results,
+            set_config_path,
+            check_godex_running,
+            get_default_config_path,
+            get_godex_url,
+        ])
         .setup(|app| {
             // Try to auto-load default godex.yaml
             if let Ok(home) = std::env::var("USERPROFILE") {
@@ -242,13 +255,6 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            get_config,
-            save_probe_results,
-            set_config_path,
-            check_godex_running,
-            get_default_config_path,
-        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

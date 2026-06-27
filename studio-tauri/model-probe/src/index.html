@@ -168,7 +168,7 @@ td.error { color: var(--fail); font-size: 10px; }
 
 <script>
 // === State ===
-const API_BASE = "http://localhost:5678";
+let API_BASE = "http://localhost:5678";
 let allModels = [];
 let providers = [];
 let selectedModels = new Set();
@@ -180,6 +180,13 @@ let progressDone = 0;
 
 // === Init ===
 window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    API_BASE = await window.__TAURI__.core.invoke("get_godex_url");
+    console.log("[probe] using API base:", API_BASE);
+  } catch (e) {
+    console.warn("[probe] get_godex_url failed:", e);
+  }
+  
   // Try to get config path from URL params or default
   const params = new URLSearchParams(window.location.search);
   const cfg = params.get("config");
