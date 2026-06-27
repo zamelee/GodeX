@@ -555,3 +555,65 @@ godex.log 中同时有 98 条 invalid params, context window exceeds limit (2013
 |---|------|------|
 | 8 | godex.yaml 加 gpt-5.4 / gpt-5.4-mini / gpt-5.5 alias 路由 | ~/.godex/config.yaml |
 | 9 | Codex++ 写 ~/.codex/config.toml 的 model 字段 | src-tauri/src/state.rs write_codex_model_context 函数 |
+
+## 五、本轮修复（2026-06-27 第三轮：Studio 调试收尾）
+
+### 背景
+上一轮推送 `7475827` 后用户报告两个仍存在的 bug：
+
+1. **sash-main-log 拖不动** — Studio 主区 ↔ 日志区之间的 sash，鼠标拖完全无效
+2. **model-probe.exe 的 config 路径为空** — 启动后 UI 上"Config"输入框是空白的
+
+### 排查过程
+
+**Bug A (sash-main-log)**：
+- 看 HTML/CSS/JS 无明显异常（其他 3 个 sash 都正常工作）
+- 解开 `target/release/build/godex-studio-*/out/tauri-codegen-assets/*.html` 看 embedded HTML
+  - 发现 embedded HTML 里 `.model-list` 仍是旧版（没有 `contain:layout style` 修复）
+  - 这是 Cargo incremental 缓存没刷新导致 — 二进制仍然是 18:57:16 的旧版
+- 第一次 `cargo build --release` (19:14:47) 后 embedded HTML 包含了 `contain:layout style`，但 Bug A 仍在
+- 用 Playwright + mocked `__TAURI__` 在 file:// 加载 index.html 测试 drag
+  - 复现了：mouse move 20 次，每次都抛 `Cannot read properties of null (reading 'style')`
+  - 根因：`initSashes()` 里写的是 `beforeEl: `$("main")`` ，但 `$ = (id) => document.getElementById(id)`，而 `<main>` 标签**没有 `id="main"`**，所以 `$("main")` 返回 null
+  - 修复：`<main>` → `<main id="main">`
+
+**Bug B (config 路径)**：
+- 看 `commands.rs:launch_model_probe` 实际已经在 `cfg_path` 非空时传 `--config=...` 给 model-probe.exe
+- 看 model-probe 的 `lib.rs` 解析 `--config=` → `CLI_CONFIG_PATH` → 写入 `state.config_path`（setup 阶段正确）
+- **看 model-probe 的 `src/index.html` init 逻辑**：
+  - 只从 URL `?config=...` 或硬编码 fallback (`godex.yaml`, `D:/Documents/VibeCoding/GodeX/godex.yaml`) 读路径
+  - **完全不读 CLI `--config=...`**，所以 UI 始终空白（虽然 Rust 端 state.config_path 已经正确）
+- 修复：
+  - `lib.rs` 加 `get_initial_config_path` Tauri command，返回 `state.config_path` 的 String
+  - 注册到 `invoke_handler`
+  - `index.html` init 时先 URL param，没有就 `await invoke("get_initial_config_path")`，再 fallback
+
+### 代码改动
+| 文件 | 改动 |
+|------|------|
+| `studio-tauri/src/index.html` | `<main>` → `<main id="main">`（1 行）|
+| `studio-tauri/model-probe/src-tauri/src/lib.rs` | 新增 `get_initial_config_path` Tauri command + 注册到 invoke_handler |
+| `studio-tauri/model-probe/src/index.html` | init 流程：URL param → get_initial_config_path → tryDefaultPaths fallback |
+
+### 验证
+1. **Bug A**：Playwright drag 测试
+   - 修复前：main 480→480（不变），log 274→274，pageerror ×20
+   - 修复后：main 480→680，log 274→120（撞 min），pageerror = 0
+   - 同时验证 sash-cols / log-sash 也都正常，无回归
+2. **Bug B**：解压 `model-probe-48f627422a9ff559/0826d364*.html` embedded HTML 确认含 `get_initial_config_path`
+3. **embedded HTML 修复**：解压 `godex-studio-8f68c89455d7cec8/c6289da30e79b*.html` 确认同时含 `<main id="main">` 和 `contain:layout style`
+
+### Release 二进制
+- `studio-tauri/src-tauri/target/release/godex-studio.exe` 19:29:29 (含 Bug A fix + 7475827 fix)
+- `studio-tauri/model-probe/src-tauri/target/release/model-probe.exe` 19:21:24 (含 Bug B fix)
+
+### 新增的工具脚本（`tools/`）
+- `patch-bug-a.cjs` — 给 `<main>` 加 id（可重放）
+- `patch-bug-b.cjs` — model-probe lib.rs + index.html patch（可重放）
+- `test-sash.cjs` / `test-sash2.cjs` / `test-all-sashes.cjs` — Playwright 自动化测试 4 个 sash 拖动
+- `verify-assets.cjs` — 解压 brotli 验证 embedded HTML 包含关键 fix
+
+### 经验教训
+1. **Tauri 2 的 frontend 改动不会自动触发 cargo rebuild**——HTML/CSS 改了但 Rust 没动的话，cargo incremental 缓存会复用旧 embedded HTML。需要 touch 一个 Rust 文件强制 rebuild。
+2. **Playwright + mocked `__TAURI__` 是测试 Studio UI 的好方法**——避免开真实 Tauri 进程，可以用 file:// 加载 index.html。
+3. **`<main>` 这种纯 tag 名元素做 `$("...")` 查询一定要有 id**——`document.getElementById` 不查 tag name。

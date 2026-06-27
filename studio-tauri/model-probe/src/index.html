@@ -185,14 +185,25 @@ window.addEventListener("DOMContentLoaded", async () => {
     console.warn("[probe] get_godex_url failed:", e);
   }
   
-  // Try to get config path from URL params or default
+  // Resolve config path with the same priority the Rust side uses:
+  //   1. URL query (?config=...) — for manual launches
+  //   2. CLI --config=... — set by Studio's launch_model_probe
+  //   3. Default USERPROFILE/.godex/config.yaml, then cwd/godex.yaml
   const params = new URLSearchParams(window.location.search);
-  const cfg = params.get("config");
-  if (cfg) {
-    document.getElementById("cfg-path").value = cfg;
+  const cfgFromUrl = params.get("config");
+  let cfgToUse = cfgFromUrl;
+  if (!cfgToUse) {
+    try {
+      cfgToUse = await window.__TAURI__.core.invoke("get_initial_config_path");
+    } catch (e) {
+      console.warn("[probe] get_initial_config_path failed:", e);
+    }
+  }
+  if (cfgToUse) {
+    document.getElementById("cfg-path").value = cfgToUse;
     await loadConfig();
   } else {
-    // Try default paths
+    // Try default paths (cwd/godex.yaml, hardcoded repo path)
     await tryDefaultPaths();
   }
 });

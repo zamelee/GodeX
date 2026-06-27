@@ -198,6 +198,15 @@ fn set_config_path(state: State<'_, AppState>, path: String) {
     *state.config_path.lock().unwrap() = Some(PathBuf::from(path));
 }
 
+/// Return the config path that was resolved at startup (CLI --config=...
+/// wins, then ~/.godex/config.yaml, then cwd/godex.yaml). The frontend
+/// uses this to pre-fill the "Config path" input so users don't have to
+/// type it manually when launched from Studio.
+#[tauri::command]
+fn get_initial_config_path(state: State<'_, AppState>) -> Option<String> {
+    state.config_path.lock().unwrap().clone().map(|p| p.display().to_string())
+}
+
 #[tauri::command]
 fn check_godex_running(port: u16) -> bool {
     TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
@@ -259,6 +268,7 @@ pub fn run() {
             check_godex_running,
             get_default_config_path,
             get_godex_url,
+            get_initial_config_path,
         ])
         .setup(|app| {
             // 1) If --config was provided and the file exists, use it.
