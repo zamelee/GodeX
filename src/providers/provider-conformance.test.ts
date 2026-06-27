@@ -62,10 +62,19 @@ describe("ProviderSpec runtime conformance", () => {
 		});
 	}
 
-	test("chat-completions provider specs do not expose OpenAI-native tool_search as a callable function", () => {
+	test("chat-completions provider specs do not expose OpenAI-native tool_search as a native tool", () => {
 		for (const spec of BUILTIN_PROVIDER_SPECS) {
 			expect(spec.capabilities.tools.supported.has("tool_search")).toBe(false);
-			expect(spec.capabilities.tools.degraded?.has("tool_search")).toBe(false);
+		}
+	});
+
+	test("chat-completions provider specs may degrade tool_search to a function so Codex Desktop can execute it client-side", () => {
+		for (const spec of BUILTIN_PROVIDER_SPECS) {
+			if (spec.capabilities.tools.degraded?.has("tool_search")) {
+				expect(spec.capabilities.tools.degraded.get("tool_search")).toBe(
+					"function",
+				);
+			}
 		}
 	});
 

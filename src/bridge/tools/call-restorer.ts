@@ -1,10 +1,15 @@
 import type {
 	ApplyPatchOperation,
+	ComputerAction,
+	ComputerCall,
 	CustomToolCall,
 	LocalShellCall,
 	ResponseItem,
 	ShellCall,
+	ToolSearchCall,
+	WebSearchCall,
 } from "../../protocol/openai/responses";
+import type { ItemStatus } from "../../protocol/openai/shared";
 import type { ToolIdentityMap } from "./tool-identity";
 
 export interface ProviderFunctionCall {
@@ -31,6 +36,20 @@ export function restoreToolCall(
 	if (identity?.requestedType === "apply_patch") {
 		return (
 			applyPatchCall(call) ?? fallbackFunctionCall(call, identity.requestedName)
+		);
+	}
+	if (identity?.requestedType === "tool_search") {
+		return toolSearchCall(call);
+	}
+	if (identity?.requestedType === "web_search") {
+		return webSearchCall(call) ?? fallbackFunctionCall(call, identity.requestedName);
+	}
+	if (
+		identity?.requestedType === "computer_use" ||
+		identity?.requestedType === "computer"
+	) {
+		return (
+			computerCall(call) ?? fallbackFunctionCall(call, identity.requestedName)
 		);
 	}
 	if (identity?.requestedType === "custom") {
@@ -111,6 +130,188 @@ function applyPatchCall(call: ProviderFunctionCall): ResponseItem | null {
 	};
 }
 
+function toolSearchCall(call: ProviderFunctionCall): ToolSearchCall {
+	const parsed = parsedRecord(call.arguments);
+	return {
+		id: call.callId,
+		type: "tool_search_call",
+		call_id: call.callId,
+		arguments: parsed ?? call.arguments,
+		execution: "client",
+		status: "in_progress",
+	};
+}
+
+function webSearchCall(call: ProviderFunctionCall): WebSearchCall | null {
+	const parsed = parsedRecord(call.arguments);
+	if (!parsed) return null;
+	const query = optionalString(parsed.query);
+	if (query === undefined) return null;
+	return {
+		id: call.callId,
+		type: "web_search_call",
+		action: { type: "search", query },
+		status: "in_progress",
+	};
+}
+
+function computerCall(call: ProviderFunctionCall): ComputerCall | null {
+	const parsed = parsedRecord(call.arguments);
+	if (!parsed) return null;
+	const actionName = optionalString(parsed.action);
+	if (!actionName) return null;
+	const action = mapComputerAction(actionName, parsed);
+	if (!action) return null;
+
+	const status: ItemStatus = "in_progress";
+	return {
+		id: call.callId,
+		type: "computer_call",
+		call_id: call.callId,
+		pending_safety_checks: [],
+		status,
+		action,
+	};
+}
+
+function mapComputerAction(
+	name: string,
+	parsed: Record<string, unknown>,
+): ComputerAction | null {
+	switch (name) {
+		case "screenshot":
+			return { type: "screenshot" };
+		case "wait":
+			return { type: "wait" };
+		case "click":
+			return clickAction(parsed);
+		case "double_click":
+			return doubleClickAction(parsed);
+		case "type":
+			return typeAction(parsed);
+		case "keypress":
+			return keypressAction(parsed);
+		case "scroll":
+			return scrollAction(parsed);
+		case "move":
+			return moveAction(parsed);
+		case "drag":
+			return dragAction(parsed);
+		default:
+			return null;
+	}
+}
+
+function clickAction(parsed: Record<string, unknown>): ComputerAction | null {
+	const x = optionalNumber(parsed.x);
+	const y = optionalNumber(parsed.y);
+	if (x === undefined || y === undefined) return null;
+	const buttonRaw = optionalString(parsed.button);
+	const button = isClickButton(buttonRaw) ? buttonRaw : "left";
+	const keys = optionalStringArray(parsed.keys);
+	const action = {
+		type: "click" as const,
+		x,
+		y,
+		button,
+		...(keys ? { keys } : {}),
+	};
+	return action;
+}
+
+function doubleClickAction(
+	parsed: Record<string, unknown>,
+): ComputerAction | null {
+	const x = optionalNumber(parsed.x);
+	const y = optionalNumber(parsed.y);
+	if (x === undefined || y === undefined) return null;
+	const keys = optionalStringArray(parsed.keys) ?? [];
+	return { type: "double_click", x, y, keys };
+}
+
+function typeAction(parsed: Record<string, unknown>): ComputerAction | null {
+	const text = optionalString(parsed.text);
+	if (text === undefined) return null;
+	return { type: "type", text };
+}
+
+function keypressAction(
+	parsed: Record<string, unknown>,
+): ComputerAction | null {
+	const keys = optionalStringArray(parsed.keys);
+	if (!keys || keys.length === 0) return null;
+	return { type: "keypress", keys };
+}
+
+function scrollAction(parsed: Record<string, unknown>): ComputerAction | null {
+	const x = optionalNumber(parsed.x);
+	const y = optionalNumber(parsed.y);
+	const scrollX = optionalNumber(parsed.scroll_x) ?? 0;
+	const scrollY = optionalNumber(parsed.scroll_y) ?? 0;
+	if (x === undefined || y === undefined) return null;
+	const keys = optionalStringArray(parsed.keys);
+	const action = {
+		type: "scroll" as const,
+		scroll_x: scrollX,
+		scroll_y: scrollY,
+		x,
+		y,
+		...(keys ? { keys } : {}),
+	};
+	return action;
+}
+
+function moveAction(parsed: Record<string, unknown>): ComputerAction | null {
+	const x = optionalNumber(parsed.x);
+	const y = optionalNumber(parsed.y);
+	if (x === undefined || y === undefined) return null;
+	const keys = optionalStringArray(parsed.keys);
+	const action = {
+		type: "move" as const,
+		x,
+		y,
+		...(keys ? { keys } : {}),
+	};
+	return action;
+}
+
+function dragAction(parsed: Record<string, unknown>): ComputerAction | null {
+	const path = parseDragPath(parsed.path);
+	if (!path || path.length === 0) return null;
+	const keys = optionalStringArray(parsed.keys);
+	const action = {
+		type: "drag" as const,
+		path,
+		...(keys ? { keys } : {}),
+	};
+	return action;
+}
+
+function parseDragPath(value: unknown): { x: number; y: number }[] | null {
+	if (!Array.isArray(value)) return null;
+	const result: { x: number; y: number }[] = [];
+	for (const point of value) {
+		if (!isRecord(point)) return null;
+		const x = optionalNumber(point.x);
+		const y = optionalNumber(point.y);
+		if (x === undefined || y === undefined) return null;
+		result.push({ x, y });
+	}
+	return result;
+}
+
+function isClickButton(
+	value: string | undefined,
+): value is "left" | "right" | "wheel" | "back" | "forward" {
+	return (
+		value === "left" ||
+		value === "right" ||
+		value === "wheel" ||
+		value === "back" ||
+		value === "forward"
+	);
+}
+
 function customToolCall(
 	call: ProviderFunctionCall,
 	name: string,
@@ -150,6 +351,12 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalNumber(value: unknown): number | undefined {
 	return typeof value === "number" ? value : undefined;
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+	if (!value.every((item) => typeof item === "string")) return undefined;
+	return value as string[];
 }
 
 function isApplyPatchOperation(value: unknown): value is ApplyPatchOperation {

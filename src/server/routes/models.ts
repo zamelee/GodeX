@@ -3,13 +3,12 @@ import type { ApplicationContext } from "../../context/application-context";
 
 interface ModelInfo {
 	slug: string;
-	// id/name are emitted alongside slug so Codex++`s parse_model_payload (which only
-	// recognizes id/model/name) can enumerate the model list. slug is kept for codex.
 	id: string;
 	name: string;
 	description?: string;
 	context_window?: number;
 	max_context_window?: number;
+	full_context_window_limit?: number;
 	auto_compact_token_limit?: number;
 	truncation_policy?: { mode: string; limit: number };
 	supports_parallel_tool_calls?: boolean;
@@ -30,7 +29,6 @@ export function handleModels(app: ApplicationContext): Response {
 		.map((entry) => {
 			const metadata = getModelMetadata(entry.alias, presets);
 
-			// Log warning if context_window not found
 			if (!metadata.context_window) {
 				app.logger?.warn("models.missing_context_window", () => ({
 					model: entry.alias,
@@ -39,13 +37,15 @@ export function handleModels(app: ApplicationContext): Response {
 				}));
 			}
 
-			// Derive input_modalities from preset.multimodal. Unknown models default
-			// to text-only (more conservative than the previous hardcoded ["text","image"]).
 			const input_modalities: string[] = ["text"];
 			if (metadata.multimodal?.image_input) input_modalities.push("image");
 			if (metadata.multimodal?.audio_input) input_modalities.push("audio");
 			if (metadata.multimodal?.video_input) input_modalities.push("video");
 			const supportsImageDetail = metadata.multimodal?.image_input === true;
+
+			const ctxWindow = metadata.context_window ?? 0;
+			const maxTokens = metadata.max_tokens ?? 0;
+			const compactLimit = Math.max(ctxWindow - maxTokens, 0);
 
 			return {
 				slug: entry.alias,
@@ -54,29 +54,21 @@ export function handleModels(app: ApplicationContext): Response {
 				display_name: entry.alias,
 				description: metadata.notes,
 				visibility: "list",
-				context_window: metadata.context_window,
-				max_context_window: metadata.context_window,
-				auto_compact_token_limit: metadata.max_tokens,
+				context_window: ctxWindow,
+				max_context_window: ctxWindow,
+				full_context_window_limit: compactLimit,
+				auto_compact_token_limit: compactLimit,
 				truncation_policy: {
 					mode: "tokens",
-					limit: metadata.max_tokens ?? 8192,
+					limit: compactLimit,
 				},
 				supports_parallel_tool_calls: true,
 				supports_image_detail_original: supportsImageDetail,
 				input_modalities,
 				supported_reasoning_levels: [
-					{
-						effort: "low",
-						description: "Fast responses with lighter reasoning",
-					},
-					{
-						effort: "medium",
-						description: "Balances speed and reasoning depth",
-					},
-					{
-						effort: "high",
-						description: "Greater reasoning depth for complex problems",
-					},
+					{ effort: "low", description: "Fast responses with lighter reasoning" },
+					{ effort: "medium", description: "Balances speed and reasoning depth" },
+					{ effort: "high", description: "Greater reasoning depth for complex problems" },
 				],
 				supported_in_api: true,
 			};
