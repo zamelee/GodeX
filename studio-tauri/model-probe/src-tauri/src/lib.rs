@@ -174,12 +174,14 @@ fn save_probe_results(state: State<'_, AppState>, results: Vec<ProbeResult>) -> 
                             if t2.starts_with("context_window:") {
                                 lines[j] = ctx_line.clone();
                                 found = true;
+                                upsert_probe_comments(&mut lines, j, result.max_input.unwrap_or(0));
                                 break;
                             }
                             if t2.starts_with("model:") { after_model = j; }
                         }
                         if !found {
-                            lines.insert(after_model + 1, ctx_line);
+                            lines.insert(after_model + 1, ctx_line.clone());
+                            upsert_probe_comments(&mut lines, after_model + 1, result.max_input.unwrap_or(0));
                         }
                     }
                 }
@@ -311,4 +313,43 @@ fn read_margin_from_yaml(raw: &str) -> Option<f64> {
         }
     }
     None
+}
+
+
+/// Insert or update the # probe_raw / # probed_at / # probe_method comment lines
+/// immediately after the context_window line at ctx_idx.
+fn upsert_probe_comments(lines: &mut Vec<String>, ctx_idx: usize, raw: u64) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let years = (now / 31_536_000) as i64;
+    let rem_after_years = now % 31_536_000;
+    let days_in_year = rem_after_years / 86_400;
+    let (y, m, d, h, mi, sec) = (
+        1970 + years,
+        ((days_in_year / 31) + 1) as u32,
+        ((days_in_year % 31) + 1) as u32,
+        ((now / 3600) % 24) as u32,
+        ((now / 60) % 60) as u32,
+        (now % 60) as u32,
+    );
+    let ts = format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, h, mi, sec);
+    let raw_line = format!("      # probe_raw: {}", raw);
+    let at_line = format!("      # probed_at: {}", ts);
+    let method_line = "      # probe_method: chat_completions".to_string();
+    let mut insert_at = ctx_idx + 1;
+    for desired in [&raw_line, &at_line, &method_line] {
+        let mut existing: Option<usize> = None;
+        for k in insert_at..lines.len().min(insert_at + 8) {
+            let t = lines[k].trim_start();
+            if t == desired.trim_start() { existing = Some(k); break; }
+            if !t.is_empty() && !t.starts_with("#")
+                && !t.starts_with("context_window") && !t.starts_with("max_tokens") { break; }
+        }
+        match existing {
+            Some(k) => { lines[k] = desired.clone(); insert_at = k + 1; }
+            None => { lines.insert(insert_at, desired.clone()); insert_at += 1; }
+        }
+    }
 }
