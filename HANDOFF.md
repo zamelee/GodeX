@@ -617,3 +617,42 @@ godex.log 中同时有 98 条 invalid params, context window exceeds limit (2013
 1. **Tauri 2 的 frontend 改动不会自动触发 cargo rebuild**——HTML/CSS 改了但 Rust 没动的话，cargo incremental 缓存会复用旧 embedded HTML。需要 touch 一个 Rust 文件强制 rebuild。
 2. **Playwright + mocked `__TAURI__` 是测试 Studio UI 的好方法**——避免开真实 Tauri 进程，可以用 file:// 加载 index.html。
 3. **`<main>` 这种纯 tag 名元素做 `$("...")` 查询一定要有 id**——`document.getElementById` 不查 tag name。
+
+## 六、本轮新增：GodeX 模式选择器 UI（2026-06-27 第四轮）
+
+### 需求
+把 replica 启动从"设置 Modal"移到"GodeX 网关代理日志 ● STOPPED"右侧，改成下拉菜单 + 勾选框。
+
+### 旧 UI（已删除）
+- 设置 Modal 里有 `☑ GodeX副本运行` 勾选 + `启动副本` 按钮
+- GodeX panel header 有 `☐ 外挂` 勾选
+
+### 新 UI（GodeX panel header）
+```
+[内置 ▼] [▶]  ● STOPPED
+          ↑           ↑
+     模式下拉       启动勾选
+```
+- **下拉** `内置 | 副本 | 外挂`：切换模式（只存 Rust flags，不立即启动）
+- **勾选 `▶`**：启动 → 几秒后检测是否真的在运行，没有则自动取消勾选
+- 取消勾选 = 停止
+
+### 行为
+1. 切换模式：立即停止当前 GodeX → 存新 flags
+2. 勾选启动：
+   - 调 `godex_start` → 3 秒后 polling `godex_status`
+   - 没跑起来 → 自动 uncheck + 报错
+   - 跑起来了 → checkbox 保持 checked
+3. 取消勾选：调 `godex_kill`
+4. `refreshStatus()` 每 5 秒同步 checkbox 状态
+
+### 代码改动
+| 文件 | 改动 |
+|------|------|
+| `src-tauri/src/commands.rs` | 新 `set_godex_mode(mode)` command，同时设 `external_mode` + `replica_mode` flags |
+| `src/index.html` | GodeX panel header：删外挂 checkbox → 模式下拉 + 启动勾选；删设置 Modal 里的 replica section；stub `loadReplicaStatus`（不再需要）|
+| `model-probe/src-tauri/src/lib.rs` | 补 `schemas.function:` 缺失的 `}`（syntax error 导致 JS 从未真正运行）|
+| `model-probe/src/index.html` | init 流程加 `get_initial_config_path` 调用 |
+
+### 验证
+- embedded HTML 全部检查通过（无 oldExtModeCheckbox，mainId+containFix+modeDropdown+modeToggle 全 true）

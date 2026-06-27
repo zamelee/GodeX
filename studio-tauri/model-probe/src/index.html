@@ -520,7 +520,7 @@ async function probeImage(baseUrl, apiKey, model, apiFormat) {
 
 async function probeTool(baseUrl, apiKey, model, toolType, apiFormat) {
   const schemas = {
-    function: {type:"function",function:{name:"test",description:"test",parameters:{type:"object",properties:{a:{type:"string"}},required:["a"]}},
+    function: {type:"function",function:{name:"test",description:"test",parameters:{type:"object",properties:{a:{type:"string"}},required:["a"]}}},
     computer_use: {type:"computer_use",computer_use:{action:"screenshot"}},
     tool_search: {type:"tool_search",tool_search:{query:"test"}},
   };

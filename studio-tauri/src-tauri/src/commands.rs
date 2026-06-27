@@ -644,6 +644,15 @@ pub fn set_replica_mode(state: State<'_, AppState>, enabled: bool) -> Result<(),
     Ok(())
 }
 
+/// Set GodeX run mode: "builtin" | "replica" | "external".
+/// Updates both external_mode and replica_mode flags atomically.
+#[tauri::command]
+pub fn set_godex_mode(state: State<'_, AppState>, mode: String) {
+    crate::diag(&format!("[cmd] set_godex_mode={}", mode));
+    state.godex.set_external_mode(mode == "external");
+    state.godex.set_replica_mode(mode == "replica");
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn get_replica_status(state: State<'_, AppState>) -> ReplicaStatus {
     crate::diag("[cmd] get_replica_status");
