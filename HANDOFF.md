@@ -443,3 +443,115 @@ function validateModel(m) {
 | 7 | ABE 校验 + reasoning（H+E） | 1（studio/src/index.html） | 低 | 30 min |
 
 **总预计**：~2.5h；按此顺序每步独立可验证。
+
+
+---
+
+## 四、gpt-5.4 model_not_found 调查（2026-06-27 15:30）
+
+### 现象
+~/.godex/logs/godex.log 中持续出现 Model not found: gpt-5.4 错误（status 400），累计 371 条（2026-06-26 12:20 ~ 2026-06-27 09:24），间隔从 1ms 到几十秒不等。
+
+### 调查方法
+1. godex 端：godex.log 中错误前后的 equest.received / provider.request.sending / stream.completed 记录
+2. Codex 端：~/.codex/sessions/2026/06/{26,27}/*.jsonl 中 session_meta / 	urn_context 字段
+3. Codex 端：~/.codex/config.toml 内容
+4. godex 端：model-presets.json 中 gpt-5.4 的预设归属
+
+### 关键证据
+
+**a) Codex ~/.codex/config.toml 当前内容**：
+`	oml
+model_provider = "custom"
+[model_providers.custom]
+name = "custom"
+wire_api = "responses"
+requires_openai_auth = true
+base_url = "http://127.0.0.1:5678/v1"
+`
+**没有 model 字段**。之前 config - 副本.toml 有 model = "MiniMax-M2.7-highspeed"，但当前被覆盖/删除。
+
+**b) 所有 Codex session 的 session_meta.payload.model 都是空字符串**（6 个 session 全部 model=''）：
+- ollout-2026-06-26T10-08-43: model='' provider='custom' cli=0.142.0-alpha.6
+- ollout-2026-06-26T14-43-12: model='' provider='custom' cli=0.142.0-alpha.6
+- ollout-2026-06-26T16-55-10: model='' provider='custom' cli=0.142.0-alpha.6
+- ollout-2026-06-26T19-37-51: model='' provider='custom' cli=0.142.0-alpha.6
+- ollout-2026-06-26T20-31-42: model='' provider='custom' cli=0.142.0-alpha.6
+- ollout-2026-06-26T21-48-47: model='' provider='custom' cli=0.142.2
+
+**c) session 实际 turn_context 用的是带前缀 model**（不是默认的 gpt-5.4）：
+- minnimax.chat/MiniMax-M2.7 / MiniMax-M2.7-highspeed / minnimax/MiniMax-M3 等
+
+**d) gpt-5.4 错误时间规律**：
+- 错误成对/成组出现（间隔 6ms~38ms），是 reqwest 客户端重试
+- 错误**夹在两次正常请求之间**：13:18:53 完成 → 13:19:18 gpt-5.4 错误 → 13:21:20 正常请求
+- **用户实际请求（turn_context 用 M2.7/M3）完全正常**——gpt-5.4 错误与用户对话无关
+
+**e) model-presets.json 中 gpt-5.4 的归属**：
+`json
+{
+  "name": "GPT-5.5",
+  "aliases": ["gpt-5.5", "gpt-5.4", "gpt-5-turbo"],
+  "context_window": 1050000,
+  "max_tokens": 131072
+}
+`
+**gpt-5.4 是 GPT-5.5 的别名**。但 godex 当前 nabled 列表里没有 GPT-5.5 也没有 gpt-5.4 alias 映射。
+
+### 根因
+Codex 0.142.x 客户端在以下场景会发"模型探测"请求（不挂 model 字段，由 Codex CLI 内部硬编码默认 model gpt-5.4）：
+1. **Model 升级提示**（弹窗"已升级到 gpt-5.5" 时探测新 model）
+2. **UI 切回默认 model**（用户切换服务商时）
+3. **启动预热 / 状态拉取**
+4. **seen-model-upgrade-list: ["gpt-5.5"] 提示触发**
+
+godex 端 model-presets.json 虽然把 gpt-5.4 解析成 GPT-5.5 预设，但 models.enabled 列表里**没有**这个预设；models.aliases 也没有 gpt-5.4 → minimax.chat/MiniMax-M2.7 映射；所以 ModelResolver.resolve("gpt-5.4") 走 indEnabledMatch 路径，匹配失败，抛 server.request.model_not_found 400。
+
+### 影响
+- **不影响用户对话**——错误是独立后台请求
+- **污染 godex.log**——371 条噪音干扰真问题诊断
+- **不消耗 MiniMax 配额**——错误在 godex 端早期就拒绝
+
+### 修复方案（独立可做）
+
+**方案 A（推荐）**：在 godex.yaml 加 alias 把 gpt-5.4 路由到用户的默认 model：
+`yaml
+models:
+  aliases:
+    gpt-5.4: minimax.chat/MiniMax-M2.7
+    gpt-5.4-mini: minimax.chat/MiniMax-M2.7-highspeed
+    gpt-5.5: minimax.chat/MiniMax-M3
+  enabled: [...]
+`
+**优点**：gpt-5.4 错误消失，Codex 客户端的"模型探测"也能正常返回
+**缺点**：Codex UI 显示的"已升级到 gpt-5.5"提示可能会让用户混淆
+
+**方案 B（保守）**：在 Codex 端 ~/.codex/config.toml 显式设 model = "minnimax.chat/MiniMax-M2.7"，避免 Codex 用默认 model 发请求：
+`	oml
+model_provider = "custom"
+model = "minnimax.chat/MiniMax-M2.7"
+`
+**优点**：根本上不让 Codex 用 gpt-5.4
+**缺点**：用户切 model 时仍可能触发默认 model 请求；需要 Codex++ 同步写这个字段
+
+**方案 A + B 都做**：A 处理已经发生的请求，B 预防新请求。
+
+### 另一个真实问题（用户最初问的"上下文超 5 次"）
+
+godex.log 中同时有 98 条 invalid params, context window exceeds limit (2013) 错误：
+- provider: minimax
+- model: MiniMax-M2.7-highspeed
+- status: 502（godex 端 providerErrorToHttp 映射）
+- 错误**成对/成组**（间隔 1-3 秒）= reqwest 自动重试 5 次
+
+修复依赖：
+1. **修 margin bug**（A）—— 让 godex 端 effective 值更小，避免 422
+2. **error passthrough**（commit a6c5c9d 已做）—— 让 Codex 端能看到 400 而非 502，触发早失败早压缩
+3. **可选**：在 godex 端加 retry 限制，避免无限重试同一个无效请求
+
+### 实施清单追加
+
+| # | 改动 | 文件 |
+|---|------|------|
+| 8 | godex.yaml 加 gpt-5.4 / gpt-5.4-mini / gpt-5.5 alias 路由 | ~/.godex/config.yaml |
+| 9 | Codex++ 写 ~/.codex/config.toml 的 model 字段 | src-tauri/src/state.rs write_codex_model_context 函数 |
