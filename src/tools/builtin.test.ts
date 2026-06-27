@@ -12,8 +12,11 @@ describe("builtin function definitions", () => {
 	test("exposes Codex built-in tool schemas from the bridge layer", () => {
 		expect(Object.keys(BUILTIN_FUNCTION_TOOL_DEFINITIONS).sort()).toEqual([
 			"apply_patch",
+			"computer",
+			"computer_use",
 			"local_shell",
 			"shell",
+			"tool_search",
 		]);
 
 		expect(BUILTIN_FUNCTION_TOOL_DEFINITIONS.local_shell.parameters.type).toBe(
