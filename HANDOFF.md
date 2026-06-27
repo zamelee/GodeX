@@ -440,9 +440,9 @@ function validateModel(m) {
 | 4 | setModelParam 节流 + CSS contain（G） | 1（仅 index.html） | 低 | 20 min | ✅ 2f60751 |
 | 5 | 探测窗口去余量（C） | 1（model-probe/src/index.html） | 极低 | 5 min | ✅ 519c3aa |
 | 6 | yaml 注释行（D） | 1（model-probe/lib.rs） | 低 | 20 min | ✅ c09b1a9 |
-| 7 | ABE 校验 + reasoning（H+E） | 1（studio/src/index.html） | 低 | 30 min | ⏳ 进行中 |
+| 7 | ABE 校验 + reasoning + probe 元数据（H+E+D 修正） | 2（src/index.html + src-tauri/src/config.rs） | 低 | 30 min | done 28f3cf4 |
 
-**总预计**：~2.5h；#1-#6 已完成并推送到 fork。
+**总预计**：~2.5h；#1-#7 已完成并推送到 fork。
 
 
 ---
