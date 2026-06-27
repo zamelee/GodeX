@@ -45,7 +45,14 @@ export function handleModels(app: ApplicationContext): Response {
 
 			const ctxWindow = metadata.context_window ?? 0;
 			const maxTokens = metadata.max_tokens ?? 0;
-			const compactLimit = Math.max(ctxWindow - maxTokens, 0);
+			// Look up margin from godex.yaml models.enabled (margin defaults to 0.95)
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const margin = (app.config.models?.enabled as any)?.find(
+				(m: { model: string; margin?: number }) => m.model.toLowerCase() === entry.alias.toLowerCase(),
+			)?.margin ?? 0.95;
+			const effectiveCtxWindow = Math.floor(ctxWindow * margin);
+			const effectiveMaxTokens = Math.floor(maxTokens * margin);
+			const compactLimit = Math.max(effectiveCtxWindow - effectiveMaxTokens, 0);
 
 			return {
 				slug: entry.alias,
@@ -54,8 +61,8 @@ export function handleModels(app: ApplicationContext): Response {
 				display_name: entry.alias,
 				description: metadata.notes,
 				visibility: "list",
-				context_window: ctxWindow,
-				max_context_window: ctxWindow,
+				context_window: effectiveCtxWindow,
+				max_context_window: effectiveCtxWindow,
 				full_context_window_limit: compactLimit,
 				auto_compact_token_limit: compactLimit,
 				truncation_policy: {

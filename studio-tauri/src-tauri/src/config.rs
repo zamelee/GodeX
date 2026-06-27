@@ -38,6 +38,10 @@ pub struct EnabledModel {
     pub capabilities: Option<ModelCapabilities>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub note: Option<String>,
+    /// Safety margin ratio (0.0-1.0). Default 0.95 (95%).
+    /// Applied to context_window and max_tokens when computing effective limits.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub margin: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -141,6 +145,7 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
                 multimodal: None,
                 capabilities: None,
                 note: None,
+                margin: None,
             });
             continue;
         }
@@ -154,6 +159,8 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
                 p.context_window = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("max_tokens:") {
                 p.max_tokens = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("margin:") {
+                p.margin = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("multimodal:") {
                 p.multimodal = Some(rest.trim() == "true");
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
@@ -203,6 +210,7 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
                 multimodal: None,
                 capabilities: None,
                 note: None,
+                margin: None,
             });
             continue;
         }
@@ -216,6 +224,8 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
                 p.context_window = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("max_tokens:") {
                 p.max_tokens = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("margin:") {
+                p.margin = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("multimodal:") {
                 p.multimodal = Some(rest.trim() == "true");
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
@@ -267,6 +277,11 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
         }
         if let Some(mt) = m.max_tokens {
             s.push_str(&format!("      max_tokens: {}\n", mt));
+        }
+        if let Some(mg) = m.margin {
+            if (0.0..=1.0).contains(&mg) {
+                s.push_str(&format!("      margin: {:.2}\n", mg));
+            }
         }
         if let Some(mm) = m.multimodal {
             s.push_str(&format!("      multimodal: {}\n", if mm { "true" } else { "false" }));
@@ -323,6 +338,11 @@ fn render_discovered_block(items: &[EnabledModel]) -> String {
         }
         if let Some(mt) = m.max_tokens {
             s.push_str(&format!("      max_tokens: {}\n", mt));
+        }
+        if let Some(mg) = m.margin {
+            if (0.0..=1.0).contains(&mg) {
+                s.push_str(&format!("      margin: {:.2}\n", mg));
+            }
         }
         if let Some(mm) = m.multimodal {
             s.push_str(&format!("      multimodal: {}\n", if mm { "true" } else { "false" }));

@@ -1025,6 +1025,10 @@ function renderModels() {
     html += `<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="${m.context_window ?? ""}" oninput="setModelParam('${mid}','context_window',this.value)"/>`;
     html += `<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="${m.max_tokens ?? ""}" oninput="setModelParam('${mid}','max_tokens',this.value)"/>`;
     html += '</div>';
+    html += '<div class="params">';
+    const margin = m.margin != null ? m.margin : 0.95;
+    html += `<label>余量</label><input type="range" min="0" max="100" value="${Math.round(margin * 100)}" style="width:70px" oninput="setModelParam('${mid}','margin',(this.value/100).toFixed(3))"/><span style="font-size:11px;color:var(--text2);min-width:32px">${Math.round(margin * 100)}%</span>`;
+    html += '</div>';
     html += '<div class="caps">';
     for (const c of CAPS) {
       const on = !!(m.capabilities && m.capabilities[c]);
@@ -1046,6 +1050,7 @@ function stripUndef(o) {
   if (o.id) out.id = String(o.id);
   if (o.context_window !== undefined && o.context_window !== null) out.context_window = o.context_window;
   if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = o.max_tokens;
+  if (o.margin !== undefined && o.margin !== null) out.margin = o.margin;
   if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
   if (o.capabilities && typeof o.capabilities === "object") {
     const cap = {};
