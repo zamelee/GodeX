@@ -1052,12 +1052,28 @@ function renderModels() {
     if (!isEnabled) html += ' <span class="disabled-tag">已禁用</span>';
     html += '</div>';
     html += '<div class="params">';
-    html += `<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="${m.context_window ?? ""}" oninput="setModelParam('${mid}','context_window',this.value)"/>`;
-    html += `<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="${m.max_tokens ?? ""}" oninput="setModelParam('${mid}','max_tokens',this.value)"/>`;
+    html += `<label>上下文</label><input type="number" min="1" placeholder="(留空)" value="${m.context_window ?? ""}" oninput="setModelParam('${mid}','context_window',this.value)"/>`;
+    html += `<label>输出上限</label><input type="number" min="1" placeholder="(留空)" value="${m.max_tokens ?? ""}" oninput="setModelParam('${mid}','max_tokens',this.value)"/>`;
+    // Probe freshness badge: cyan if fresh, yellow if > 30d, hidden if never probed.
+    const probedAtMs = parseProbedAt(m.probed_at);
+    if (probedAtMs) {
+      const ageMs = Date.now() - probedAtMs;
+      const isStale = ageMs > 30 * 86_400_000;
+      const badgeColor = isStale ? "var(--yellow)" : "var(--blue)";
+      const badgeBg = isStale ? "rgba(210,153,34,.15)" : "rgba(88,166,255,.15)";
+      const raw = m.probe_raw != null ? "raw " + Number(m.probe_raw).toLocaleString() + " / " : "";
+      html += `<span title="# probe_raw / # probed_at from yaml" style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:3px;font-size:9px;background:${badgeBg};color:${badgeColor};cursor:help">${raw}探测 ${esc(formatProbeAge(probedAtMs))}</span>`;
+    }
     html += '</div>';
     html += '<div class="params">';
     const margin = m.margin != null ? m.margin : 0.95;
     html += `<label>余量</label><input type="range" min="0" max="100" value="${Math.round(margin * 100)}" style="width:70px" oninput="setModelParam('${mid}','margin',(this.value/100).toFixed(3))"/><span style="font-size:11px;color:var(--text2);min-width:32px">${Math.round(margin * 100)}%</span>`;
+    const curReasoning = m.reasoning || "none";
+    html += `<label style="margin-left:8px">推理</label><select style="width:auto;min-width:80px" onchange="setModelParam('${mid}','reasoning',this.value)" title="OpenAI reasoning effort (传递到 Codex 端)">`;
+    for (const [v, lab] of [["none", "无"], ["enabled", "开启"], ["max", "最大"]]) {
+      html += `<option value="${v}" ${v === curReasoning ? "selected" : ""}>${lab}</option>`;
+    }
+    html += '</select>';
     html += '</div>';
     html += '<div class="caps">';
     for (const c of CAPS) {
@@ -1081,6 +1097,9 @@ function stripUndef(o) {
   if (o.context_window !== undefined && o.context_window !== null) out.context_window = o.context_window;
   if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = o.max_tokens;
   if (o.margin !== undefined && o.margin !== null) out.margin = o.margin;
+  if (o.reasoning != null && o.reasoning !== "") out.reasoning = String(o.reasoning);
+  if (o.probe_raw != null && Number.isFinite(o.probe_raw)) out.probe_raw = Math.floor(o.probe_raw);
+  if (o.probed_at) out.probed_at = String(o.probed_at);
   if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
   if (o.capabilities && typeof o.capabilities === "object") {
     const cap = {};
@@ -1092,6 +1111,40 @@ function stripUndef(o) {
   }
   if (o.note) out.note = String(o.note);
   return out;
+}
+
+/** ABE validation. Returns null on success, or an error string describing the failure.
+ *  A: context_window must be >= 1 when present.
+ *  B: max_tokens must not exceed context_window when both are set. */
+function validateModel(m) {
+  const cw = m.context_window;
+  const mt = m.max_tokens;
+  if (cw != null && Number.isFinite(cw) && cw < 1) return "上下文必须 >= 1";
+  if (cw != null && mt != null && Number.isFinite(cw) && Number.isFinite(mt) && mt > cw) {
+    return "输出上限不能超过上下文 (max=" + mt + " > ctx=" + cw + ")";
+  }
+  if (m.margin != null && (m.margin < 0 || m.margin > 1)) return "余量必须在 0-100% 之间";
+  if (m.reasoning != null && m.reasoning !== "") {
+    const r = String(m.reasoning);
+    if (!["none", "enabled", "max"].includes(r)) return "reasoning 必须是 none / enabled / max";
+  }
+  return null;
+}
+
+/** Parse an ISO-8601 timestamp; return ms-since-epoch or null on failure. */
+function parseProbedAt(s) {
+  if (!s) return null;
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Format probe age: just now / N min ago / N hr ago / N days ago. */
+function formatProbeAge(probedAtMs) {
+  const ms = Date.now() - probedAtMs;
+  if (ms < 60_000) return "刚刚";
+  if (ms < 3_600_000) return Math.floor(ms / 60_000) + " 分钟前";
+  if (ms < 86_400_000) return Math.floor(ms / 3_600_000) + " 小时前";
+  return Math.floor(ms / 86_400_000) + " 天前";
 }
 
 async function saveProvider() {
@@ -1113,6 +1166,11 @@ async function saveProvider() {
 
 async function saveEnabled() {
   if (!activeProvider) return;
+  // ABE validation: catch bad inputs before round-tripping through Rust.
+  for (const m of enabled) {
+    const err = validateModel(m);
+    if (err) { showMsg("校验失败 [" + esc(m.model) + "]: " + err, "err"); return; }
+  }
   let all;
   try { all = await invoke("read_enabled_models"); }
   catch (e) { showMsg("读取失败: " + e, "err"); return; }

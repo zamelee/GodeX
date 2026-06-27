@@ -42,6 +42,18 @@ pub struct EnabledModel {
     /// Applied to context_window and max_tokens when computing effective limits.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub margin: Option<f64>,
+    /// Reasoning effort: "none" | "enabled" | "max". None = no reasoning field emitted.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub reasoning: Option<String>,
+    /// Raw context_window value measured by model-probe, before margin multiplication.
+    /// Read from the # probe_raw: yaml comment line; never re-emitted by the user
+    /// (model-probe is the sole writer). Preserved across save round-trips.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub probe_raw: Option<u64>,
+    /// ISO-8601 UTC timestamp of the most recent successful probe.
+    /// Read from the # probed_at: yaml comment line; same persistence rules as probe_raw.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub probed_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -146,6 +158,9 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
                 capabilities: None,
                 note: None,
                 margin: None,
+                reasoning: None,
+                probe_raw: None,
+                probed_at: None,
             });
             continue;
         }
@@ -161,11 +176,21 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
                 p.max_tokens = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("margin:") {
                 p.margin = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("reasoning:") {
+                let v = rest.trim().trim_matches('"').to_string();
+                p.reasoning = if v.is_empty() { None } else { Some(v) };
             } else if let Some(rest) = trimmed.strip_prefix("multimodal:") {
                 p.multimodal = Some(rest.trim() == "true");
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
                 let v = rest.trim();
                 p.note = Some(v.trim_matches('"').to_string());
+            } else if let Some(rest) = trimmed.strip_prefix("#") {
+                let comment = rest.trim();
+                if let Some(v) = comment.strip_prefix("probe_raw:") {
+                    p.probe_raw = v.trim().parse().ok();
+                } else if let Some(v) = comment.strip_prefix("probed_at:") {
+                    p.probed_at = Some(v.trim().to_string());
+                }
             }
         }
     }
@@ -211,6 +236,9 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
                 capabilities: None,
                 note: None,
                 margin: None,
+                reasoning: None,
+                probe_raw: None,
+                probed_at: None,
             });
             continue;
         }
@@ -226,11 +254,21 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
                 p.max_tokens = rest.trim().parse().ok();
             } else if let Some(rest) = trimmed.strip_prefix("margin:") {
                 p.margin = rest.trim().parse().ok();
+            } else if let Some(rest) = trimmed.strip_prefix("reasoning:") {
+                let v = rest.trim().trim_matches('"').to_string();
+                p.reasoning = if v.is_empty() { None } else { Some(v) };
             } else if let Some(rest) = trimmed.strip_prefix("multimodal:") {
                 p.multimodal = Some(rest.trim() == "true");
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
                 let v = rest.trim();
                 p.note = Some(v.trim_matches('"').to_string());
+            } else if let Some(rest) = trimmed.strip_prefix("#") {
+                let comment = rest.trim();
+                if let Some(v) = comment.strip_prefix("probe_raw:") {
+                    p.probe_raw = v.trim().parse().ok();
+                } else if let Some(v) = comment.strip_prefix("probed_at:") {
+                    p.probed_at = Some(v.trim().to_string());
+                }
             }
         }
     }
@@ -281,6 +319,19 @@ fn render_enabled_block(items: &[EnabledModel]) -> String {
         if let Some(mg) = m.margin {
             if (0.0..=1.0).contains(&mg) {
                 s.push_str(&format!("      margin: {:.2}\n", mg));
+            }
+        }
+        if let Some(rs) = &m.reasoning {
+            if !rs.is_empty() {
+                s.push_str(&format!("      reasoning: \"{}\"\n", rs.replace('"', "\\\"")));
+            }
+        }
+        if let Some(pr) = m.probe_raw {
+            s.push_str(&format!("      # probe_raw: {}\n", pr));
+        }
+        if let Some(pa) = &m.probed_at {
+            if !pa.is_empty() {
+                s.push_str(&format!("      # probed_at: {}\n", pa));
             }
         }
         if let Some(mm) = m.multimodal {
@@ -342,6 +393,19 @@ fn render_discovered_block(items: &[EnabledModel]) -> String {
         if let Some(mg) = m.margin {
             if (0.0..=1.0).contains(&mg) {
                 s.push_str(&format!("      margin: {:.2}\n", mg));
+            }
+        }
+        if let Some(rs) = &m.reasoning {
+            if !rs.is_empty() {
+                s.push_str(&format!("      reasoning: \"{}\"\n", rs.replace('"', "\\\"")));
+            }
+        }
+        if let Some(pr) = m.probe_raw {
+            s.push_str(&format!("      # probe_raw: {}\n", pr));
+        }
+        if let Some(pa) = &m.probed_at {
+            if !pa.is_empty() {
+                s.push_str(&format!("      # probed_at: {}\n", pa));
             }
         }
         if let Some(mm) = m.multimodal {
@@ -520,6 +584,10 @@ models:
             multimodal: None,
             capabilities: None,
             note: None,
+            margin: None,
+            reasoning: None,
+            probe_raw: None,
+            probed_at: None,
         }]
     }
 
@@ -607,6 +675,10 @@ models:
                 stream: Some(true),
             }),
             note: Some("hello".to_string()),
+            margin: None,
+            reasoning: None,
+            probe_raw: None,
+            probed_at: None,
         };
         let block = render_enabled_block(&[item]);
         assert!(block.contains("- provider: minnimax\n"));
@@ -691,6 +763,10 @@ models:
             multimodal: None,
             capabilities: None,
             note: None,
+            margin: None,
+            reasoning: None,
+            probe_raw: None,
+            probed_at: None,
         }];
         let block = render_enabled_block(&items);
         let updated = replace_or_insert(raw, &block);
@@ -701,5 +777,30 @@ models:
         assert_eq!(top_models, 1, "CRLF input must produce exactly one top-level models:, got:\n{}", updated);
         assert!(!updated.contains("aliases:"), "old aliases: should be gone, got:\n{}", updated);
         assert!(updated.contains("enabled:"), "new enabled: block should be present");
+    }
+
+    /// Round-trip: yaml with # probe_raw / # probed_at comments, plus a reasoning line,
+    /// must be readable as EnabledModel fields and re-emittable by render_enabled_block.
+    #[test]
+    fn round_trip_preserves_probe_metadata_and_reasoning() {
+        let dir = std::env::temp_dir().join("godex_studio_round_trip");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("config.yaml");
+        let raw = "server:\n  port: 5678\ndefault_provider: minimax\nproviders:\n  minimax:\n    spec: minimax\nmodels:\n  enabled:\n    - provider: minimax\n      model: MiniMax-M3\n      context_window: 1235000\n      # probe_raw: 1300000\n      # probed_at: 2026-06-27T10:00:00Z\n      # probe_method: chat_completions\n      margin: 0.95\n      reasoning: \"max\"\n";
+        std::fs::write(&p, raw).unwrap();
+        let models = read_enabled_models(&p);
+        assert_eq!(models.len(), 1);
+        let m = &models[0];
+        assert_eq!(m.model, "MiniMax-M3");
+        assert_eq!(m.context_window, Some(1235000));
+        assert_eq!(m.probe_raw, Some(1300000), "probe_raw comment not parsed");
+        assert_eq!(m.probed_at.as_deref(), Some("2026-06-27T10:00:00Z"), "probed_at comment not parsed");
+        assert_eq!(m.reasoning.as_deref(), Some("max"), "reasoning field not parsed");
+        // Re-emit and check that probe_raw + probed_at + reasoning come back out.
+        let out = render_enabled_block(&models);
+        assert!(out.contains("      reasoning: \"max\""), "reasoning missing in re-emit:\n{}", out);
+        assert!(out.contains("      # probe_raw: 1300000"), "probe_raw missing in re-emit:\n{}", out);
+        assert!(out.contains("      # probed_at: 2026-06-27T10:00:00Z"), "probed_at missing in re-emit:\n{}", out);
+        let _ = std::fs::remove_file(&p);
     }
 }
