@@ -207,6 +207,19 @@ fn get_initial_config_path(state: State<'_, AppState>) -> Option<String> {
     state.config_path.lock().unwrap().clone().map(|p| p.display().to_string())
 }
 
+/// Diagnostic: dump resolved config path to ~/.godex/model-probe-diag.txt
+/// so we can verify CLI --config=... pass-through end-to-end.
+fn write_diag(state_config: &Option<PathBuf>) {
+    let home = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".into());
+    let diag = std::path::PathBuf::from(home).join(".godex").join("model-probe-diag.txt");
+    let _ = std::fs::create_dir_all(diag.parent().unwrap());
+    let cli = CLI_CONFIG_PATH.get().cloned().unwrap_or(None);
+    let body = format!("cli_arg: {:?}\nresolved: {:?}\n",
+        cli.as_ref().map(|p| p.display().to_string()),
+        state_config.as_ref().map(|p| p.display().to_string()));
+    let _ = std::fs::write(&diag, body);
+}
+
 #[tauri::command]
 fn check_godex_running(port: u16) -> bool {
     TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
@@ -271,6 +284,10 @@ pub fn run() {
             get_initial_config_path,
         ])
         .setup(|app| {
+            // diag
+            if let Some(s0) = app.try_state::<AppState>() {
+                write_diag(&s0.config_path.lock().unwrap().clone());
+            }
             // 1) If --config was provided and the file exists, use it.
             if let Some(Some(cli_path)) = CLI_CONFIG_PATH.get().map(|p| p.as_ref()) {
                 if cli_path.exists() {

@@ -102,6 +102,9 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .log-panel-header .lp-mid-ext{font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;padding:0 4px;border-radius:3px;transition:background .12s}
 .log-panel-header .lp-mid-ext:hover{background:var(--bg3)}
 .log-panel-header .lp-mid-ext input{width:auto;margin:0;cursor:pointer}
+.log-panel-header select#lp-godex-mode{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;cursor:pointer}
+.log-panel-header select#lp-godex-mode:focus{border-color:var(--blue);outline:none}
+.log-panel-header input#lp-godex-active{width:auto;margin:0;cursor:pointer;accent-color:var(--blue)}
 .log-panel-header .lp-right select,.log-panel-header .lp-right input{font-size:10px;padding:1px 4px;width:auto;background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--text)}
 .log-panel-header .lp-count{font-size:10px;color:var(--text2);min-width:48px;text-align:right;font-family:ui-monospace,monospace}
 .log-panel-body{flex:1;overflow-y:auto;overflow-x:hidden;font-family:"Consolas","Courier New",monospace;font-size:11px;background:var(--bg);white-space:pre-wrap}
@@ -284,7 +287,14 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       <span class="lp-title">GodeX</span>
       <span class="lp-sub">网关代理日志</span>
       <span class="lp-status stopped" id="lp-godex-status">● STOPPED</span>
-      <label class="lp-mid-ext" title="外挂模式 godex 可见窗口运行 Studio 从 trace DB 读日志"><input type="checkbox" id="lp-godex-extmode" onchange="onLogPanelExtModeToggle(this.checked)"/>外挂</label>
+      <select id="lp-godex-mode" title="运行模式: 内置(默认)|副本(godex.exe副本)|外挂(external可见窗口)" onchange="onGodexModeChange(this.value)">
+        <option value="builtin">内置</option>
+        <option value="replica">副本</option>
+        <option value="external">外挂</option>
+      </select>
+      <label title="勾选启动 GodeX，取消则停止" style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="lp-godex-active" onchange="onGodexActiveToggle(this.checked)"/>▶
+      </label>
       <div class="lp-right">
         <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
           <input type="checkbox" id="lp-godex-wrap" checked style="width:auto;margin:0"/> Wrap
@@ -362,19 +372,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
     </div>
-    <div class="row" id="replica-section">
-      <label>
-        <input type="checkbox" id="set-replica-mode" onchange="onReplicaModeChange()"/>
-        GodeX 副本运行
-      </label>
-      <div style="font-size:11px;color:var(--text2);margin-top:4px">
-        <div>副本路径: <code id="set-replica-path" style="word-break:break-all">—</code></div>
-        <div>PID: <span id="set-replica-pid">—</span></div>
-        <div id="replica-status" style="margin-top:4px"></div>
-        <button class="btn gray small" onclick="startReplica()" id="btn-start-replica" style="margin-top:6px">启动副本</button>
-        <button class="btn gray small" onclick="killReplica()" id="btn-kill-replica" style="margin-top:6px;display:none">停止副本</button>
-      </div>
-    </div>
+        <!-- replica section removed: use GodeX panel header mode selector instead -->
     <div class="row">
       <label>数据库路径 <span style="color:var(--text2)">(只读，跟随 <code>~/.godex/data/</code>)</span></label>
       <div style="font-size:11px;color:var(--text2);line-height:1.5">
@@ -689,8 +687,13 @@ class LogPanel {
           this.restartBtn.disabled = true;
           const oldText = this.restartBtn.textContent;
           this.restartBtn.textContent = "重启中...";
-    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
-    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
+    // Use new mode selector (dropdown + active checkbox)
+    const mode = $("lp-godex-mode") ? $("lp-godex-mode").value : "builtin";
+    await invoke("set_godex_mode", { mode });
+    await invoke("godex_kill");
+    await invoke("godex_start");
+    const r2 = await invoke("godex_status");
+    const pid = r2.pid || "ok";
           this.restartBtn.textContent = "pid=" + pid;
           setTimeout(() => { this.restartBtn.textContent = oldText; this.restartBtn.disabled = false; }, 1500);
         } catch (e) {
@@ -1194,26 +1197,87 @@ async function saveEnabled() {
 // Poll external godex logs from the log file / trace DB every 5 s when in
 // external mode. The ring buffer + stdout pipe path is internal-only.
 async function onLogPanelExtModeToggle(checked) {
-  const sc = $("lp-godex-extmode"); if (sc) sc.checked = !!checked;
+// === GodeX mode selector (内置/副本/外挂 + 启动勾选) ===
+// State tracking for auto-stop detection
+let _godexActiveStart = 0;       // timestamp when active checkbox was last checked
+let _godexAutoStopTimer = null; // setTimeout handle for 3s auto-verify
+
+async function onGodexModeChange(mode) {
+  // Just persist the mode to Rust (flags set in supervisor, not persisted separately)
   try {
-    await invoke("set_external_mode", { externalMode: !!checked });
-    showMsg(checked ? "外挂模式已开启" : "外挂模式已关闭", "ok");
-    if (checked) {
-      // First-time (or re-toggle) full fetch, then poll incrementally.
-      loadTraceLogs({ reset: true });
-      if (_tracePollTimer) clearInterval(_tracePollTimer);
-      _tracePollTimer = setInterval(() => { loadTraceLogs(); }, 5000);
-    } else if (_tracePollTimer) {
-      clearInterval(_tracePollTimer);
-      _tracePollTimer = null;
-    }
-    return true;
+    await invoke("set_godex_mode", { mode });
+    showMsg("模式已切换为: " + (mode === "builtin" ? "内置" : mode === "replica" ? "副本" : "外挂"), "ok");
   } catch(e) {
-    showMsg("保存失败: " + e, "err");
-    $("lp-godex-extmode").checked = !checked;
-    if (sc) sc.checked = !checked;
-    return false;
+    showMsg("切换模式失败: " + e, "err");
   }
+  // If godex was running, kill it when mode changes
+  if ($("lp-godex-active").checked) {
+    $("lp-godex-active").checked = false;
+    cancelAutoStop();
+    await invoke("godex_kill");
+    showMsg("已停止 GodeX", "ok");
+  }
+}
+
+async function onGodexActiveToggle(checked) {
+  const checkbox = $("lp-godex-active");
+  if (!checkbox) return;
+  checkbox.disabled = true;
+  try {
+    if (checked) {
+      // Record start time for auto-stop detection
+      _godexActiveStart = Date.now();
+      cancelAutoStop();
+      // Start godex with current mode (flags already set via onGodexModeChange)
+      await invoke("godex_start");
+      showMsg("启动中...", "ok");
+      // Poll for 3 seconds; if not running by then, auto-uncheck
+      _godexAutoStopTimer = setTimeout(async function() {
+        _godexAutoStopTimer = null;
+        try {
+          const r = await invoke("godex_status");
+          if (!r.running) {
+            // Not running - auto uncheck
+            if (checkbox.checked) {
+              checkbox.checked = false;
+              checkbox.disabled = false;
+              showMsg("启动失败，GodeX 未能在 3 秒内启动", "err");
+            }
+          } else {
+            // Running OK - re-enable checkbox
+            checkbox.disabled = false;
+          }
+        } catch(e) {
+          if (checkbox.checked) {
+            checkbox.checked = false;
+            checkbox.disabled = false;
+            showMsg("启动验证失败: " + e, "err");
+          }
+        }
+      }, 3000);
+    } else {
+      // Unchecked - stop godex
+      cancelAutoStop();
+      await invoke("godex_kill");
+      showMsg("已停止 GodeX", "ok");
+    }
+  } catch(e) {
+    checkbox.disabled = false;
+    if (checked) { checkbox.checked = false; }
+    showMsg("操作失败: " + e, "err");
+  }
+}
+
+function cancelAutoStop() {
+  if (_godexAutoStopTimer !== null) {
+    clearTimeout(_godexAutoStopTimer);
+    _godexAutoStopTimer = null;
+  }
+}
+
+  // DEPRECATED: onLogPanelExtModeToggle replaced by onGodexModeChange + onGodexActiveToggle
+  // This stub is kept so any stale references (none expected) silently no-op.
+  showMsg("请使用上方模式选择器切换 GodeX 运行模式", "warn");
 }
 
 let _traceLastId = 0;
@@ -1243,8 +1307,12 @@ async function saveAndRestart() {
   showMsg("正在重启 godex...", "");
   setEditorStatus("重启中...");
   try {
-    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
-    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
+    const mode = $("lp-godex-mode") ? $("lp-godex-mode").value : "builtin";
+    await invoke("set_godex_mode", { mode });
+    await invoke("godex_kill");
+    await invoke("godex_start");
+    const r2 = await invoke("godex_status");
+    const pid = r2.pid || "ok";
     showMsg("已重启,pid=" + pid, "ok");
     setEditorStatus("已重启,新 pid=" + pid);
     refreshStatus();
@@ -1304,12 +1372,26 @@ function resetEditor() {
 async function refreshStatus() {
   try {
     const r = await invoke("godex_status");
+    const checkbox = $("lp-godex-active");
     if (r.running) {
       godexPanel.setStatus(true);
       $("lp-godex-status").textContent = r.pid ? ("● RUNNING pid=" + r.pid) : "● RUNNING";
+      // Sync checkbox to "running" state (prevents auto-stop false positive)
+      if (checkbox && !checkbox.checked) {
+        checkbox.checked = true;
+      }
+      // Cancel any pending auto-stop if godex is now running
+      if (checkbox && _godexAutoStopTimer !== null && checkbox.disabled) {
+        cancelAutoStop();
+        checkbox.disabled = false;
+      }
     } else {
       godexPanel.setStatus(false);
       $("lp-godex-status").textContent = "● STOPPED";
+      // Sync checkbox to "stopped" state
+      if (checkbox && checkbox.checked && !checkbox.disabled) {
+        checkbox.checked = false;
+      }
     }
   } catch (e) {
     godexPanel.setStatus(null);
@@ -1322,15 +1404,25 @@ async function refreshStatus() {
   setTimeout(function(){ if(!providers.length){ console.warn("[init] providers timeout, show empty"); renderProviders(); } }, 3000);
   var presetTimer = setTimeout(function(){ console.warn("[init] presets timed out"); }, 5000);
   loadRustPresets().then(function(){ clearTimeout(presetTimer); }).catch(function(e){ clearTimeout(presetTimer); console.warn("[init] loadRustPresets:", e); });
-  // Load external mode from config so the GodeX log panel checkbox reflects persisted state
-  // Always start with external mode OFF, regardless of any persisted value.
-  // The user opts in explicitly via the toggle; the server-side persisted
-  // flag will be overwritten by the next set_external_mode call.
+  // Init mode selector: always start with "builtin" mode, godex stopped.
+  // The user chooses mode via dropdown and starts via the ▶ checkbox.
   try {
-    await invoke("set_external_mode", { externalMode: false });
-    const _em = $("lp-godex-extmode");
-    if (_em) _em.checked = false;
-  } catch(e) { console.warn("[init] reset ext mode:", e); }
+    const rStatus = await invoke("godex_status");
+    const isRunning = rStatus && rStatus.running;
+    if (isRunning) {
+      // Godex is running (from a previous session) - reflect state in UI
+      $("lp-godex-active").checked = true;
+      // Try to detect current mode from status or default to builtin
+      $("lp-godex-mode").value = "builtin";
+    } else {
+      $("lp-godex-active").checked = false;
+      $("lp-godex-mode").value = "builtin";
+    }
+  } catch(e) {
+    $("lp-godex-active").checked = false;
+    $("lp-godex-mode").value = "builtin";
+    console.warn("[init] godex status:", e);
+  }
   try { initSashes(); } catch(e) { console.error("[init] initSashes:", e); }
   try { refreshStatus(); } catch(e) { console.error("[init] refreshStatus:", e); }
   setInterval(function(){ try { refreshStatus(); } catch(e){} }, 5000);
@@ -1432,10 +1524,8 @@ async function resetSettings() {
 }
 
 async function loadReplicaStatus() {
-  try {
-    const s = await invoke("get_replica_status");
-    $('set-replica-mode').checked = s.enabled;
-    if (s.replica_path) $('set-replica-path').textContent = s.replica_path;
+  // DEPRECATED: replica UI removed. Use GodeX panel header mode selector instead.
+  return; // no-op
     $("set-replica-pid").textContent = s.pid ?? "---";
     if (s.running) {
       $("btn-start-replica").style.display = "none";
