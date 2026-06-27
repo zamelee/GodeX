@@ -432,17 +432,17 @@ function validateModel(m) {
 
 ## 三、实施顺序（确认后动手）
 
-| # | 改动 | 文件数 | 风险 | 预计时间 |
-|---|------|--------|------|----------|
-| 1 | 修 margin bug（A） | 4 | 低 | 30 min |
-| 2 | fs-provider 修复（F） | 1（仅 CSS） | 极低 | 5 min |
-| 3 | model-probe CLI 参数（B） | 2 | 低 | 30 min |
-| 4 | setModelParam 节流 + CSS contain（G） | 1（仅 index.html） | 低 | 20 min |
-| 5 | 探测窗口去余量（C） | 1（model-probe/src/index.html） | 极低 | 5 min |
-| 6 | yaml 注释行（D） | 1（model-probe/lib.rs） | 低 | 20 min |
-| 7 | ABE 校验 + reasoning（H+E） | 1（studio/src/index.html） | 低 | 30 min |
+| # | 改动 | 文件数 | 风险 | 预计时间 | 状态 |
+|---|------|--------|------|----------|------|
+| 1 | 修 margin bug（A） | 4 | 低 | 30 min | ✅ ba929c9 |
+| 2 | fs-provider 修复（F） | 1（仅 CSS） | 极低 | 5 min | ✅ 55d63a6 |
+| 3 | model-probe CLI 参数（B） | 2 | 低 | 30 min | ✅ feab3f1 |
+| 4 | setModelParam 节流 + CSS contain（G） | 1（仅 index.html） | 低 | 20 min | ✅ 2f60751 |
+| 5 | 探测窗口去余量（C） | 1（model-probe/src/index.html） | 极低 | 5 min | ✅ 519c3aa |
+| 6 | yaml 注释行（D） | 1（model-probe/lib.rs） | 低 | 20 min | ✅ c09b1a9 |
+| 7 | ABE 校验 + reasoning（H+E） | 1（studio/src/index.html） | 低 | 30 min | ⏳ 进行中 |
 
-**总预计**：~2.5h；按此顺序每步独立可验证。
+**总预计**：~2.5h；#1-#6 已完成并推送到 fork。
 
 
 ---
