@@ -1,2 +1,0 @@
-cargo:rustc-link-search=native=D:\Documents\VibeCoding\GodeX\studio-tauri\model-probe\src-tauri\target\release\build\webview2-com-sys-46d637d8e86f127e\out\x64
-cargo:rustc-link-lib=advapi32
