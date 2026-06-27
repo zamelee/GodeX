@@ -601,6 +601,34 @@ pub fn open_in_editor(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn launch_model_probe(state: State<'_, AppState>) -> Result<(), String> {
+    crate::diag("[cmd] launch_model_probe");
+    use std::path::PathBuf;
+    use std::process::Stdio;
+    let possible_paths = [
+        PathBuf::from("D:/Documents/VibeCoding/GodeX/studio-tauri/model-probe/src-tauri/target/release/model-probe.exe"),
+        PathBuf::from("D:/Documents/VibeCoding/GodeX/studio-tauri/model-probe/target/release/model-probe.exe"),
+    ];
+    let exe_path = possible_paths.iter().find(|p| p.exists())
+        .ok_or("model-probe.exe not found. Build studio-tauri/model-probe first.")?;
+    let cfg_path = {
+        let p = state.paths.lock();
+        p.godex_config.clone()
+    };
+    let mut cmd = std::process::Command::new(exe_path);
+    if !cfg_path.as_os_str().is_empty() {
+        cmd.arg(format!("--config={}", cfg_path.display()));
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("spawn model-probe failed: {}", e))?;
+    crate::diag(&format!("[cmd] launched model-probe from {}", exe_path.display()));
+    Ok(())
+}
+
 #[derive(serde::Serialize)]
 pub struct ReplicaStatus {
     pub enabled: bool,
