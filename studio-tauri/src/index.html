@@ -123,7 +123,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .log-sash:hover::before,.log-sash.dragging::before{background:var(--blue)}
 .model-toolbar{padding:8px 12px;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(48,54,61,.5);flex-wrap:wrap}
 .model-toolbar input[type=text]{flex:1;min-width:120px}
-.model-list{padding:0;contain:strict}
+.model-list{padding:0;contain:layout style;flex:1 1 0;min-height:0;overflow:auto}
 .model-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px;contain:layout style}
 .model-row:hover{background:rgba(255,255,255,.02)}
 .model-row .name{font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
