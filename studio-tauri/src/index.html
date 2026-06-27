@@ -337,6 +337,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       <div style="display:flex;gap:6px">
         <input id="set-config" type="text" placeholder="C:\Users\Bliss\.godex\config.yaml" style="flex:1"/>
         <button class="btn small" onclick="browseConfigPath()" title="浏览...">📁</button>
+        <button class="btn small" onclick="openConfigInEditor()" title="用系统编辑器打开">📄</button>
       </div>
     </div>
     <div class="row">
@@ -1373,6 +1374,14 @@ async function browseConfigPath() {
     });
     if (path) $("set-config").value = path;
   } catch (e) { showMsg("文件选择失败: " + e, "err"); }
+}
+
+async function openConfigInEditor() {
+  const cfg = $("set-config").value.trim();
+  if (!cfg) { showMsg("请先填写 Config 路径", "err"); return; }
+  try {
+    await invoke("open_in_editor", { path: cfg });
+  } catch (e) { showMsg("打开失败: " + e, "err"); }
 }
 
 async function browseBinaryPath() {

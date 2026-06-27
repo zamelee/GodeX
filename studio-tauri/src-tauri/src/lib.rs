@@ -154,6 +154,7 @@ pub fn run() {
             commands::match_model_preset,
             commands::write_codex_model_context,
             commands::read_codex_model_context,
+            commands::open_in_editor,
         ])
         .run(tauri::generate_context!());
 
