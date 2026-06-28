@@ -80,7 +80,20 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                     current_base_url.clear();
                 }
             }
-            // Exit providers section only on next top-level section, not immediately
+            // Exit providers section when we hit models: or other sections
+            if trimmed == "models:" || trimmed == "server:" || trimmed == "default_provider:" {
+                if in_providers {
+                    // Save the last provider before exiting
+                    if !current_provider.is_empty() {
+                        providers.insert(current_provider.clone(), ProviderInfo {
+                            name: current_provider.clone(),
+                            base_url: current_base_url.clone(),
+                            api_key: current_api_key.clone(),
+                        });
+                    }
+                }
+                in_providers = false;
+            }
             if in_enabled && !trimmed.starts_with("enabled:") && !trimmed.starts_with("discovered:") {
                 in_enabled = false;
             }
