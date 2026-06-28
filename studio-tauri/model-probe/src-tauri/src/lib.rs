@@ -80,7 +80,7 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                     current_base_url.clear();
                 }
             }
-            // Exit providers section only when we hit a new top-level section
+            if in_providers { in_providers = false; }
             if in_enabled && !trimmed.starts_with("enabled:") && !trimmed.starts_with("discovered:") {
                 in_enabled = false;
             }
@@ -99,12 +99,11 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                 }
                 current_provider = trimmed.trim_end_matches(':').to_string();
             }
-            // Look for endpoint.base_url (nested under endpoint:)
-            if trimmed.starts_with("base_url:") {
-                current_base_url = trimmed.strip_prefix("base_url:").unwrap_or("").trim().to_string();
+            if let Some(rest) = trimmed.strip_prefix("endpoint:") {
+                current_base_url = rest.trim().to_string();
             }
-            if trimmed.starts_with("api_key:") {
-                current_api_key = trimmed.strip_prefix("api_key:").unwrap_or("").trim().to_string();
+            if let Some(rest) = trimmed.strip_prefix("api_key:") {
+                current_api_key = rest.trim().to_string();
             }
         }
         
