@@ -304,42 +304,39 @@ fn probe_model(
     claimed_ctx: u64,
     claimed_max_tokens: u64,
 ) -> Result<ProbeResult, String> {
-    let client = Client::builder()
-        .timeout(Duration::from_secs(60))
-        .build()
-        .map_err(|e| e.to_string())?;
+    std::thread::spawn(move || {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| e.to_string())?;
 
-    let auth = format!("Bearer {}", api_key);
-    let headers = reqwest::header::HeaderMap::from_iter([
-        (reqwest::header::AUTHORIZATION, auth.parse().unwrap()),
-        (reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap()),
-    ]);
+        let auth = format!("Bearer {}", api_key);
+        let headers = reqwest::header::HeaderMap::from_iter([
+            (reqwest::header::AUTHORIZATION, auth.parse().unwrap()),
+            (reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap()),
+        ]);
 
-    // 1. Probe context window (大步长 + 二分)
-    let max_input = probe_context_window(&client, &base_url, &headers, &model, claimed_ctx)?;
+        let max_input = probe_context_window(&client, &base_url, &headers, &model, claimed_ctx)?;
+        let max_output = probe_max_tokens(&client, &base_url, &headers, &model, claimed_max_tokens)?;
+        let caps = probe_capabilities(&client, &base_url, &headers, &model)?;
 
-    // 2. Probe max tokens
-    let max_output = probe_max_tokens(&client, &base_url, &headers, &model, claimed_max_tokens)?;
-
-    // 3. Probe all capabilities (批量 + 单独)
-    let caps = probe_capabilities(&client, &base_url, &headers, &model)?;
-
-    Ok(ProbeResult {
-        model,
-        max_input,
-        max_output,
-        text: caps.text,
-        image: caps.image,
-        video: caps.video,
-        audio: caps.audio,
-        function: caps.function,
-        computer_use: caps.computer_use,
-        tool_search: caps.tool_search,
-        web_search: caps.web_search,
-        file_search: caps.file_search,
-        mcp: caps.mcp,
-        reasoning: caps.reasoning,
-    })
+        Ok(ProbeResult {
+            model: model.clone(),
+            max_input,
+            max_output,
+            text: caps.text,
+            image: caps.image,
+            video: caps.video,
+            audio: caps.audio,
+            function: caps.function,
+            computer_use: caps.computer_use,
+            tool_search: caps.tool_search,
+            web_search: caps.web_search,
+            file_search: caps.file_search,
+            mcp: caps.mcp,
+            reasoning: caps.reasoning,
+        })
+    }).join().map_err(|e| format!("Thread error: {:?}", e))?
 }
 
 struct Capabilities {
