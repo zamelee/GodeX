@@ -355,6 +355,25 @@ function renderTable() {
 }
 
 // === Probe Logic ===
+// Call Rust probe_model command
+async function probeModelRust(baseUrl, apiKey, model, claimedCtx, claimedMaxTokens) {
+  log(`  [Rust] probing ${model}...`);
+  try {
+    const result = await window.__TAURI__.core.invoke("probe_model", {
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      model: model,
+      claimedCtx: claimedCtx,
+      claimedMaxTokens: claimedMaxTokens
+    });
+    log(`  [Rust] done: ctx=${result.max_input}, max_tokens=${result.max_output}`);
+    return result;
+  } catch (e) {
+    log(`  [Rust] error: ${e}`, "error");
+    return null;
+  }
+}
+
 async function startProbe() {
   if (selectedModels.size === 0) { alert("请先选择模型"); return; }
   
@@ -373,98 +392,64 @@ async function startProbe() {
   document.getElementById("btn-stop").style.display = "inline-block";
   document.getElementById("btn-save").disabled = true;
   
-  // Margin is read from godex.yaml in the Rust backend (read_margin_from_yaml);
-  // the probe window no longer owns it.
-  const apiFormat = document.getElementById("api-format").value;
   const baseUrl = prov.base_url || `${API_BASE}/v1`;
   const models = Array.from(selectedModels);
   
-  // Count total probes
-  const probeCtx = checked("chk-ctx");
-  const probeMulti = checked("chk-text") || checked("chk-image") || checked("chk-video") || checked("chk-audio");
-  const probeTools = checked("chk-function") || checked("chk-websearch") || checked("chk-filesearch") || checked("chk-mcp") || checked("chk-computer") || checked("chk-toolsearch");
-  const probeReasoning = checked("chk-reasoning");
-  
-  progressTotal = 0;
+  progressTotal = models.length;
   progressDone = 0;
-  
-  if (probeCtx) progressTotal += models.length * 3; // binary search ~3 calls
-  if (probeMulti) progressTotal += models.length;
-  if (probeTools) progressTotal += models.length;
-  if (probeReasoning) progressTotal += models.length;
   
   log(`开始探测 ${models.length} 个模型...`);
   
   for (const model of models) {
     if (stopFlag) { log("探测已停止", "warn"); break; }
+    
     const mcfg = allModels.find(m => m.model === model);
     const ctxClaimed = mcfg?.context_window || 100000;
     const outClaimed = mcfg?.max_tokens || 131072;
     
-    results[model] = { model, text: "running", image: "running", video: "running", audio: "running", function: "running", ctx: "running", reasoning: "running" };
+    results[model] = { 
+      model, 
+      ctx: "running", 
+      max_output: null,
+      text: "running", 
+      image: null, 
+      video: null, 
+      audio: null,
+      function: "running", 
+      computer_use: null,
+      tool_search: null,
+      web_search: null,
+      file_search: null,
+      mcp: null,
+      reasoning: "running" 
+    };
     renderTable();
     
-    // Context probe
-    if (probeCtx && !stopFlag) {
-      const maxIn = await probeContext(baseUrl, apiKey, model, ctxClaimed, outClaimed, apiFormat);
-      if (stopFlag) break;
-      results[model].ctx = maxIn;
-      results[model].max_input_raw = maxIn;
-      renderTable();
+    // Call Rust probe_model command
+    const probeResult = await probeModelRust(baseUrl, apiKey, model, ctxClaimed, outClaimed);
+    
+    if (stopFlag) break;
+    
+    if (probeResult) {
+      results[model].ctx = probeResult.max_input;
+      results[model].max_input_raw = probeResult.max_input;
+      results[model].max_output = probeResult.max_output;
+      results[model].text = probeResult.text;
+      results[model].image = probeResult.image;
+      results[model].video = probeResult.video;
+      results[model].audio = probeResult.audio;
+      results[model].function = probeResult.function;
+      results[model].computer_use = probeResult.computer_use;
+      results[model].tool_search = probeResult.tool_search;
+      results[model].web_search = probeResult.web_search;
+      results[model].file_search = probeResult.file_search;
+      results[model].mcp = probeResult.mcp;
+      results[model].reasoning = probeResult.reasoning;
+    } else {
+      log(`  探测失败`, "error");
     }
     
-    // Multimodal probe
-    if (probeMulti && !stopFlag) {
-      if (checked("chk-text")) {
-        results[model].text = await probeText(baseUrl, apiKey, model, apiFormat);
-      }
-      if (checked("chk-image") && !stopFlag) {
-        results[model].image = await probeImage(baseUrl, apiKey, model, apiFormat);
-      }
-      
-      // Max output tokens probing
-      if (checked("chk-maxout") && !stopFlag) {
-        let maxOut = null;
-        // First: try to estimate from completion_tokens from text probe
-        if (window.__lastCompletionTokens !== undefined && window.__lastCompletionTokens > 0) {
-          // Use completion_tokens as a conservative estimate
-          maxOut = window.__lastCompletionTokens;
-          log(`  [max_output] estimated from usage: ${maxOut}`);
-          delete window.__lastCompletionTokens;
-        } else {
-          // Fallback: probe max_output_tokens directly
-          log(`  [max_output] probing directly...`);
-          const probeResult = await probeMaxOutputTokens(baseUrl, apiKey, model, apiFormat);
-          if (probeResult) {
-            maxOut = probeResult.actual;
-          }
-        }
-        results[model].max_output = maxOut;
-      }
-      renderTable();
-    }
-    
-    // Tools probe
-    if (probeTools && !stopFlag) {
-      if (checked("chk-function")) {
-        results[model].function = await probeTool(baseUrl, apiKey, model, "function", apiFormat);
-      }
-      if (checked("chk-computer") && !stopFlag) {
-        results[model].computer_use = await probeTool(baseUrl, apiKey, model, "computer_use", apiFormat);
-      }
-      if (checked("chk-toolsearch") && !stopFlag) {
-        results[model].tool_search = await probeTool(baseUrl, apiKey, model, "tool_search", apiFormat);
-      }
-      renderTable();
-    }
-    
-    // Reasoning probe
-    if (probeReasoning && !stopFlag) {
-      results[model].reasoning = await probeReasoning(baseUrl, apiKey, model, apiFormat);
-      renderTable();
-    }
-    
-    results[model].text = results[model].text === "running" ? true : results[model].text;
+    progressDone++;
     renderTable();
   }
   
