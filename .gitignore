@@ -61,3 +61,4 @@ studio-tauri/__build.log.err
 studio-tauri/__build.ps1
 studio-tauri/src-tauri/target/
 
+__pycache__/
