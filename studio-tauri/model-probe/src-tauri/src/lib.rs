@@ -304,53 +304,67 @@ async fn probe_model(
     claimed_ctx: u64,
     claimed_max_tokens: u64,
 ) -> Result<ProbeResult, String> {
-    let (tx, rx) = std::sync::mpsc::channel();
+    // Clone all values needed for the blocking task
+    let model2 = model.clone();
+    let base_url2 = base_url.clone();
+    let api_key2 = api_key.clone();
     
-    std::thread::spawn(move || {
-        let client = match Client::builder()
-            .timeout(Duration::from_secs(120))
-            .build() {
-            Ok(c) => c,
-            Err(e) => { tx.send(Err(e.to_string())).ok(); return; }
-        };
-
-        let auth = format!("Bearer {}", api_key);
-        let headers = reqwest::header::HeaderMap::from_iter([
-            (reqwest::header::AUTHORIZATION, auth.parse().unwrap()),
-            (reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap()),
-        ]);
-
-        let max_input = probe_context_window(&client, &base_url, &headers, &model, claimed_ctx);
-        let max_output = probe_max_tokens(&client, &base_url, &headers, &model, claimed_max_tokens);
-        let caps = probe_capabilities(&client, &base_url, &headers, &model);
-
-        let result = match (max_input, max_output, caps) {
-            (Ok(mi), Ok(mo), Ok(c)) => Ok(ProbeResult {
-                model: model.clone(),
-                max_input: mi,
-                max_output: mo,
-                text: c.text,
-                image: c.image,
-                video: c.video,
-                audio: c.audio,
-                function: c.function,
-                computer_use: c.computer_use,
-                tool_search: c.tool_search,
-                web_search: c.web_search,
-                file_search: c.file_search,
-                mcp: c.mcp,
-                reasoning: c.reasoning,
-            }),
-            (Err(e), _, _) => Err(e),
-            (_, Err(e), _) => Err(e),
-            (_, _, Err(e)) => Err(e),
-        };
+    eprintln!("[probe] Starting for {}", model);
+    
+    // Use tokio::spawn_blocking to run blocking HTTP in background thread
+    let handle = tokio::task::spawn_blocking(move || {
+        eprintln!("[probe] In blocking task for {}", model2);
         
-        tx.send(result).ok();
-    });
+        let client = Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .expect("Failed to create HTTP client");
 
-    rx.recv().map_err(|e| format!("Channel error: {:?}", e))?
+        let auth = format!("Bearer {}", api_key2);
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::AUTHORIZATION, auth.parse().unwrap());
+        headers.insert(reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap());
+
+        eprintln!("[probe] Probing context for {}", model2);
+        let max_input = probe_context_window(&client, &base_url2, &headers, &model2, claimed_ctx);
+        
+        eprintln!("[probe] Probing max_tokens for {}", model2);
+        let max_output = probe_max_tokens(&client, &base_url2, &headers, &model2, claimed_max_tokens);
+        
+        eprintln!("[probe] Probing capabilities for {}", model2);
+        let caps = probe_capabilities(&client, &base_url2, &headers, &model2);
+
+        eprintln!("[probe] Done probing {}", model2);
+        (max_input, max_output, caps)
+    });
+    
+    // Await the result from the blocking task
+    let (max_input, max_output, caps) = handle.await.map_err(|e| format!("Task error: {:?}", e))?;
+    
+    eprintln!("[probe] Returning result for {}", model);
+    
+    match (max_input, max_output, caps) {
+        (Ok(mi), Ok(mo), Ok(c)) => Ok(ProbeResult {
+        model,
+        max_input: mi,
+        max_output: mo,
+        text: c.text,
+        image: c.image,
+        video: c.video,
+        audio: c.audio,
+        function: c.function,
+        computer_use: c.computer_use,
+        tool_search: c.tool_search,
+        web_search: c.web_search,
+        file_search: c.file_search,
+        mcp: c.mcp,
+        reasoning: c.reasoning,
+        }),
+        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
+    }
 }
+
+
 
 struct Capabilities {
     text: Option<bool>,
@@ -394,12 +408,8 @@ fn probe_context_window(
             Ok(r) if r.status().is_success() => {
                 last_ok = test_val;
                 test_val = (test_val as f64 * 2.0) as u64;
-                eprintln!("[probe] step");
             }
-            _ => {
-                eprintln!("[probe] context {} FAIL", test_val);
-                break;
-            }
+            _ => break,
         }
     }
 
