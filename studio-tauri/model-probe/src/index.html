@@ -110,7 +110,8 @@ td.error { color: var(--fail); font-size: 10px; }
     <div class="section" style="flex:1">
       <div class="section-title">探测内容</div>
       <div class="check-grid">
-        <label class="check-item" id="chk-maxout"><input type="checkbox" checked onchange="renderTable()"/>最大输出</label>\n        <label class="check-item" id="chk-ctx"><input type="checkbox" checked onchange="renderTable()"/>上下文</label>
+        <label class="check-item" id="chk-ctx"><input type="checkbox" checked onchange="renderTable()"/>上下文</label>
+        <label class="check-item" id="chk-maxout"><input type="checkbox" checked onchange="renderTable()"/>最大输出</label>
         <label class="check-item" id="chk-text"><input type="checkbox" checked onchange="renderTable()"/>文本</label>
         <label class="check-item" id="chk-image"><input type="checkbox" checked onchange="renderTable()"/>图片</label>
         <label class="check-item" id="chk-video"><input type="checkbox" checked onchange="renderTable()"/>视频</label>
@@ -312,6 +313,7 @@ function clearAllModels() {
 function getCols() {
   const cols = [{key:"model", label:"Model", sticky:true}];
   if (checked("chk-ctx")) cols.push({key:"ctx", label:"上下文"});
+  if (checked("chk-maxout")) cols.push({key:"max_output", label:"最大输出"});
   if (checked("chk-text")) cols.push({key:"text", label:"文本"});
   if (checked("chk-image")) cols.push({key:"image", label:"图片"});
   if (checked("chk-video")) cols.push({key:"video", label:"视频"});
@@ -346,7 +348,7 @@ function renderTable() {
       const v = r[col.key];
       const cls = v === true ? "yes" : v === false ? "no" : v === "running" ? "running" : v ? "error" : "pending";
       const icon = v === true ? "●" : v === false ? "○" : v === "running" ? "◐" : "—";
-      const display = col.key === "ctx" ? (v ? (v >= 1000000 ? (v/1000000).toFixed(1)+"M" : (v/1000).toFixed(0)+"K") : "—") : (v === true ? "✓" : v === false ? "✗" : v === "running" ? "…" : "—");
+      const display = col.key === "ctx" ? (v ? (v >= 1000000 ? (v/1000000).toFixed(1)+"M" : (v/1000).toFixed(0)+"K") : "—") : col.key === "max_output" ? (v ? (v >= 1000 ? (v/1000).toFixed(0)+"K" : v) : "—") : (v === true ? "✓" : v === false ? "✗" : v === "running" ? "…" : "—");
       return `<td class="${cls}">${col.key === "reasoning" && v ? v : display}</td>`;
     }).join("")}</tr>`;
   }).join("");
