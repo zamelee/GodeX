@@ -394,8 +394,12 @@ fn probe_context_window(
             Ok(r) if r.status().is_success() => {
                 last_ok = test_val;
                 test_val = (test_val as f64 * 2.0) as u64;
+                eprintln!("[probe] step");
             }
-            _ => break,
+            _ => {
+                eprintln!("[probe] context {} FAIL", test_val);
+                break;
+            }
         }
     }
 
