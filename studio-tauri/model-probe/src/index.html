@@ -85,7 +85,7 @@ td.error { color: var(--fail); font-size: 10px; }
   <div class="row">
     <span class="label">Config:</span>
     <input id="cfg-path" type="text" placeholder="godex.yaml 路径" style="flex:1"/>
-    <button class="btn gray" onclick="loadConfig()">加载配置</button>
+    <button class="btn gray" onclick="openConfigPicker()">加载配置</button>
     <span id="cfg-status" class="status"></span>
   </div>
 
@@ -110,7 +110,7 @@ td.error { color: var(--fail); font-size: 10px; }
     <div class="section" style="flex:1">
       <div class="section-title">探测内容</div>
       <div class="check-grid">
-        <label class="check-item" id="chk-ctx"><input type="checkbox" checked onchange="renderTable()"/>上下文</label>
+        <label class="check-item" id="chk-maxout"><input type="checkbox" checked onchange="renderTable()"/>最大输出</label>\n        <label class="check-item" id="chk-ctx"><input type="checkbox" checked onchange="renderTable()"/>上下文</label>
         <label class="check-item" id="chk-text"><input type="checkbox" checked onchange="renderTable()"/>文本</label>
         <label class="check-item" id="chk-image"><input type="checkbox" checked onchange="renderTable()"/>图片</label>
         <label class="check-item" id="chk-video"><input type="checkbox" checked onchange="renderTable()"/>视频</label>
@@ -177,6 +177,28 @@ let progressTotal = 0;
 let progressDone = 0;
 
 // === Init ===
+
+async function openConfigPicker() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "YAML", extensions: ["yaml", "yml"] }],
+        title: "选择 GodeX 配置文件"
+      }
+    });
+    if (path) {
+      document.getElementById("cfg-path").value = path;
+      await loadConfig();
+    }
+  } catch (e) {
+    console.warn("[probe] dialog open failed:", e);
+    // Fallback: just call loadConfig which uses the current text value
+    await loadConfig();
+  }
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   try {
     API_BASE = await window.__TAURI__.core.invoke("get_godex_url");
@@ -225,7 +247,8 @@ async function loadConfig() {
   if (!path) return false;
   try {
     await window.__TAURI__.core.invoke("set_config_path", { path });
-    const [models, provs] = await window.__TAURI__.core.invoke("get_config");
+    const [models, provs] = await window.__TAURI__.core.invoke("get_config"); alert("get_config returned: " + JSON.stringify({models: models.length, provs: provs.length}));
+    console.log("[probe] get_config returned:", JSON.stringify({models, providers}));
     allModels = models || [];
     providers = provs || [];
     populateProviders();
@@ -396,6 +419,26 @@ async function startProbe() {
       if (checked("chk-image") && !stopFlag) {
         results[model].image = await probeImage(baseUrl, apiKey, model, apiFormat);
       }
+      
+      // Max output tokens probing
+      if (checked("chk-maxout") && !stopFlag) {
+        let maxOut = null;
+        // First: try to estimate from completion_tokens from text probe
+        if (window.__lastCompletionTokens !== undefined && window.__lastCompletionTokens > 0) {
+          // Use completion_tokens as a conservative estimate
+          maxOut = window.__lastCompletionTokens;
+          log(`  [max_output] estimated from usage: ${maxOut}`);
+          delete window.__lastCompletionTokens;
+        } else {
+          // Fallback: probe max_output_tokens directly
+          log(`  [max_output] probing directly...`);
+          const probeResult = await probeMaxOutputTokens(baseUrl, apiKey, model, apiFormat);
+          if (probeResult) {
+            maxOut = probeResult.actual;
+          }
+        }
+        results[model].max_output = maxOut;
+      }
       renderTable();
     }
     
@@ -486,6 +529,14 @@ async function probeText(baseUrl, apiKey, model, apiFormat) {
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, messages: [{role:"user",content:"hi"}], max_tokens: 8 }),
       });
+      if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        // Store completion_tokens for max_output estimation
+        const compTokens = data.usage?.completion_tokens;
+        if (compTokens !== undefined) {
+          window.__lastCompletionTokens = compTokens;
+        }
+      }
       return r.ok;
     } else {
       const r = await fetch(`${baseUrl}/responses`, {
@@ -493,9 +544,50 @@ async function probeText(baseUrl, apiKey, model, apiFormat) {
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, input: [{role:"user",content:[{type:"input_text",text:"hi"}]}], max_output_tokens: 8 }),
       });
+      if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        const compTokens = data.usage?.completion_tokens;
+        if (compTokens !== undefined) {
+          window.__lastCompletionTokens = compTokens;
+        }
+      }
       return r.ok;
     }
   } catch { return false; }
+}
+
+// Probe max_output_tokens using binary search (silent mode)
+async function probeMaxOutputTokens(baseUrl, apiKey, model, apiFormat) {
+  const maxTokens = [262144, 196608, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32];
+  for (const mt of maxTokens) {
+    if (stopFlag) return null;
+    try {
+      if (apiFormat === "chat_completions") {
+        const r = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, messages: [{role:"user",content:"say ok"}], max_tokens: mt }),
+        });
+        if (r.ok) {
+          const data = await r.json().catch(()=>({}));
+          const compTokens = data.usage?.completion_tokens;
+          return { requested: mt, actual: compTokens || mt };
+        }
+      } else {
+        const r = await fetch(`${baseUrl}/responses`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, input: [{role:"user",content:[{type:"input_text",text:"say ok"}]}], max_output_tokens: mt }),
+        });
+        if (r.ok) {
+          const data = await r.json().catch(()=>({}));
+          const compTokens = data.usage?.completion_tokens;
+          return { requested: mt, actual: compTokens || mt };
+        }
+      }
+    } catch {}
+  }
+  return null;
 }
 
 async function probeImage(baseUrl, apiKey, model, apiFormat) {
@@ -587,7 +679,7 @@ async function saveResults() {
   const resultsList = Object.values(results).map(r => ({
     model: r.model,
     max_input: r.max_input_raw,
-    max_output: r.max_input_raw ? Math.floor(r.max_input_raw * 0.15) : null,
+    max_output: r.max_output || null,
     text: r.text === true,
     image: r.image === true,
     function: r.function === true,
@@ -597,6 +689,13 @@ async function saveResults() {
   try {
     await window.__TAURI__.core.invoke("save_probe_results", { results: resultsList });
     log("已保存到 godex.yaml", "ok");
+    // Notify studio that probe results were saved
+    try {
+      const { emit } = window.__TAURI__.event;
+      await emit("probe-saved", { models: resultsList.map(r => r.model) });
+    } catch(e) {
+      console.warn("[probe] emit probe-saved failed:", e);
+    }
   } catch(e) { log("保存失败: " + e, "fail"); }
 }
 
