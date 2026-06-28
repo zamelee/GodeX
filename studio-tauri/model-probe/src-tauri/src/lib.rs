@@ -80,7 +80,6 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                     current_base_url.clear();
                 }
             }
-            // Exit providers section when we hit models: or other sections
             // Exit providers section on any top-level section marker
             if !trimmed.is_empty() && !trimmed.starts_with(" ") && !trimmed.starts_with("	") && !trimmed.starts_with("#") {
                 // This is a top-level section header (no leading whitespace, not a comment)
@@ -93,8 +92,8 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                             api_key: current_api_key.clone(),
                         });
                     }
+                    in_providers = false;  // Only set to false if we were in providers
                 }
-                in_providers = false;
             }
             if in_enabled && !trimmed.starts_with("enabled:") && !trimmed.starts_with("discovered:") {
                 in_enabled = false;
