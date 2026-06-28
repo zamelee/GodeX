@@ -297,7 +297,7 @@ pub fn parse_cli_args() {
 // ============================================================
 
 #[tauri::command]
-async fn probe_model(
+fn probe_model(
     base_url: String,
     api_key: String,
     model: String,
@@ -316,13 +316,13 @@ async fn probe_model(
     ]);
 
     // 1. Probe context window (大步长 + 二分)
-    let max_input = probe_context_window(&client, &base_url, &headers, &model, claimed_ctx).await?;
+    let max_input = probe_context_window(&client, &base_url, &headers, &model, claimed_ctx)?;
 
     // 2. Probe max tokens
-    let max_output = probe_max_tokens(&client, &base_url, &headers, &model, claimed_max_tokens).await?;
+    let max_output = probe_max_tokens(&client, &base_url, &headers, &model, claimed_max_tokens)?;
 
     // 3. Probe all capabilities (批量 + 单独)
-    let caps = probe_capabilities(&client, &base_url, &headers, &model).await?;
+    let caps = probe_capabilities(&client, &base_url, &headers, &model)?;
 
     Ok(ProbeResult {
         model,
@@ -357,7 +357,7 @@ struct Capabilities {
 }
 
 // Probe context window: 大步长找范围 -> 二分精确值
-async fn probe_context_window(
+fn probe_context_window(
     client: &Client,
     base_url: &str,
     headers: &reqwest::header::HeaderMap,
@@ -418,7 +418,7 @@ async fn probe_context_window(
 }
 
 // Probe max tokens: 测试关键值
-async fn probe_max_tokens(
+fn probe_max_tokens(
     client: &Client,
     base_url: &str,
     headers: &reqwest::header::HeaderMap,
@@ -451,7 +451,7 @@ async fn probe_max_tokens(
 }
 
 // Probe capabilities: 批量测试 -> 失败单独测
-async fn probe_capabilities(
+fn probe_capabilities(
     client: &Client,
     base_url: &str,
     headers: &reqwest::header::HeaderMap,
@@ -460,7 +460,7 @@ async fn probe_capabilities(
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     // 1. Text (baseline)
-    let text = test_simple_chat(client, &url, headers, model).await;
+    let text = test_simple_chat(client, &url, headers, model);
 
     // 2. Batch test all tools at once
     let all_tools = vec![
@@ -502,15 +502,15 @@ async fn probe_capabilities(
     }
 
     // 3. Individual tests for failed capabilities
-    let function = test_function_call(client, &url, headers, model).await;
-    let computer_use = test_computer_use(client, &url, headers, model).await;
-    let tool_search = test_tool_search(client, &url, headers, model).await;
-    let web_search = test_web_search(client, &url, headers, model).await;
-    let file_search = test_file_search(client, &url, headers, model).await;
-    let reasoning = test_reasoning(client, &url, headers, model).await;
+    let function = test_function_call(client, &url, headers, model);
+    let computer_use = test_computer_use(client, &url, headers, model);
+    let tool_search = test_tool_search(client, &url, headers, model);
+    let web_search = test_web_search(client, &url, headers, model);
+    let file_search = test_file_search(client, &url, headers, model);
+    let reasoning = test_reasoning(client, &url, headers, model);
 
     // Image/Video/Audio - hard to test, return None or assume based on model
-    let image = test_image(client, &url, headers, model).await;
+    let image = test_image(client, &url, headers, model);
 
     Ok(Capabilities {
         text,
@@ -527,7 +527,7 @@ async fn probe_capabilities(
     })
 }
 
-async fn test_simple_chat(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_simple_chat(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "hi"}],
@@ -539,7 +539,7 @@ async fn test_simple_chat(client: &Client, url: &str, headers: &reqwest::header:
     }
 }
 
-async fn test_image(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_image(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{
@@ -557,7 +557,7 @@ async fn test_image(client: &Client, url: &str, headers: &reqwest::header::Heade
     }
 }
 
-async fn test_function_call(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_function_call(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
@@ -570,7 +570,7 @@ async fn test_function_call(client: &Client, url: &str, headers: &reqwest::heade
     }
 }
 
-async fn test_computer_use(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_computer_use(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
@@ -583,7 +583,7 @@ async fn test_computer_use(client: &Client, url: &str, headers: &reqwest::header
     }
 }
 
-async fn test_tool_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_tool_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
@@ -596,7 +596,7 @@ async fn test_tool_search(client: &Client, url: &str, headers: &reqwest::header:
     }
 }
 
-async fn test_web_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_web_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
@@ -609,7 +609,7 @@ async fn test_web_search(client: &Client, url: &str, headers: &reqwest::header::
     }
 }
 
-async fn test_file_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+fn test_file_search(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
@@ -622,7 +622,7 @@ async fn test_file_search(client: &Client, url: &str, headers: &reqwest::header:
     }
 }
 
-async fn test_reasoning(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<String> {
+fn test_reasoning(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<String> {
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": "test"}],
