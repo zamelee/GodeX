@@ -81,7 +81,9 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                 }
             }
             // Exit providers section when we hit models: or other sections
-            if trimmed == "models:" || trimmed == "server:" || trimmed == "default_provider:" {
+            // Exit providers section on any top-level section marker
+            if !trimmed.is_empty() && !trimmed.starts_with(" ") && !trimmed.starts_with("	") && !trimmed.starts_with("#") {
+                // This is a top-level section header (no leading whitespace, not a comment)
                 if in_providers {
                     // Save the last provider before exiting
                     if !current_provider.is_empty() {
