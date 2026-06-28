@@ -60,8 +60,10 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
     for line in raw.lines() {
         let trimmed = line.trim_start();
         
+
         if trimmed == "providers:" { in_providers = true; in_models = false; continue; }
         if trimmed == "models:" { in_models = true; in_providers = false; continue; }
+        if in_models && trimmed.starts_with("enabled:") { in_enabled = true; continue; }
         
         if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
             if in_providers {
@@ -78,6 +80,7 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
                     current_base_url.clear();
                 }
             }
+            if in_providers { in_providers = false; }
             if in_enabled && !trimmed.starts_with("enabled:") && !trimmed.starts_with("discovered:") {
                 in_enabled = false;
             }
@@ -86,7 +89,7 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
         
         if in_providers {
             let indent = line.len() - trimmed.len();
-            if indent == 2 && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            if indent == 2 && trimmed.ends_with(":") && !trimmed.starts_with("#") {
                 if !current_provider.is_empty() {
                     providers.insert(current_provider.clone(), ProviderInfo {
                         name: current_provider.clone(),
@@ -137,7 +140,7 @@ fn get_config(state: State<'_, AppState>) -> Result<(Vec<EnabledModel>, Vec<Prov
         });
     }
     
-    Ok((models, providers.into_values().collect()))
+    eprintln!("[DBG] models={} providers={}", models.len(), providers.len()); eprintln!("[DBG] in_models={} in_enabled={}", in_models, in_enabled); for m in &models { eprintln!("[DBG] model: {}/{}", m.provider, m.model); } Ok((models, providers.into_values().collect()))
 }
 
 #[tauri::command]

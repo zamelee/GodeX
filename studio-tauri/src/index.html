@@ -1269,6 +1269,18 @@ async function refreshStatus() {
   try { refreshStatus(); } catch(e) { console.error("[init] refreshStatus:", e); }
   setInterval(function(){ try { refreshStatus(); } catch(e){} }, 5000);
   try { listen("godex://log", function(ev){ pushLogLine(ev.payload); }); } catch(e) { console.warn("[init] listen:", e); }
+  // Listen for model-probe save events and refresh model list
+  try { listen("probe-saved", async function(ev){
+    console.log("[init] probe-saved event received, refreshing models...");
+    try {
+      await loadProviders();
+      // Also refresh model details display
+      const activeProvider = localStorage.getItem("activeProvider");
+      if (activeProvider && providers.find(function(x){ return x.name === activeProvider; })) {
+        selectProvider(activeProvider);
+      }
+    } catch(e) { console.error("[init] probe-saved refresh error:", e); }
+  }); } catch(e) { console.warn("[init] listen probe-saved:", e); }
   try { invoke("godex_logs_tail", { limit: 500 }).then(function(tail){ if (tail) tail.forEach(function(line){ pushLogLine(line); }); }); } catch(e) { console.warn("[init] tail:", e); }
   if (activeProvider && providers.find(function(x){ return x.name === activeProvider; })) {
     try { selectProvider(activeProvider); } catch(e) { console.error("[init] selectProvider:", e); }
