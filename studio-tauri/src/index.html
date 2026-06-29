@@ -147,6 +147,77 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .modal-box .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/*** Probe Modal Styles ***/
+.probe-modal-box {
+  min-width: 800px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.probe-section {
+  flex: 0 0 auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.probe-label {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.probe-sash {
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  margin: 4px 0;
+}
+.probe-sash:hover { background: var(--blue); }
+.probe-models-list {
+  flex: 1;
+  max-height: 150px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+}
+.probe-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.probe-model-item:hover { background: var(--bg3); }
+.probe-model-item input { width: auto; margin: 0; flex-shrink: 0; }
+.probe-model-name { flex: 1; font-size: 12px; }
+.probe-model-ctx { font-size: 10px; color: var(--blue); min-width: 50px; text-align: right; }
+.probe-caps-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.probe-caps-grid label { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.probe-caps-grid input { width: auto; margin: 0; }
+.probe-results-section { flex: 0 0 200px; min-height: 100px; }
+.probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+#probe-results-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+#probe-results-table th, #probe-results-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+#probe-results-table th { background: var(--bg2); position: sticky; top: 0; z-index: 1; }
+.sticky-col { position: sticky; left: 0; background: var(--bg2); z-index: 2; }
+#probe-results-table tr:hover .sticky-col { background: var(--bg3); }
+.probe-log-section { flex: 1; min-height: 150px; }
+.probe-log { flex: 1; min-height: 150px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; color: #7ee787; white-space: pre-wrap; }
+.empty-msg { color: var(--text2); font-size: 11px; padding: 8px; }
+.probe-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; }
+.probe-actions-right { display: flex; gap: 8px; }
+#probe-results-table th:nth-child(1), #probe-results-table td:nth-child(1) { width: 140px; }
+#probe-results-table th:nth-child(n+2), #probe-results-table td:nth-child(n+2) { width: 70px; }
+
 </style>
 </head>
 <body>
@@ -408,11 +479,87 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     </div>
   </div>
 </div>
+
+
+<div id="probe-modal" class="modal" style="display:none">
+  <div class="modal-box probe-modal-box">
+    <h3>模型探测</h3>
+    <div class="probe-section">
+      <label class="probe-label">Provider</label>
+      <select id="probe-provider" onchange="onProbeProviderChange()">
+        <option value="">-- 选择 Provider --</option>
+      </select>
+    </div>
+    <div class="probe-sash" id="probe-sash-models"></div>
+    <div class="probe-section" id="probe-models-section">
+      <div class="probe-label">选择模型</div>
+      <div id="probe-models-list" class="probe-models-list"></div>
+    </div>
+    <div class="probe-sash" id="probe-sash-caps"></div>
+    <div class="probe-section" id="probe-caps-section">
+      <div class="probe-label">能力探测</div>
+      <div class="probe-caps-grid">
+        <label><input type="checkbox" id="cap-ctx" checked/> Context</label>
+        <label><input type="checkbox" id="cap-max" checked/> MaxTokens</label>
+        <label><input type="checkbox" id="cap-text" checked/> Text</label>
+        <label><input type="checkbox" id="cap-image" checked/> Image</label>
+        <label><input type="checkbox" id="cap-video"/> Video</label>
+        <label><input type="checkbox" id="cap-audio"/> Audio</label>
+        <label><input type="checkbox" id="cap-func" checked/> Func</label>
+        <label><input type="checkbox" id="cap-reason" checked/> Reason</label>
+        <label><input type="checkbox" id="cap-computer"/> Computer</label>
+        <label><input type="checkbox" id="cap-toolsearch"/> ToolSearch</label>
+        <label><input type="checkbox" id="cap-websearch"/> WebSearch</label>
+        <label><input type="checkbox" id="cap-filesearch"/> FileSearch</label>
+        <label><input type="checkbox" id="cap-mcp"/> MCP</label>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-results"></div>
+    <div class="probe-section probe-results-section" id="probe-results-section">
+      <div class="probe-label">结果</div>
+      <div class="probe-table-wrap">
+        <table id="probe-results-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">Model</th>
+              <th>Context</th>
+              <th>MaxOut</th>
+              <th>Text</th>
+              <th>Image</th>
+              <th>Video</th>
+              <th>Audio</th>
+              <th>Func</th>
+              <th>Reason</th>
+              <th>Computer</th>
+              <th>ToolSearch</th>
+              <th>WebSearch</th>
+              <th>FileSearch</th>
+              <th>MCP</th>
+            </tr>
+          </thead>
+          <tbody id="probe-results-body">
+            <tr><td colspan="14" class="empty-msg">等待探测...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-log"></div>
+    <div class="probe-section probe-log-section" id="probe-log-section">
+      <div class="probe-label">日志</div>
+      <div id="probe-log" class="probe-log"></div>
+    </div>
+    <div class="probe-actions">
+      <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
+      <div class="probe-actions-right">
+        <button class="btn gray" id="btn-probe-save" onclick="saveProbeResults()">保存</button>
+        <button class="btn gray" onclick="closeProbeModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script>
-
-
-
-
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -926,12 +1073,194 @@ async function fetchRemoteModels() {
 }
 
 async function launchModelProbe() {
-  try {
-    await invoke("launch_model_probe");
-  } catch(e) {
-    showMsg("启动 model-probe 失败: " + e, "err");
+  // Populate providers dropdown
+  const sel = document.getElementById("probe-provider");
+  sel.innerHTML = '<option value="">-- 选择 Provider --</option>';
+  for (const p of providers) {
+    const opt = document.createElement("option");
+    opt.value = p.name;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+  document.getElementById("probe-models-list").innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+  document.getElementById("probe-log").innerHTML = "";
+  document.getElementById("probe-results-body").innerHTML = "<tr><td colspan='14' class='empty-msg'>等待探测...</td></tr>";
+  document.getElementById("probe-modal").style.display = "flex";
+}
+
+
+function onProbeProviderChange() {
+  const provName = document.getElementById("probe-provider").value;
+  const container = document.getElementById("probe-models-list");
+  if (!provName) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+    return;
+  }
+  const prov = providers.find(p => p.name === provName);
+  if (!prov) return;
+  
+  const models = enabled.filter(m => m.provider === provName).sort((a, b) => a.model.localeCompare(b.model));
+  if (models.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:11px">该 Provider 没有已启用的模型</div>';
+    return;
+  }
+  
+  container.innerHTML = "";
+  for (const m of models) {
+    const div = document.createElement("div");
+    div.style = "display:flex;align-items:center;gap:6px;padding:4px";
+    div.innerHTML = '<input type="checkbox" class="probe-model-check" value="' + m.model + '" checked/>' +
+      '<span style="font-size:12px">' + m.model + '</span>' +
+      '<span style="font-size:10px;color:var(--blue);margin-left:auto">' + 
+      ((m.context_window || 0) / 1000) + "K</span>";
+    container.appendChild(div);
   }
 }
+
+
+
+let _probeResults = [];
+let _probeChanged = false;
+
+async function startProbeRun() {
+  const provName = document.getElementById("probe-provider").value;
+  if (!provName) { showMsg("请选择 Provider", "err"); return; }
+  
+  const checks = document.querySelectorAll(".probe-model-check:checked");
+  if (checks.length === 0) { showMsg("请选择要探测的模型", "err"); return; }
+  
+  const prov = providers.find(p => p.name === provName);
+  if (!prov || !prov.api_key) { showMsg("该 Provider 没有 API Key", "err"); return; }
+  
+  const modelNames = Array.from(checks).map(c => c.value);
+  const btn = document.getElementById("btn-probe-start");
+  btn.disabled = true;
+  btn.textContent = "探测中...";
+  
+  const logEl = document.getElementById("probe-log");
+  const resultsBody = document.getElementById("probe-results-body");
+  logEl.innerHTML = "";
+  _probeResults = [];
+  _probeChanged = false;
+  
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString();
+    logEl.innerHTML += "[" + ts + "] " + msg + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  
+  const baseUrl = prov.base_url || "https://minnimax.chat/v1";
+  
+  try {
+    log("开始探测 " + modelNames.length + " 个模型...");
+    log("Provider: " + provName);
+    log("Base URL: " + baseUrl);
+    log("");
+    
+    for (let i = 0; i < modelNames.length; i++) {
+      const model = modelNames[i];
+      log("--- " + model + " [" + (i + 1) + "/" + modelNames.length + "] ---");
+      
+      try {
+        const r = await invoke("probe_model", {
+          baseUrl: baseUrl,
+          apiKey: prov.api_key,
+          model: model,
+          claimedCtx: 100000,
+          claimedMaxTokens: 131072
+        });
+        
+        if (r.success) {
+          if (r.context_window) log("  Context: " + r.context_window + " tokens");
+          if (r.max_tokens) log("  MaxOut: " + r.max_tokens + " tokens");
+          const caps2 = [];
+          if (r.text) caps2.push("text");
+          if (r.image) caps2.push("image");
+          if (r.video) caps2.push("video");
+          if (r.audio) caps2.push("audio");
+          if (r.function) caps2.push("func");
+          if (r.reasoning) caps2.push("reason:" + r.reasoning);
+          if (caps2.length > 0) log("  Capabilities: " + caps2.join(", "));
+          
+          const m = enabled.find(em => em.provider === provName && em.model === model);
+          if (m) {
+            if (r.context_window && !m.context_window) m.context_window = r.context_window;
+            if (r.max_tokens && !m.max_tokens) m.max_tokens = r.max_tokens;
+          }
+        } else {
+          log("  FAILED: " + (r.error || "unknown error"));
+        }
+        
+        _probeResults.push(r);
+        _probeChanged = true;
+        updateProbeResultsTable();
+        
+      } catch(e) {
+        log("  ERROR: " + e);
+        _probeResults.push({ model: model, success: false, error: String(e) });
+        _probeChanged = true;
+        updateProbeResultsTable();
+      }
+      
+      log("");
+    }
+    
+    log("探测完成!");
+    
+  } catch(e) {
+    log("错误: " + e);
+    showMsg("探测失败: " + e, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "开始探测";
+  }
+}
+
+function updateProbeResultsTable() {
+  const tbody = document.getElementById("probe-results-body");
+  if (_probeResults.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-msg">等待探测...</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  for (const r of _probeResults) {
+    const tr = document.createElement("tr");
+    const ok = (v) => v === true ? "&#10003;" : (v === false ? "&#10007;" : "-");
+    const num = (v) => v ? Math.round(v / 1000) + "K" : "-";
+    tr.innerHTML = '<td class="sticky-col">' + r.model + '</td>' +
+      '<td>' + num(r.context_window) + '</td>' +
+      '<td>' + num(r.max_tokens) + '</td>' +
+      '<td>' + ok(r.text) + '</td>' +
+      '<td>' + ok(r.image) + '</td>' +
+      '<td>' + ok(r.video) + '</td>' +
+      '<td>' + ok(r.audio) + '</td>' +
+      '<td>' + ok(r.function) + '</td>' +
+      '<td>' + ok(r.reasoning) + '</td>' +
+      '<td>' + ok(r.computer_use) + '</td>' +
+      '<td>' + ok(r.tool_search) + '</td>' +
+      '<td>' + ok(r.web_search) + '</td>' +
+      '<td>' + ok(r.file_search) + '</td>' +
+      '<td>' + ok(r.mcp) + '</td>';
+    tbody.appendChild(tr);
+  }
+}
+
+async function saveProbeResults() {
+  if (_probeResults.length === 0) {
+    showMsg("没有可保存的结果", "warn");
+    return;
+  }
+  showMsg("保存功能开发中...", "warn");
+}
+
+function closeProbeModal() {
+  if (_probeChanged) {
+    if (!confirm("有未保存的探测结果，确定关闭？")) return;
+  }
+  document.getElementById("probe-modal").style.display = "none";
+  renderModels();
+}
+
 
 // 判断 row 的参数是否跟 remote 默认完全一样
 function rowEqualsRemote(row, remote) {
