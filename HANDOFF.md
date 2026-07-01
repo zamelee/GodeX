@@ -656,3 +656,47 @@ godex.log 中同时有 98 条 invalid params, context window exceeds limit (2013
 
 ### 验证
 - embedded HTML 全部检查通过（无 oldExtModeCheckbox，mainId+containFix+modeDropdown+modeToggle 全 true）
+
+
+---
+
+# Phase 14 - Model-Probe Modal Render + Sash Wiring (2026-07-01)
+
+## State
+- HEAD: a21509a7 (commit: fix(probe-modal): move probe-flex-mid wrapper AFTER probe-sash-results)
+- Working tree clean (only untracked: bin output + tools/probe mock/pix/log files)
+- Last binary: D:\\Documents\\VibeCoding\\GodeX\\studio-tauri\\src-tauri\\target\\release\\godex-studio.exe (7.5 MB, 2026/7/1)
+- Mock harness: D:\\Documents\\VibeCoding\\GodeX\\tools\\probe\\probe_real_clean.html (94 KB, 2026/7/1 17:48)
+
+## User red lines (permanent)
+1. cargo build --release requires user approval. Sequence: backup -> script verify -> user OK -> compile.
+2. Do not touch godex2.exe (running on 5678), CodeX, Codex++; only fix via GodeX itself.
+
+## Compiled-binary symptoms (user-reproduced)
+- Bug A: log section zero height in probe modal. Buttons may be hidden.
+  - Root: .modal-box (line 142) has no display declaration => defaults to display:block.
+  - .probe-flex-mid wants flex:1 1 0 but parent is block => height 0.
+  - Previous fix .probe-modal-box{display:flex} was added but mock still computed display:block.
+- Bug B: 4 probe-sash-* not draggable.
+  - Root: initSashes() (line 901-941) only registers 4 GodeX Studio top-level sashes.
+  - probe-sash-models / probe-sash-caps / probe-sash-results / probe-sash-log not registered.
+
+## Fix plan
+1. CSS: add display:flex; flex-direction:column; to .modal-box at line 142.
+   - Safe: current modals are column-style; existing .row children stay flex.
+2. JS: add 4 new Sash(...) entries at end of initSashes() (before closing brace).
+   - All 4 use dir=h, mode=pct, defaultRatio by content size.
+   - storageKey prefix godex-studio.probe.*
+3. probe-section in HTML already have IDs (probe-models-section, probe-caps-section, probe-results-section, probe-log-section); only Provider section may need an ID for Sash beforeEl. Will add id=probe-provider-section on line 581.
+4. Verify with Playwright mock BEFORE compiling.
+5. User OK -> cargo build --release once.
+
+## Hard no-no
+- Do not move .probe-actions inside .probe-flex-mid.
+- Do not modify Sash class.
+- Do not touch Rust this round.
+- Push only to fork (zamelee/GodeX), never origin (Ahoo-Wang/GodeX).
+
+## Verification (run before compile)
+python tools/probe/verify_modal_render.py
+  -> Expect display===flex, midWrapperH>=200, logH>=100.
