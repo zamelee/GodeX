@@ -4,6 +4,8 @@
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize)]
@@ -45,8 +47,9 @@ pub struct ProbeClient {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
-    pub client: Client,
-    pub events: Vec<ProbeEvent>,
+    client: Client,
+    cancel: Arc<AtomicBool>,
+    live_emit: Option<Box<dyn Fn(ProbeEvent) + Send + Sync>>,
 }
 
 impl ProbeClient {
@@ -60,8 +63,20 @@ impl ProbeClient {
             api_key: api_key.to_string(),
             model: model.to_string(),
             client,
-            events: Vec::new(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            live_emit: None,
         })
+    }
+    pub fn with_cancel(mut self, cancel: Arc<AtomicBool>) -> Self {
+        self.cancel = cancel;
+        self
+    }
+    pub fn with_live_emit(mut self, f: Box<dyn Fn(ProbeEvent) + Send + Sync>) -> Self {
+        self.live_emit = Some(f);
+        self
+    }
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::SeqCst)
     }
 
     fn headers(&self) -> HeaderMap {
@@ -75,8 +90,14 @@ impl ProbeClient {
         format!("{}/chat/completions", self.base_url)
     }
 
-    fn emit(&mut self, ev: ProbeEvent) {
-        self.events.push(ev);
+    fn emit(&self, ev: ProbeEvent) {
+        if let Some(ref f) = self.live_emit {
+            f(ev);
+        }
+    }
+    /// Kept for backward compatibility; returns empty since events are emitted live.
+    pub fn take_events(&mut self) -> Vec<ProbeEvent> {
+        Vec::new()
     }
 }
 
@@ -152,6 +173,10 @@ impl ProbeClient {
         let mut last_ok = claimed;
         let mut test = claimed;
         loop {
+            if self.is_cancelled() {
+                self.emit(ProbeEvent::info("ctx", "cancelled", &format!("at test={}", test)));
+                break;
+            }
             let r = self.client.post(&url).headers(headers.clone()).json(&build_body(test)).send();
             match r {
                 Ok(resp) if resp.status().is_success() => {
@@ -220,6 +245,10 @@ impl ProbeClient {
         let mut last_ok = claimed;
         let mut test = claimed;
         loop {
+            if self.is_cancelled() {
+                self.emit(ProbeEvent::info("max_tokens", "cancelled", &format!("at test={}", test)));
+                break;
+            }
             let r = self.client.post(&url).headers(headers.clone()).json(&build_body(test)).send();
             match r {
                 Ok(resp) if resp.status().is_success() => {
@@ -276,6 +305,11 @@ impl ProbeClient {
         let headers = self.headers();
 
         // 1. text
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("text", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let body = serde_json::json!({
             "model": self.model,
             "messages": [{"role": "user", "content": "Say hi in 3 words."}],
@@ -294,6 +328,11 @@ impl ProbeClient {
         }
 
         // 2. image (RED+red fixture)
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("image", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let png_url = format!("data:image/png;base64,{}", IMAGE_B64);
         let body = serde_json::json!({
             "model": self.model,
@@ -316,6 +355,11 @@ impl ProbeClient {
         }
 
         // 3. audio (440Hz WAV, input_audio shape)
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("audio", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let body = serde_json::json!({
             "model": self.model,
             "messages": [{"role": "user", "content": [
@@ -338,6 +382,11 @@ impl ProbeClient {
         }
 
         // 4. video (mp4 stub)
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("video", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let mp4_url = format!("data:video/mp4;base64,{}", VIDEO_B64);
         let body = serde_json::json!({
             "model": self.model,
@@ -365,6 +414,11 @@ impl ProbeClient {
 
 
         // 5. function (one tool, tool_choice=required, check tool_calls present)
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("function", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let body = serde_json::json!({
             "model": self.model,
             "messages": [{"role": "user", "content": "What is the weather in Tokyo? Use get_weather."}],
@@ -392,6 +446,11 @@ impl ProbeClient {
         }
 
         // 6. reasoning (reasoning_effort=medium, check reasoning_tokens > 0)
+        if self.is_cancelled() {
+            self.emit(ProbeEvent::info("reasoning", "cancelled", "user cancelled"));
+            return caps;
+        }
+
         let body = serde_json::json!({
             "model": self.model,
             "reasoning_effort": "medium",
@@ -420,6 +479,10 @@ impl ProbeClient {
             ("mcp", serde_json::json!({"type": "mcp"})),
         ];
         for (name, tdef) in tool_specs {
+            if self.is_cancelled() {
+                self.emit(ProbeEvent::info(*name, "cancelled", "user cancelled"));
+                return caps;
+            }
             let body = serde_json::json!({
                 "model": self.model,
                 "messages": [{"role": "user", "content": "hi"}],
@@ -454,8 +517,5 @@ impl ProbeClient {
         caps
     }
 
-    pub fn take_events(&mut self) -> Vec<ProbeEvent> {
-        std::mem::take(&mut self.events)
-    }
 }
 
