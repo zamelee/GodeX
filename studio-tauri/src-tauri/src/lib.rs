@@ -2,6 +2,7 @@
 mod commands;
 mod config;
 mod godex;
+pub mod probe;
 mod state;
 mod strip_ansi;
 
@@ -161,6 +162,9 @@ pub fn run() {
             commands::get_replica_status,
             commands::start_godex_replica,
             commands::kill_godex_replica,
+            commands::probe_ctx,
+            commands::probe_max_tokens,
+            commands::probe_caps,
         ])
         .run(tauri::generate_context!());
 

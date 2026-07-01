@@ -1,0 +1,48 @@
+// probe.rs - GodeX Studio model probe (3-command split)
+// See handoff-draft.md for the architecture decision.
+
+use reqwest::blocking::Client;
+use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
+use serde::Serialize;
+use std::time::Duration;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProbeEvent {
+    pub stage: String,
+    pub status: String,
+    pub detail: Option<String>,
+}
+
+impl ProbeEvent {
+    pub fn ok
+    - stage: &str, detail: &str
+    - Self {
+        Self
+            stage: stage.to_string
+            status: ok.to_string
+            detail: Some
+                detail.to_string
+            
+        }
+    pub fn fail
+    - stage: &str, detail: &str
+    - Self {
+        Self
+            stage: stage.to_string
+            status: fail.to_string
+            detail: Some
+                detail.to_string
+            
+        }
+    pub fn info
+    - stage: &str, status: &str, detail: &str
+    - Self {
+        Self
+            stage: stage.to_string
+            status: status.to_string
+            detail: Some
+                detail.to_string
+            
+        }
+}
+
