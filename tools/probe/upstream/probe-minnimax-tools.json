@@ -1,0 +1,236 @@
+{
+  "MiniMax-M2.7": {
+    "web_search": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 111,
+        "completion_tokens_details": {
+          "reasoning_tokens": 60
+        },
+        "prompt_tokens": 466,
+        "total_characters": 0,
+        "total_tokens": 577
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "web_search_high": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 93,
+        "completion_tokens_details": {
+          "reasoning_tokens": 53
+        },
+        "prompt_tokens": 466,
+        "prompt_tokens_details": {
+          "cached_tokens": 443
+        },
+        "total_characters": 0,
+        "total_tokens": 559
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "file_search_no_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931ad74df8ea6b720c8fc215fcefce'}",
+      "has_tool_calls": false
+    },
+    "file_search_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931ad8c05aacc728c0636609342e98'}",
+      "has_tool_calls": false
+    },
+    "computer_use_preview": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: computer_use_preview (2013)', 'http_code': '400'}, 'request_id': '06931ad8a5499646da8def9abc0a5718'}",
+      "has_tool_calls": false
+    },
+    "mcp": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: mcp (2013)', 'http_code': '400'}, 'request_id': '06931ad9ec88a4226ad3d42bef9eba96'}",
+      "has_tool_calls": false
+    },
+    "parallel_two_funcs": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 82,
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_tokens": 246,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_characters": 0,
+        "total_tokens": 328
+      },
+      "err": null,
+      "has_tool_calls": true
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "web_search": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 69,
+        "completion_tokens_details": {
+          "reasoning_tokens": 29
+        },
+        "prompt_tokens": 466,
+        "total_characters": 0,
+        "total_tokens": 535
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "web_search_high": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 118,
+        "completion_tokens_details": {
+          "reasoning_tokens": 78
+        },
+        "prompt_tokens": 466,
+        "prompt_tokens_details": {
+          "cached_tokens": 443
+        },
+        "total_characters": 0,
+        "total_tokens": 584
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "file_search_no_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931ae13bbf34bdc74d7bd3269d7875'}",
+      "has_tool_calls": false
+    },
+    "file_search_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931ae18980969a14cd87cc169fed67'}",
+      "has_tool_calls": false
+    },
+    "computer_use_preview": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: computer_use_preview (2013)', 'http_code': '400'}, 'request_id': '06931ae2db68ddc920e0dc2dd471edc3'}",
+      "has_tool_calls": false
+    },
+    "mcp": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: mcp (2013)', 'http_code': '400'}, 'request_id': '06931ae2f3bc97c1af27ab5c232a3ddd'}",
+      "has_tool_calls": false
+    },
+    "parallel_two_funcs": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 82,
+        "completion_tokens_details": {
+          "reasoning_tokens": 44
+        },
+        "prompt_tokens": 244,
+        "total_characters": 0,
+        "total_tokens": 326
+      },
+      "err": null,
+      "has_tool_calls": true
+    }
+  },
+  "MiniMax-M3": {
+    "web_search": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 88,
+        "prompt_tokens": 679,
+        "prompt_tokens_details": {
+          "cached_tokens": 626
+        },
+        "total_characters": 0,
+        "total_tokens": 767
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "web_search_high": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 86,
+        "prompt_tokens": 679,
+        "prompt_tokens_details": {
+          "cached_tokens": 665
+        },
+        "total_characters": 0,
+        "total_tokens": 765
+      },
+      "err": null,
+      "has_tool_calls": true
+    },
+    "file_search_no_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931ae9f672b8b0a78880e7fbff956f'}",
+      "has_tool_calls": false
+    },
+    "file_search_vs": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: file_search (2013)', 'http_code': '400'}, 'request_id': '06931aea0e387cc783f0b8eb22496c70'}",
+      "has_tool_calls": false
+    },
+    "computer_use_preview": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: computer_use_preview (2013)', 'http_code': '400'}, 'request_id': '06931aea57d2006bba418c2894fd585d'}",
+      "has_tool_calls": false
+    },
+    "mcp": {
+      "status": 400,
+      "ok": false,
+      "usage": {},
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, invalid tool type: mcp (2013)', 'http_code': '400'}, 'request_id': '06931aea63b50d48dff36fd730a8981b'}",
+      "has_tool_calls": false
+    },
+    "parallel_two_funcs": {
+      "status": 200,
+      "ok": true,
+      "usage": {
+        "completion_tokens": 83,
+        "prompt_tokens": 457,
+        "prompt_tokens_details": {
+          "cached_tokens": 203
+        },
+        "total_characters": 0,
+        "total_tokens": 540
+      },
+      "err": null,
+      "has_tool_calls": true
+    }
+  }
+}

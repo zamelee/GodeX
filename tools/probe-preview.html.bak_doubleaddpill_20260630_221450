@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Probe 窗口 UI 预览</title>
+<style>
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#2d333b;
+  --border:#3c3c3c;--text:#ccc;--text2:#888;
+  --blue:#4fc3f7;--green:#4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);
+  padding:24px;font-size:13px;
+}
+h2{color:var(--blue);margin-bottom:12px}
+.toolbar{
+  position:fixed;top:12px;right:12px;
+  background:var(--bg2);border:1px solid var(--border);
+  padding:8px 12px;border-radius:6px;font-size:11px;
+  display:flex;flex-direction:column;gap:6px;z-index:10000;
+}
+.toolbar button{
+  padding:4px 8px;background:var(--bg3);color:var(--text);
+  border:1px solid var(--border);border-radius:3px;
+  cursor:pointer;font-size:11px;
+}
+.toolbar button:hover{background:var(--blue);color:#000}
+
+.probe-modal-box {
+  min-width: 800px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.probe-section {
+  flex: 0 0 auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.probe-label { font-size: 11px; color: var(--text2); font-weight: 600; }
+.probe-sash {
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  margin: 4px 0;
+}
+.probe-sash:hover { background: var(--blue); }
+
+.probe-models-list {
+  flex: 1;
+  min-height: 60px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px 6px;
+}
+.probe-model-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.probe-model-item:hover { background: var(--bg3); }
+.probe-model-item input { margin: 0; cursor: pointer; }
+.probe-model-item .ctx-badge {
+  font-size: 9px;
+  color: var(--blue);
+  padding-left: 3px;
+}
+.probe-model-item.custom {
+  border-color: var(--blue);
+  background: rgba(79, 195, 247, 0.08);
+}
+.probe-model-item.custom .model-name::before {
+  content: "\271A";
+  font-size: 9px;
+  color: var(--blue);
+  margin-right: 3px;
+}
+.probe-model-item.add-pill {
+  background: transparent;
+  border: 1px dashed var(--border);
+  padding: 3px 8px;
+}
+.probe-model-item.add-pill input {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  width: 110px;
+  padding: 0;
+}
+.probe-model-item.add-pill input::placeholder { color: var(--text2); }
+.probe-model-item.add-pill:focus-within { border-color: var(--blue); }
+
+.probe-caps-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.probe-caps-grid input { width: auto; margin: 0; }
+.cap-item {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+.cap-item:hover { background: var(--bg2); }
+.cap-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.cap-top input { width: auto; margin: 0; cursor: pointer; }
+.cap-zh {
+  font-size: 10px;
+  color: var(--text2);
+  padding-left: 17px;
+  line-height: 1.3;
+}
+
+.probe-results-section { flex: 0 0 200px; min-height: 100px; }
+.probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+.probe-log-section { flex: 1; min-height: 150px; }
+.probe-log { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-family: "Consolas","Courier New",monospace; font-size: 11px; height: 100%; overflow-y: auto; }
+.probe-actions {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px;
+}
+.probe-actions-right { display: flex; gap: 8px; }
+
+.btn { padding: 6px 14px; background: var(--blue); color: #000; border: 1px solid var(--blue); border-radius: 3px; cursor: pointer; font-weight: 600; }
+.btn:disabled { background: var(--bg3); color: var(--text2); border-color: var(--bg3); cursor: not-allowed; }
+.btn.gray { background: var(--bg3); color: var(--text); border-color: var(--border); }
+.btn.gray:hover { background: var(--blue); color: #000; }
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+
+select { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 5px 8px; border-radius: 3px; font-size: 12px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th, td { padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { background: var(--bg2); color: var(--text2); font-weight: 600; position: sticky; top: 0; }
+td.sticky-col, th.sticky-col { text-align: left; position: sticky; left: 0; background: var(--bg2); z-index: 1; }
+.empty-msg { text-align: center; color: var(--text2); padding: 24px; }
+.check-yes { color: var(--green); }
+.check-no { color: #ef4444; }
+.check-na { color: var(--text2); }
+</style>
+</head>
+<body>
+<h2>Probe 窗口 UI 预览 (脱开 studio.exe)</h2>
+
+<div class="toolbar">
+  <b style="color:var(--blue)">状态切换</b>
+  <button onclick="scenarioEmpty()">空状态</button>
+  <button onclick="scenarioLoaded()">已加载 5 模型</button>
+  <button onclick="scenarioEmpty2()">空 Provider(无已启用)</button>
+  <button onclick="scenarioCustom()">5 + 2 自定义</button>
+  <button onclick="scenarioProbed()">探测完成</button>
+  <button onclick="scenarioRunProbe()">▶ 开始探测(模拟)</button>
+  <button onclick="scenarioReset()">重置</button>
+</div>
+
+<div class="probe-modal-box">
+  <h3 style="margin-bottom:12px">模型探测</h3>
+  <div class="probe-section">
+    <label class="probe-label">Provider</label>
+    <select id="probe-provider">
+      <option value="">-- 选择 Provider --</option>
+    </select>
+  </div>
+  <div class="probe-sash"></div>
+  <div class="probe-section">
+    <div class="probe-label">选择模型</div>
+    <div id="probe-models-list" class="probe-models-list"></div>
+  </div>
+  <div class="probe-sash"></div>
+  <div class="probe-section">
+    <div class="probe-label">能力探测</div>
+    <div class="probe-caps-grid">
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-ctx" checked/><span>Context</span></span><span class="cap-zh">上下文窗口大小</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-max" checked/><span>MaxTokens</span></span><span class="cap-zh">单次输出 token 上限</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-text" checked/><span>Text</span></span><span class="cap-zh">文本</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-image" checked/><span>Image</span></span><span class="cap-zh">图片</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-video"/><span>Video</span></span><span class="cap-zh">视频</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-audio"/><span>Audio</span></span><span class="cap-zh">音频 / 音乐</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-func" checked/><span>Func</span></span><span class="cap-zh">函数调用</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-reason" checked/><span>Reason</span></span><span class="cap-zh">推理 / 思维链</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-computer"/><span>Computer</span></span><span class="cap-zh">计算机操作</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-toolsearch"/><span>ToolSearch</span></span><span class="cap-zh">工具搜索</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-websearch"/><span>WebSearch</span></span><span class="cap-zh">网页搜索</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-filesearch"/><span>FileSearch</span></span><span class="cap-zh">文件搜索</span></label>
+      <label class="cap-item"><span class="cap-top"><input type="checkbox" id="cap-mcp"/><span>MCP</span></span><span class="cap-zh">MCP 服务器</span></label>
+    </div>
+  </div>
+  <div class="probe-sash"></div>
+  <div class="probe-section probe-results-section">
+    <div class="probe-label">结果</div>
+    <div class="probe-table-wrap">
+      <table id="probe-results-table">
+        <thead><tr>
+          <th class="sticky-col">Model</th>
+          <th>Context</th><th>MaxOut</th>
+          <th>Text</th><th>Image</th><th>Video</th><th>Audio</th>
+          <th>Func</th><th>Reason</th>
+          <th>Computer</th><th>ToolSearch</th><th>WebSearch</th><th>FileSearch</th><th>MCP</th>
+        </tr></thead>
+        <tbody id="probe-results-body"><tr><td colspan="14" class="empty-msg">等待探测...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="probe-sash"></div>
+  <div class="probe-section probe-log-section">
+    <div class="probe-label">日志</div>
+    <div id="probe-log" class="probe-log"></div>
+  </div>
+  <div class="probe-actions">
+    <button class="btn" id="btn-probe-start">开始探测</button>
+    <div class="probe-actions-right">
+      <button class="btn gray" id="btn-probe-save">保存</button>
+      <button class="btn gray">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Mock data =====
+const MOCK_PROVIDERS = [
+  { name: 'minnimax.chat', base_url: 'https://minnimax.chat/v1', api_key: 'gw-xxx' },
+  { name: 'other.api',     base_url: 'https://api.other.com/v1', api_key: 'k2' },
+];
+const MOCK_ENABLED_BY_PROVIDER = {
+  'minnimax.chat': [
+    { model: 'MiniMax-M2.7',           context_window: 204800 },
+    { model: 'MiniMax-M2.7-highspeed', context_window: 204800 },
+    { model: 'MiniMax-M3',             context_window: 1000000 },
+    { model: 'MiniMax-M3-7B',          context_window: 128000 },
+    { model: 'MiniMax-M5-Pro',         context_window: 500000 },
+  ],
+  'other.api': [],
+};
+
+// Mock probe results (simulates what Rust probe_model would return)
+function mockProbeResult(model) {
+  return {
+    model,
+    context_window: MOCK_ENABLED_BY_PROVIDER['minnimax.chat'].find(m=>m.model===model)?.context_window || 131072,
+    max_tokens: 131072,
+    text: true, image: false, video: false, audio: false,
+    function: model.startsWith('MiniMax-M3') || model.includes('Pro'),
+    computer_use: false, tool_search: false, web_search: false, file_search: false, mcp: false,
+    reasoning: model.includes('M3') || model.includes('Pro'),
+  };
+}
+
+// ===== JS from index.html =====
+function $(id){return document.getElementById(id);}
+
+function onProbeProviderChange() {
+  const provName = $("probe-provider").value;
+  const container = $("probe-models-list");
+  container.innerHTML = "";
+  if (!provName) {
+    renderEmptyMsg(container, "先选择 Provider");
+    return;
+  }
+  const models = (MOCK_ENABLED_BY_PROVIDER[provName] || []).slice().sort((a,b)=>a.model.localeCompare(b.model));
+  if (models.length === 0) {
+    renderEmptyMsg(container, "该 Provider 没有已启用的模型。下方可手动添加任意模型名。");
+  } else {
+    models.forEach(function(m){ appendModelPill(container, m.model, m.context_window || 0, false); });
+  }
+  appendAddPill(container);
+}
+function appendModelPill(container, name, ctx, isCustom) {
+  const label = document.createElement("label");
+  label.className = "probe-model-item" + (isCustom ? " custom" : "");
+  const chk = document.createElement("input");
+  chk.type = "checkbox"; chk.className = "probe-model-check"; chk.value = name; chk.checked = true;
+  if (isCustom) chk.dataset.custom = "1";
+  const span = document.createElement("span"); span.className = "model-name"; span.textContent = name;
+  label.appendChild(chk); label.appendChild(span);
+  if (ctx > 0) {
+    const badge = document.createElement("span"); badge.className = "ctx-badge";
+    badge.textContent = Math.round(ctx / 1000) + "K";
+    label.appendChild(badge);
+  }
+  container.appendChild(label);
+}
+function appendAddPill(container) {
+  const wrap = document.createElement("label");
+  wrap.className = "probe-model-item add-pill";
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "probe-custom-input";
+  input.placeholder = "+ 手动添加模型名";
+  wrap.appendChild(input);
+  container.appendChild(wrap);
+  input.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter") { ev.preventDefault(); addCustomModel(); }
+  });
+}
+function addCustomModel() {
+  const input = document.querySelector(".probe-custom-input");
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  if (document.querySelector('.probe-model-check[value="' + name.replace(/"/g,'\\"') + '"]')) {
+    input.value = ""; return;
+  }
+  const container = $("probe-models-list");
+  appendModelPill(container, name, 0, true);
+  container.appendChild(input.parentElement);
+  input.value = ""; input.focus();
+}
+function renderEmptyMsg(container, msg) {
+  const div = document.createElement("div");
+  div.style.cssText = "color:var(--text2);font-size:11px;padding:8px;width:100%";
+  div.textContent = msg;
+  container.appendChild(div);
+  appendAddPill(container);
+}
+
+// ===== Probe simulation =====
+const logEl = $("probe-log");
+function log(msg) {
+  const ts = new Date().toLocaleTimeString();
+  logEl.innerHTML += "[" + ts + "] " + msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+const resultsBody = $("probe-results-body");
+function renderResults(results) {
+  if (results.length === 0) {
+    resultsBody.innerHTML = '<tr><td colspan="14" class="empty-msg">等待探测...</td></tr>';
+    return;
+  }
+  resultsBody.innerHTML = "";
+  results.forEach(function(r){
+    const tr = document.createElement("tr");
+    const ok = function(v){ return v === true ? '<span class="check-yes">\u2713</span>' : (v === false ? '<span class="check-no">\u2717</span>' : '<span class="check-na">-</span>'); };
+    const num = function(v){ return v ? Math.round(v/1000)+'K' : '-'; };
+    tr.innerHTML = '<td class="sticky-col">'+r.model+'</td>'+
+      '<td>'+num(r.context_window)+'</td>'+
+      '<td>'+num(r.max_tokens)+'</td>'+
+      '<td>'+ok(r.text)+'</td>'+
+      '<td>'+ok(r.image)+'</td>'+
+      '<td>'+ok(r.video)+'</td>'+
+      '<td>'+ok(r.audio)+'</td>'+
+      '<td>'+ok(r.function)+'</td>'+
+      '<td>'+ok(r.reasoning)+'</td>'+
+      '<td>'+ok(r.computer_use)+'</td>'+
+      '<td>'+ok(r.tool_search)+'</td>'+
+      '<td>'+ok(r.web_search)+'</td>'+
+      '<td>'+ok(r.file_search)+'</td>'+
+      '<td>'+ok(r.mcp)+'</td>';
+    resultsBody.appendChild(tr);
+  });
+}
+
+// ===== Wire up =====
+$("probe-provider").addEventListener("change", onProbeProviderChange);
+$("btn-probe-start").addEventListener("click", startProbe);
+$("btn-probe-save").addEventListener("click", function(){ alert("(模拟) 已保存"); });
+
+async function startProbe() {
+  const checks = document.querySelectorAll(".probe-model-check:checked");
+  if (checks.length === 0) { alert("请先勾选模型"); return; }
+  const btn = $("btn-probe-start");
+  btn.disabled = true; btn.textContent = "探测中...";
+  logEl.innerHTML = "";
+  renderResults([]);
+  log("开始探测 " + checks.length + " 个模型...");
+  log("Base URL: " + (MOCK_PROVIDERS[0].base_url));
+  const arr = [];
+  for (const c of checks) {
+    const name = c.value;
+    log("--- " + name + " ---");
+    await new Promise(r => setTimeout(r, 300));
+    const r = mockProbeResult(name);
+    log("  Context: " + (r.context_window || "FAIL"));
+    log("  MaxOut: " + (r.max_tokens || "FAIL"));
+    const caps = [];
+    if (r.text) caps.push("text");
+    if (r.image) caps.push("image");
+    if (r.function) caps.push("func");
+    if (r.reasoning) caps.push("reason");
+    log("  Caps: " + (caps.join(",") || "(none)"));
+    arr.push(r);
+    renderResults(arr);
+  }
+  log("探测完成");
+  btn.disabled = false; btn.textContent = "开始探测";
+}
+
+// ===== Scenarios =====
+function populateDropdown() {
+  const sel = $("probe-provider");
+  sel.innerHTML = '<option value="">-- 选择 Provider --</option>';
+  MOCK_PROVIDERS.forEach(function(p) {
+    const opt = document.createElement("option");
+    opt.value = p.name; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+}
+function scenarioEmpty() {
+  populateDropdown();
+  $("probe-provider").value = "";
+  onProbeProviderChange();
+  logEl.innerHTML = ""; renderResults([]);
+}
+function scenarioLoaded() {
+  populateDropdown();
+  $("probe-provider").value = "minnimax.chat";
+  onProbeProviderChange();
+  logEl.innerHTML = ""; renderResults([]);
+}
+function scenarioEmpty2() {
+  populateDropdown();
+  $("probe-provider").value = "other.api";
+  onProbeProviderChange();
+  logEl.innerHTML = ""; renderResults([]);
+}
+function scenarioCustom() {
+  scenarioLoaded();
+  setTimeout(function() {
+    const inp = document.querySelector(".probe-custom-input");
+    inp.value = "gpt-test-1";
+    addCustomModel();
+    inp.value = "MiniMax-M9-Future";
+    addCustomModel();
+  }, 100);
+}
+function scenarioProbed() {
+  scenarioLoaded();
+  setTimeout(function() {
+    const models = MOCK_ENABLED_BY_PROVIDER['minnimax.chat'];
+    logEl.innerHTML = "";
+    renderResults(models.map(mockProbeResult));
+    log("(已预填充) 5 行结果");
+  }, 100);
+}
+function scenarioRunProbe() {
+  scenarioLoaded();
+  setTimeout(startProbe, 100);
+}
+function scenarioReset() {
+  scenarioEmpty();
+}
+
+// Initial
+populateDropdown();
+scenarioEmpty();
+</script>
+</body>
+</html>

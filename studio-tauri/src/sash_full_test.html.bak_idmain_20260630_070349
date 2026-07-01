@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--bg:#1e1e1e;--bg2:#252526;--bg3:#333;--border:#3c3c3c;--text:#ccc;--text2:#888;--blue:#4fc3f7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:13px;background:var(--bg);color:var(--text)}
+header{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;height:40px;display:flex;align-items:center}
+main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
+.col-left{flex:0 0 240px;background:var(--bg2);overflow:hidden;padding:8px}
+.sash-v{width:8px;height:100%;cursor:col-resize;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.sash-h{height:14px;width:100%;cursor:row-resize;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}
+.sash-h::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:4px;background:var(--border);border-radius:1px}
+.sash-h:hover,.sash-h.dragging{background:var(--blue)}
+.sash-h:hover::before,.sash-h.dragging::before{background:#fff}
+.sash-v:hover,.sash-v.dragging{background:var(--blue)}
+.col-right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.forms-area{flex:1 1 0;overflow:hidden;padding:12px;display:flex;flex-direction:column;min-height:0}
+.form-section{background:var(--bg2);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column}
+#fs-provider{flex:0 1 auto;min-height:80px;background:rgba(255,0,0,.1)}
+#fs-models{flex:1 1 0;min-height:80px;background:rgba(0,255,0,.1)}
+.log-region{flex:1 1 0;background:var(--bg);min-height:120px;padding:8px}
+.info{position:fixed;bottom:10px;right:10px;background:var(--blue);color:#000;padding:6px 10px;border-radius:4px;font-size:11px;z-index:99;font-family:monospace}
+.btn{padding:6px 12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;margin:4px}
+.btn:hover{background:var(--blue);color:#000}
+</style></head>
+<body>
+<header><h2 style="color:var(--blue)">Sash 综合测试 (3个 sash)</h2></header>
+<main>
+  <div class="col-left" id="col-left">
+    <h4 style="margin-bottom:8px">左侧栏</h4>
+    <button class="btn" onclick="alert('按钮可点击')">测试按钮</button>
+  </div>
+  <div class="sash sash-v" id="sash-cols" title="拖动调整左右"></div>
+  <div class="col-right" id="col-right">
+    <div class="forms-area" id="forms-area">
+      <div class="form-section" id="fs-provider"><strong>服务商信息 (可压缩)</strong></div>
+      <div class="sash sash-h" id="sash-forms" title="拖动调整上下"></div>
+      <div class="form-section" id="fs-models"><strong>已启用模型 (可扩展)</strong></div>
+    </div>
+  </div>
+</main>
+<div class="sash sash-h" id="sash-main-log" title="拖动调整主区与日志区"></div>
+<div class="log-region" id="log-region"><strong>日志区</strong></div>
+<div class="info" id="info">拖动任意 sash 测试</div>
+<div id="diag" style="position:fixed;top:50px;left:10px;background:#ff0;color:#000;z-index:9999;font-size:11px;padding:4px;max-width:400px;font-family:monospace"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const _godexSashes = [];
+class Sash {
+  constructor({ sashEl, beforeEl, afterEl, dir, storageKey, minBefore = 80, minAfter = 80, defaultRatio = 0.5, mode = "pct" }) {
+    this.sash = sashEl;
+    this.before = beforeEl;
+    this.after = afterEl;
+    this.dir = dir; // 'h' (horizontal sash, vertical split) or 'v' (vertical sash, horizontal split)
+    this.storageKey = storageKey;
+    this.minBefore = minBefore;
+    this.minAfter = minAfter;
+    this.defaultRatio = defaultRatio;
+    this.mode = mode; // "pct" => flex-basis:%; "px" => flex-basis:px
+    this.container = sashEl.parentElement;
+    this._onMove = this._onMove.bind(this);
+    this._onUp = this._onUp.bind(this);
+    this._onDown = this._onDown.bind(this);
+    this._onTouchStart = this._onTouchStart.bind(this);
+    sashEl.addEventListener("mousedown", this._onDown);
+    sashEl.addEventListener("touchstart", this._onTouchStart, { passive: false });
+    // Defer to next frame so the flex layout has computed container size.
+    const me = this;
+    requestAnimationFrame(() => requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); }));
+  }
+  _loadRatio() {
+    const v = parseFloat(localStorage.getItem(this.storageKey));
+    if (Number.isFinite(v) && v >= 0.05 && v <= 0.95) return v;
+    return this.defaultRatio;
+  }
+  applyRatio(ratio, persist = true) {
+    const r = Math.max(0.05, Math.min(0.95, ratio));
+    if (this.mode === "px") {
+      const total = this.dir === "v" ? this.container.clientWidth : this.container.clientHeight;
+      const px = Math.round(r * total);
+      this.before.style.flex = `0 0 ${px}px`;
+      this.after.style.flex = "1 1 0";
+    } else if (this.dir === "v") {
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    } else {
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    }
+    if (persist) localStorage.setItem(this.storageKey, String(r));
+  }
+  _onMove(ev) {
+    if (!this.dragging) return;
+    const rect = this.container.getBoundingClientRect();
+    const pos = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+    const pos2 = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    let ratio;
+    if (this.dir === "v") {
+      ratio = (pos2 - rect.left) / rect.width;
+    } else {
+      ratio = (pos - rect.top) / rect.height;
+    }
+    // Enforce minimums.
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const minBeforeRatio = this.minBefore / totalPx;
+    const maxBeforeRatio = 1 - (this.minAfter / totalPx);
+    ratio = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
+    this.applyRatio(ratio, /*persist=*/false);
+  }
+  _onUp() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.sash.classList.remove("dragging");
+    document.body.style.cursor = "";
+    // Persist final ratio.
+    const rect = this.container.getBoundingClientRect();
+    const beforeRect = this.before.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+    this.applyRatio(beforePx / totalPx, /*persist=*/true);
+    window.removeEventListener("mousemove", this._onMove);
+    window.removeEventListener("mouseup", this._onUp);
+    window.removeEventListener("touchmove", this._onMove);
+    window.removeEventListener("touchend", this._onUp);
+  }
+  _onDown(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
+    window.addEventListener("mousemove", this._onMove);
+    window.addEventListener("mouseup", this._onUp);
+  }
+  _onTouchStart(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    window.addEventListener("touchmove", this._onMove, { passive: false });
+    window.addEventListener("touchend", this._onUp);
+  }
+}
+function initSashes() {
+  // A: header / main / log-region — between main and log-region.
+  // The parent of #sash-main-log is <body>.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-main-log"),
+    beforeEl: $("main"),
+    afterEl: $("log-region"),
+    dir: "h",
+    storageKey: "godex-studio.mainLogRatio",
+    minBefore: 200, minAfter: 120, defaultRatio: 0.6,
+  }));
+  // D: col-left / col-right — vertical split.
+  // E: forms area — vertical split between #fs-provider and #fs-models.
+  // The parent of #sash-forms is #forms-area.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-forms"),
+    beforeEl: $("fs-provider"),
+    afterEl: $("fs-models"),
+    dir: "h",
+    storageKey: "godex-studio.formsRatio",
+    minBefore: 80, minAfter: 80, defaultRatio: 0.35, mode: "px",
+  }));
+
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-cols"),
+    beforeEl: $("col-left"),
+    afterEl: $("col-right"),
+    dir: "v",
+    storageKey: "godex-studio.colsRatio",
+    minBefore: 120, minAfter: 240, defaultRatio: 0.22,
+  }));
+  // B: Studio / GodeX panels — horizontal split inside log-region.
+  _godexSashes.push(new Sash({
+    sashEl: $("log-sash"),
+    beforeEl: $("lp-studio"),
+    afterEl: $("lp-godex"),
+    dir: "h",
+    storageKey: "godex-studio.sashRatio",
+    minBefore: 120, minAfter: 80, defaultRatio: 0.6,
+  }));
+}
+
+
+window.addEventListener("resize", function(){
+  for(var s of _godexSashes){ try{s.applyRatio(s._loadRatio(), false);}catch(e){} }
+});
+
+document.addEventListener("mousemove", function(e){
+  for(var s of _godexSashes){
+    if(s.dragging){
+      var rect = s.container.getBoundingClientRect();
+      var pos = (e.touches ? e.touches[0].clientY : e.clientY);
+      var pos2 = (e.touches ? e.touches[0].clientX : e.clientX);
+      var ratio = s.dir === "v" ? (pos2 - rect.left)/rect.width : (pos - rect.top)/rect.height;
+      var totalPx = s.dir === "v" ? rect.width : rect.height;
+      var minR = s.minBefore / totalPx;
+      var maxR = 1 - s.minAfter / totalPx;
+      ratio = Math.max(minR, Math.min(maxR, ratio));
+      s.applyRatio(ratio, false);
+      document.getElementById("info").textContent = s.sash.id + ": " + (ratio*100).toFixed(1) + "%";
+    }
+  }
+});
+try {
+  initSashes();
+} catch(e) {
+  var d = document.getElementById("diag");
+  d.style.display = "block";
+  d.innerHTML = "initSashes ERROR: " + e.message;
+}
+var d = document.getElementById("diag");
+d.style.display = "block";
+if (_godexSashes.length >= 3) {
+  var sml = _godexSashes[2];
+  var sl = document.getElementById("sash-main-log");
+  d.innerHTML =
+    "Sash count: " + _godexSashes.length + "<br>" +
+    "sash[2] container=" + sml.container.tagName + " (id=" + (sml.container.id||"?") + ")<br>" +
+    "sash-main-log.parent=" + sl.parentElement.tagName + " (id=" + (sl.parentElement.id||"?") + ")<br>" +
+    "before=main, after=log-region";
+} else {
+  d.innerHTML = "_godexSashes=" + _godexSashes.length;
+}
+</script>
+</body></html>

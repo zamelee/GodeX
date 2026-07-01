@@ -1,0 +1,571 @@
+{
+  "MiniMax-M2.7": {
+    "text": {
+      "ok": true,
+      "status": 200,
+      "time": 2.69,
+      "usage": {
+        "completion_tokens": 81,
+        "completion_tokens_details": {
+          "reasoning_tokens": 74
+        },
+        "prompt_tokens": 50,
+        "total_characters": 0,
+        "total_tokens": 131
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 74,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"Reply with one short sentence about the weather.\" So we need to produce a short sentence about the weather. The request is straightforward. There's no policy violation. So we can comply. Must reply with one short sentence about the weather. So something like \"It is sunny and warm today.\" That's a short sentence. That's it.\n</think>\n\nIt is sunny and warm today.",
+      "has_think": true,
+      "err": null
+    },
+    "image_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 6.97,
+      "usage": {
+        "completion_tokens": 238,
+        "completion_tokens_details": {
+          "reasoning_tokens": 210
+        },
+        "prompt_tokens": 55,
+        "total_characters": 0,
+        "total_tokens": 293
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 210,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"Describe this image briefly (1-2 sentences, mention dominant color).\"\n\nBut there is no image provided. According to policy, we cannot assume an image is present. The user might be expecting us to describe something that we can't see. We have no context. We need to respond that we cannot see the image, request them to provide image description, or let them know that we need the image.\n\nWe need to follow policy: If user requests description but we can't see the image, we should ask for more context or request the image. There's no policy preventing us from asking clarifying question. So answer: \"I can't see the image, could you provide a description or the image?\" There's no conflict.\n\nThus answer: \"I’m unable to view the image directly. If you describe it, I can help.\" The user wants short. But we can be concise: \"I’m unable to view the image. Could you provide a description so I can help?\" Should be brief.\n\nThus final.\n</think>\n\nI’m unable to view the image directly. If you describe it (or share a URL), I can provide a brief description for you.",
+      "has_think": true,
+      "err": null
+    },
+    "audio_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 6.63,
+      "usage": {
+        "completion_tokens": 256,
+        "completion_tokens_details": {
+          "reasoning_tokens": 240
+        },
+        "prompt_tokens": 51,
+        "total_characters": 0,
+        "total_tokens": 307
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 240,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What does this audio sound like? Reply briefly.\" However, there is no audio attached. As an AI text model, I can't process audio directly unless given a description. Since no audio is provided, I need to ask for clarification or let the user know I cannot hear audio. However, the user explicitly asks \"What does this audio sound like? Reply briefly.\" There's no audio attached. According to policy, we should politely respond that we don't have access to audio. We can ask user to describe audio. So we respond \"I’m sorry, but I don’t have the ability to listen to audio. Could you describe what it sounds like?\" But the instruction says \"Reply briefly.\" So a brief response: \"I’m sorry, but I can’t hear audio; could you describe it?\" That satisfies brevity and policy. Probably we can say \"I don’t have the ability to listen to audio; could you describe it?\" Should we be more succinct: \"I can’t hear audio. Please describe it.\" That's brief.\n\nThus answer: \"I’m unable to listen to audio; could you describe the sound?\" Probably that.\n\nWe'll comply.\n</think>\n\nI’m unable to listen to audio; could you describe what it sounds like?",
+      "has_think": true,
+      "err": null
+    },
+    "video_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 7.24,
+      "usage": {
+        "completion_tokens": 230,
+        "completion_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "prompt_tokens": 49,
+        "total_characters": 0,
+        "total_tokens": 279
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 180,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"Describe what happens in this video briefly.\" There's no video attached. As a text-based model, we cannot view or process video content unless it's provided as a description, transcript, or a link. We have no context. So we must respond politely, explain we cannot see video and ask for more info or alternative description.\n\nThe user may have intended to embed a video but didn't. We can ask for a description or ask them to provide a link. We can also mention that if they can provide a description or transcript, we can summarize it. Or we could ask for the video URL.\n\nWe need to comply with policy. There's no disallowed content. The request is straightforward.\n\nWe must not guess. We must ask for clarification.\n\nSo final answer: Apology and request for more info. Perhaps suggest they provide a link or description.\n\nHence produce final.\n</think>\n\nI’m sorry, but I can’t view or listen to videos. If you can provide a brief description of the video’s content, a link where I can access it, or a transcript, I’ll be happy to give you a concise summary.",
+      "has_think": true,
+      "err": null
+    },
+    "function_call_required": {
+      "ok": true,
+      "status": 200,
+      "time": 1.5,
+      "usage": {
+        "completion_tokens": 56,
+        "completion_tokens_details": {
+          "reasoning_tokens": 32
+        },
+        "prompt_tokens": 206,
+        "total_characters": 0,
+        "total_tokens": 262
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\": \"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_function_0vuzfgnj08nq_1",
+          "index": 0,
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 32,
+      "finish_reason": "tool_calls",
+      "reply": "<think>\nThe user wants to know the current weather in Tokyo. I should use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+      "has_think": true,
+      "err": null
+    },
+    "function_call_auto": {
+      "ok": true,
+      "status": 200,
+      "time": 2.27,
+      "usage": {
+        "completion_tokens": 56,
+        "completion_tokens_details": {
+          "reasoning_tokens": 32
+        },
+        "prompt_tokens": 206,
+        "total_characters": 0,
+        "total_tokens": 262
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\": \"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_function_sslrcc2pbocd_1",
+          "index": 0,
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 32,
+      "finish_reason": "tool_calls",
+      "reply": "<think>\nThe user wants to know the current weather in Tokyo. I should use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_medium": {
+      "ok": true,
+      "status": 200,
+      "time": 5.22,
+      "usage": {
+        "completion_tokens": 202,
+        "completion_tokens_details": {
+          "reasoning_tokens": 117
+        },
+        "prompt_tokens": 60,
+        "total_characters": 0,
+        "total_tokens": 262
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 117,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What is 13 * 17? Think step-by-step, then state the answer clearly.\"\n\nWe should respond with a step-by-step multiplication, then state the answer. Straightforward.\n\n13*17: 13*10=130, 13*7=91, sum = 221. Or compute 17*13 = (20-3)*13 = 260 - 39 = 221. So answer is 221.\n\nWe must obey policies. No disallowed content. It's simple.\n\nHence final answer: 221.\n</think>\n\n**Step‑by‑step multiplication**\n\n1. Multiply 13 by 10:  \n   \\(13 \\times 10 = 130\\).\n\n2. Multiply 13 by 7:  \n   \\(13 \\times 7 = 91\\).\n\n3. Add the two partial results:  \n   \\(130 + 91 = 221\\).\n\n**Answer:** \\(13 \\times 17 = 221\\).",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_none": {
+      "ok": true,
+      "status": 200,
+      "time": 6.41,
+      "usage": {
+        "completion_tokens": 271,
+        "completion_tokens_details": {
+          "reasoning_tokens": 164
+        },
+        "prompt_tokens": 60,
+        "total_characters": 0,
+        "total_tokens": 331
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 164,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What is 13 * 17? Think step-by-step, then state the answer clearly.\"\n\nWe need to give a step-by-step reasoning and then give the answer.\n\nThe multiplication is straightforward: 13 * 17 = ?\n\n13 * 17 can be done by mental multiplication:\n\nMethod 1: 13*10=130, 13*7=91, sum = 221.\n\nThus 13*17 = 221.\n\nAlternatively: 17*13 = (17*10)+(17*3) = 170+51=221.\n\nYes.\n\nThus answer: 221.\n\nSo we need to provide a step-by-step explanation, then answer.\n\nWe should be concise.\n\nNow produce final answer: step-by-step, then answer.\n\nThat's all.\n</think>\n\n**Step‑by‑step reasoning**\n\n1. Break 17 into a sum of a tens part and a ones part:  \n   \\(17 = 10 + 7\\).\n\n2. Multiply 13 by each part separately:  \n   - \\(13 \\times 10 = 130\\)  \n   - \\(13 \\times 7 = 91\\)\n\n3. Add the two partial products:  \n   \\(130 + 91 = 221\\).\n\n**Answer:** \\(13 \\times 17 = 221\\).",
+      "has_think": true,
+      "err": null
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "text": {
+      "ok": true,
+      "status": 200,
+      "time": 3.54,
+      "usage": {
+        "completion_tokens": 177,
+        "completion_tokens_details": {
+          "reasoning_tokens": 168
+        },
+        "prompt_tokens": 50,
+        "total_characters": 0,
+        "total_tokens": 227
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 168,
+      "finish_reason": "stop",
+      "reply": "<think>\nWe have a user request: \"Reply with one short sentence about the weather.\" So we need to produce a short sentence about the weather. This is straightforward. There's no policy violation. Just output a short sentence like \"It's sunny and warm today.\" That's it. There's no reason to refuse. It's a simple request. Provide the answer. Should we ensure it's short and about weather. Could be \"The sky is bright with a light breeze.\" That's fine. Keep it short. We'll comply.\n\nWe should check for any issues: It's just a simple statement. It's not disallowed. There's no request for disallowed content. So we can comply. Use one short sentence.\n\nThus: \"The sun is shining with a gentle breeze.\" Or \"It's a warm, sunny day.\" Should be okay. We'll produce one short sentence.\n</think>\n\nThe sun is shining with a gentle breeze.",
+      "has_think": true,
+      "err": null
+    },
+    "image_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 4.0,
+      "usage": {
+        "completion_tokens": 191,
+        "completion_tokens_details": {
+          "reasoning_tokens": 159
+        },
+        "prompt_tokens": 55,
+        "total_characters": 0,
+        "total_tokens": 246
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 159,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user says: \"Describe this image briefly (1-2 sentences, mention dominant color).\"\n\nBut there is no image provided. The user presumably wants a description. As a language model we cannot see any image. According to the policy, we must respond that we cannot see the image. The user might have expected an image attached but it's missing. We must ask for clarification or indicate that we need the image. So we should say we cannot see any image; please provide it.\n\nThus we should comply with policy: respond that we cannot see the image and request it.\n\nThus final answer: \"I’m sorry, I don’t see any image. Could you upload it so I can provide a brief description?\" Possibly also note we need the image.\n\nProceed.\n</think>\n\nI’m sorry, but I don’t see any image attached. Could you please upload the image so I can provide a brief description and note its dominant color?",
+      "has_think": true,
+      "err": null
+    },
+    "audio_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 5.79,
+      "usage": {
+        "completion_tokens": 300,
+        "completion_tokens_details": {
+          "reasoning_tokens": 276
+        },
+        "prompt_tokens": 51,
+        "total_characters": 0,
+        "total_tokens": 351
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 276,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What does this audio sound like? Reply briefly.\" This is ambiguous because we haven't been given any audio. The user may be referring to some audio that they would paste but they didn't provide any content. The user says \"What does this audio sound like? Reply briefly.\" Possibly the user wants us to guess what the audio is based on a provided description, but we have no audio. So we must ask for clarification. Or we can respond that we cannot hear audio. According to policy, we cannot process audio. We can politely ask the user to describe the audio. The user asked us to \"Reply briefly\". So we can respond: \"I can't hear audio, could you describe it?\" Or \"I can't process audio files; could you describe the sound?\" That is the most appropriate. The request: \"What does this audio sound like? Reply briefly.\" So we must ask for more context. We must follow the policy: we can't process audio directly. So we must ask for description or transcript.\n\nThus answer: \"I can't hear the audio, could you describe it?\" or \"I’m unable to listen, but if you describe the sound I can help.\"\n\nWe must follow the request to be brief. Let's respond: \"I’m not able to listen, but if you describe the sound I can try to help.\"\n</think>\n\nI’m not able to listen to audio, but if you describe what it sounds like, I can help interpret it.",
+      "has_think": true,
+      "err": null
+    },
+    "video_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 5.79,
+      "usage": {
+        "completion_tokens": 244,
+        "completion_tokens_details": {
+          "reasoning_tokens": 206
+        },
+        "prompt_tokens": 49,
+        "total_characters": 0,
+        "total_tokens": 293
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 206,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"Describe what happens in this video briefly.\"\n\nWe need to consider that we don't have a video. The request: \"Describe what happens in this video briefly.\"\n\nWe have to consider policy: No direct mention of inability to view video. Must handle user request. We need to ask for clarification, ask for a transcript, or request a description. As we cannot view video, we must say we cannot see the video and ask for more details. The request is to \"Describe what happens in this video briefly.\" The assistant must respond that they can't view the video and ask for a description or transcript.\n\nSo the response: Apologize, explain inability to view, ask user to provide details or a description.\n\nThus, answer: \"I’m unable to see the video; could you give me a brief description?\" Or \"I can't watch videos; if you tell me what's in it, I can summarize.\"\n\nWe'll comply with policy. Provide a brief helpful response.\n\nNow generate final answer.\n</think>\n\nI’m sorry, but I can’t view or listen to videos. If you can give me a brief summary of what’s shown or a transcript, I’ll gladly help you describe it.",
+      "has_think": true,
+      "err": null
+    },
+    "function_call_required": {
+      "ok": true,
+      "status": 200,
+      "time": 1.8,
+      "usage": {
+        "completion_tokens": 56,
+        "completion_tokens_details": {
+          "reasoning_tokens": 32
+        },
+        "prompt_tokens": 206,
+        "total_characters": 0,
+        "total_tokens": 262
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\": \"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_function_i4sw23rzopaw_1",
+          "index": 0,
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 32,
+      "finish_reason": "tool_calls",
+      "reply": "<think>\nThe user wants to know the current weather in Tokyo. I should use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+      "has_think": true,
+      "err": null
+    },
+    "function_call_auto": {
+      "ok": true,
+      "status": 200,
+      "time": 1.76,
+      "usage": {
+        "completion_tokens": 57,
+        "completion_tokens_details": {
+          "reasoning_tokens": 33
+        },
+        "prompt_tokens": 206,
+        "total_characters": 0,
+        "total_tokens": 263
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\": \"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_function_nugy6nrgya85_1",
+          "index": 0,
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 33,
+      "finish_reason": "tool_calls",
+      "reply": "<think>\nThe user is asking for the current weather in Tokyo. I need to use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_medium": {
+      "ok": true,
+      "status": 200,
+      "time": 4.96,
+      "usage": {
+        "completion_tokens": 262,
+        "completion_tokens_details": {
+          "reasoning_tokens": 162
+        },
+        "prompt_tokens": 60,
+        "total_characters": 0,
+        "total_tokens": 322
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 162,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What is 13 * 17? Think step-by-step, then state the answer clearly.\" This is a straightforward multiplication problem.\n\nWe should do step-by-step multiplication: 13 * 17.\n\nWe can compute directly: 10 * 17 = 170, 3 * 17 = 51, sum = 221.\n\nAlternatively, using long multiplication: 13 * 17 = (13 * 10) + (13 * 7) = 130 + 91 = 221.\n\nThus the answer is 221.\n\nThus respond: Step-by-step: multiply 13 by 17, etc., answer: 221.\n\nWe should comply. There's no policy violation. It's a simple arithmetic question.\n\nThus final answer: 221.\n</think>\n\n**Step‑by‑step calculation**\n\n1. Break the multiplication into easier parts:  \n   \\(13 \\times 17 = 13 \\times (10 + 7)\\)\n\n2. Multiply each part:  \n   \\(13 \\times 10 = 130\\)  \n   \\(13 \\times 7 = 91\\)\n\n3. Add the two results:  \n   \\(130 + 91 = 221\\)\n\n**Answer:** \\(13 \\times 17 = 221\\).",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_none": {
+      "ok": true,
+      "status": 200,
+      "time": 3.39,
+      "usage": {
+        "completion_tokens": 195,
+        "completion_tokens_details": {
+          "reasoning_tokens": 114
+        },
+        "prompt_tokens": 60,
+        "total_characters": 0,
+        "total_tokens": 255
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 114,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user asks: \"What is 13 * 17? Think step-by-step, then state the answer clearly.\"\n\nWe should comply. Provide step-by-step multiplication, compute 13*17.\n\n13*17 = 13*10 + 13*7 = 130 + 91 = 221.\n\nThus answer: 221.\n\nWe need to follow policy: The request is straightforward. No policy violation. We just answer.\n\nMake sure the answer is clearly stated. Use appropriate format.\n\nThus final answer: 221.\n\nProceed.\n</think>\n\n**Step‑by‑step calculation**\n\n1. Multiply 13 by 10: \\(13 \\times 10 = 130\\)  \n2. Multiply 13 by 7: \\(13 \\times 7 = 91\\)  \n3. Add the two results: \\(130 + 91 = 221\\)\n\n**Answer:** \\(13 \\times 17 = 221\\)",
+      "has_think": true,
+      "err": null
+    }
+  },
+  "MiniMax-M3": {
+    "text": {
+      "ok": true,
+      "status": 200,
+      "time": 1.94,
+      "usage": {
+        "completion_tokens": 31,
+        "completion_tokens_details": {
+          "reasoning_tokens": 18
+        },
+        "prompt_tokens": 185,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 216
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": 18,
+      "finish_reason": "stop",
+      "reply": "<think>The user wants a short sentence about the weather. I'll provide a simple, concise response.</think>\n\nThe weather today is sunny with a gentle breeze.",
+      "has_think": true,
+      "err": null
+    },
+    "image_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 3.65,
+      "usage": {
+        "completion_tokens": 83,
+        "prompt_tokens": 206,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 289
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": null,
+      "finish_reason": "stop",
+      "reply": "<think>The user wants a brief description of the image - 1-2 sentences with mention of the dominant color. I should keep it concise.</think>\n\nI don't have access to view or analyze images directly. I'm only able to process and respond to text-based content. If you can describe the image to me, I'd be happy to help discuss it, answer questions about it, or assist with any related tasks.",
+      "has_think": true,
+      "err": null
+    },
+    "audio_inline": {
+      "ok": true,
+      "status": 200,
+      "time": 2.44,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 186,
+        "prompt_tokens_details": {
+          "cached_tokens": 114
+        },
+        "total_characters": 0,
+        "total_tokens": 256
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": null,
+      "finish_reason": "stop",
+      "reply": "<think>\nThe user is asking what an audio sounds like, but no audio file has been attached or provided in this message. I need to let them know that no audio was included so I can't describe it.\n</think>\nI don't see or hear any audio in your message. Could you attach the audio file or provide more details about what you're trying to share?",
+      "has_think": true,
+      "err": null
+    },
+    "video_inline": {
+      "ok": false,
+      "status": 400,
+      "time": 0.69,
+      "usage": {},
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": null,
+      "finish_reason": null,
+      "reply": "",
+      "has_think": false,
+      "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid param: invalid video content: run ffprobe: exit status 1 (2013)', 'http_code': '400'}, 'request_id': '06931a5804717f5ce2164dbe0bb9f721'}"
+    },
+    "function_call_required": {
+      "ok": true,
+      "status": 200,
+      "time": 2.03,
+      "usage": {
+        "completion_tokens": 67,
+        "completion_tokens_details": {
+          "reasoning_tokens": 27
+        },
+        "prompt_tokens": 419,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 486
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\":\"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_019f193fb8467a50845d036b",
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 27,
+      "finish_reason": "tool_calls",
+      "reply": "<think>The user is asking for the current weather in Tokyo and wants me to use the get_weather function. Let me make that call.</think>\n\nI'll check the current weather in Tokyo for you.",
+      "has_think": true,
+      "err": null
+    },
+    "function_call_auto": {
+      "ok": true,
+      "status": 200,
+      "time": 2.04,
+      "usage": {
+        "completion_tokens": 87,
+        "completion_tokens_details": {
+          "reasoning_tokens": 47
+        },
+        "prompt_tokens": 419,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_characters": 0,
+        "total_tokens": 506
+      },
+      "has_tool_calls": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\":\"Tokyo\"}",
+            "name": "get_weather"
+          },
+          "id": "call_019f193fc04a75609be3210c",
+          "type": "function"
+        }
+      ],
+      "reasoning_tokens": 47,
+      "finish_reason": "tool_calls",
+      "reply": "<think>The user is asking about the weather in Tokyo and wants me to use the get_weather function. I have access to a get_weather function that takes a city parameter. Let me call it with \"Tokyo\" as the city.</think>\n\nI'll check the current weather in Tokyo for you.",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_medium": {
+      "ok": true,
+      "status": 200,
+      "time": 6.09,
+      "usage": {
+        "completion_tokens": 368,
+        "prompt_tokens": 195,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 563
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": null,
+      "finish_reason": "stop",
+      "reply": "<think>The user is asking me to calculate 13 * 17 and to think step-by-step. Let me work through this.\n\n13 * 17\n\nI can break this down in several ways:\n\nMethod 1: Direct multiplication\n13 * 17\n= 13 * (10 + 7)\n= 13 * 10 + 13 * 7\n= 130 + 91\n= 221\n\nLet me verify: 13 * 17\n- 13 * 7 = 91\n- 13 * 10 = 130\n- 91 + 130 = 221\n\nMethod 2: Another approach\n17 * 13\n= 17 * (10 + 3)\n= 170 + 51\n= 221\n\nMethod 3: Check with a different breakdown\n13 * 17 = (15 - 2)(15 + 2) = 15² - 2² = 225 - 4 = 221 ✓\n\nAll methods confirm 221.</think>\n\n**Step-by-step solution:**\n\nTo calculate 13 × 17, I can break this into manageable parts:\n\n**Step 1:** Rewrite 17 as (10 + 7).\n13 × 17 = 13 × (10 + 7)\n\n**Step 2:** Apply the distributive property.\n= (13 × 10) + (13 × 7)\n\n**Step 3:** Calculate each part.\n= 130 + 91\n\n**Step 4:** Add the results.\n= 221\n\n**Verification** using the difference of squares: (15 − 2)(15 + 2) = 15² − 2² = 225 − 4 = 221 ✓\n\n**Answer: 13 × 17 = 221**",
+      "has_think": true,
+      "err": null
+    },
+    "reasoning_none": {
+      "ok": true,
+      "status": 200,
+      "time": 3.19,
+      "usage": {
+        "completion_tokens": 277,
+        "prompt_tokens": 195,
+        "prompt_tokens_details": {
+          "cached_tokens": 194
+        },
+        "total_characters": 0,
+        "total_tokens": 472
+      },
+      "has_tool_calls": false,
+      "tool_calls": null,
+      "reasoning_tokens": null,
+      "finish_reason": "stop",
+      "reply": "<think>The user is asking me to calculate 13 * 17. Let me do this step by step.\n\n13 * 17\n\nI can break this down:\n- 13 * 17 = 13 * (10 + 7)\n- = 13 * 10 + 13 * 7\n- = 130 + 91\n- = 221\n\nLet me verify: 13 * 17\n- 13 * 7 = 91\n- 13 * 10 = 130\n- 91 + 130 = 221\n\nYes, 221 is correct.\n\nAlternatively, I could verify with: 17 * 13 = 17 * (10 + 3) = 170 + 51 = 221. ✓\n\nSo the answer is 221.</think>\n\n# Calculating 13 × 17\n\n## Step-by-Step Solution\n\n**Method: Breaking it into parts**\n\n13 × 17 = 13 × (10 + 7)\n\n**Step 1:** Multiply 13 by 10\n$$13 \\times 10 = 130$$\n\n**Step 2:** Multiply 13 by 7\n$$13 \\times 7 = 91$$\n\n**Step 3:** Add the results together\n$$130 + 91 = 221$$\n\n## Answer\n\n**13 × 17 = 221**",
+      "has_think": true,
+      "err": null
+    }
+  }
+}

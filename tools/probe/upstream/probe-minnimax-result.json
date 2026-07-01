@@ -1,0 +1,610 @@
+{
+  "MiniMax-M2.7": {
+    "claim": {
+      "context_window": 1430584,
+      "max_tokens": 196608
+    },
+    "context_window": 715292,
+    "ctx_history": [
+      {
+        "try": 1430584,
+        "status": 400,
+        "time": 5.97,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 1072938,
+        "status": 400,
+        "time": 5.77,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 894115,
+        "status": 400,
+        "time": 3.87,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 804703,
+        "status": 400,
+        "time": 3.42,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 759997,
+        "status": 400,
+        "time": 3.29,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 737644,
+        "status": 400,
+        "time": 5.14,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 726468,
+        "status": 400,
+        "time": 3.2,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      }
+    ],
+    "max_tokens": 196608,
+    "mt_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 7.61,
+        "completion_tokens": 141,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 5.23,
+        "completion_tokens": 252,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 196608,
+        "status": 200,
+        "time": 6.35,
+        "completion_tokens": 253,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 400,
+        "time": 0.35,
+        "completion_tokens": null,
+        "finish_reason": null,
+        "ok": false,
+        "err": "invalid params, model[MiniMax-M2.7] does not support max tokens > 196608 (2013)"
+      }
+    ],
+    "caps": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 49,
+          "prompt_tokens_details": {
+            "cached_tokens": 14
+          },
+          "total_characters": 0,
+          "total_tokens": 113
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>The user says: \"Reply with one short sentence.\" This is presumably a direct instruction to reply with one short s"
+      },
+      "image": {
+        "cap": "image",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 58,
+          "total_characters": 0,
+          "total_tokens": 122
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user asks: \"What letter is in this 64x64 placeholder? Reply with just that letter.\" So presumably they are s"
+      },
+      "audio": {
+        "cap": "audio",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 55,
+          "total_characters": 0,
+          "total_tokens": 119
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user asks: \"What does this audio say? Reply briefly or say 'not supported'.\" The user has not provided any a"
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 36,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 199,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_characters": 0,
+          "total_tokens": 235
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "stop",
+        "snippet": "<think>The user wants me to reply with one short sentence. This is a very simple request that doesn't require any tool u"
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 57,
+          "total_characters": 0,
+          "total_tokens": 121
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user asks: \"What is 13 * 17? Think step by step, then answer.\" Straightforward multiplication.\n\n13 * 17 = (1"
+      }
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "claim": {
+      "context_window": 1271631,
+      "max_tokens": 196608
+    },
+    "context_window": 635815,
+    "ctx_history": [
+      {
+        "try": 1271631,
+        "status": 400,
+        "time": 5.68,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 953723,
+        "status": 400,
+        "time": 4.72,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 794769,
+        "status": 400,
+        "time": 2.96,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 715292,
+        "status": 400,
+        "time": 3.11,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 675553,
+        "status": 400,
+        "time": 3.18,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 655684,
+        "status": 400,
+        "time": 3.36,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 645749,
+        "status": 400,
+        "time": 3.27,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      }
+    ],
+    "max_tokens": 196608,
+    "mt_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 3.02,
+        "completion_tokens": 103,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 2.85,
+        "completion_tokens": 97,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 196608,
+        "status": 200,
+        "time": 5.45,
+        "completion_tokens": 237,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 400,
+        "time": 0.41,
+        "completion_tokens": null,
+        "finish_reason": null,
+        "ok": false,
+        "err": "invalid params, model[MiniMax-M2.7-highspeed] does not support max tokens > 196608 (2013)"
+      }
+    ],
+    "caps": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 47,
+          "total_characters": 0,
+          "total_tokens": 111
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user says: \"Reply with one short sentence.\" The user wants a response that is a single short sentence. This "
+      },
+      "image": {
+        "cap": "image",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 58,
+          "total_characters": 0,
+          "total_tokens": 122
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user asks: \"What letter is in this 64x64 placeholder? Reply with just that letter.\"\n\nInterpretation: There's"
+      },
+      "audio": {
+        "cap": "audio",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 55,
+          "total_characters": 0,
+          "total_tokens": 119
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user says: \"What does this audio say? Reply briefly or say 'not supported'.\" There is presumably an audio at"
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 36,
+          "completion_tokens_details": {
+            "reasoning_tokens": 27
+          },
+          "prompt_tokens": 197,
+          "total_characters": 0,
+          "total_tokens": 233
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "stop",
+        "snippet": "<think>\nThe user is asking me to reply with one short sentence. This is a simple request that doesn't require any tools."
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens": 57,
+          "total_characters": 0,
+          "total_tokens": 121
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user asks: \"What is 13 * 17? Think step by step, then answer.\" That's straightforward multiplication. The us"
+      }
+    }
+  },
+  "MiniMax-M3": {
+    "claim": {
+      "context_window": 4967702,
+      "max_tokens": 200000
+    },
+    "context_window": 2483851,
+    "ctx_history": [
+      {
+        "try": 4967702,
+        "status": 400,
+        "time": 16.47,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 3725776,
+        "status": 400,
+        "time": 21.0,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 3104813,
+        "status": 400,
+        "time": 18.42,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 2794332,
+        "status": 400,
+        "time": 9.09,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 2639091,
+        "status": 400,
+        "time": 10.05,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 2561471,
+        "status": 400,
+        "time": 8.55,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      },
+      {
+        "try": 2522661,
+        "status": 400,
+        "time": 15.16,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "invalid params, context window exceeds limit (2013)"
+      }
+    ],
+    "max_tokens": 524288,
+    "mt_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 1.92,
+        "completion_tokens": 51,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 1.99,
+        "completion_tokens": 46,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 196608,
+        "status": 200,
+        "time": 1.75,
+        "completion_tokens": 37,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 200,
+        "time": 3.16,
+        "completion_tokens": 38,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 393216,
+        "status": 200,
+        "time": 1.82,
+        "completion_tokens": 43,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 524288,
+        "status": 200,
+        "time": 2.1,
+        "completion_tokens": 52,
+        "finish_reason": "stop",
+        "ok": true,
+        "err": null
+      }
+    ],
+    "caps": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 49,
+          "completion_tokens_details": {
+            "reasoning_tokens": 39
+          },
+          "prompt_tokens": 182,
+          "prompt_tokens_details": {
+            "cached_tokens": 128
+          },
+          "total_characters": 0,
+          "total_tokens": 231
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "stop",
+        "snippet": "<think>The user wants me to reply with one short sentence. But they haven't said anything specific for me to respond to."
+      },
+      "image": {
+        "cap": "image",
+        "status": 400,
+        "ok": false,
+        "usage": {},
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": null,
+        "snippet": null,
+        "err": "invalid param: remote returned status 404 (2013)"
+      },
+      "audio": {
+        "cap": "audio",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 53,
+          "prompt_tokens": 190,
+          "prompt_tokens_details": {
+            "cached_tokens": 114
+          },
+          "total_characters": 0,
+          "total_tokens": 243
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "stop",
+        "snippet": "<think>\nThe user is asking me to identify what an audio says, but there is no audio provided in the message. I should re"
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 49,
+          "prompt_tokens": 410,
+          "prompt_tokens_details": {
+            "cached_tokens": 114
+          },
+          "total_characters": 0,
+          "total_tokens": 459
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "stop",
+        "snippet": "<think>\nThe user said \"Reply with one short sentence.\" but didn't ask a specific question. I should respond with one sho"
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "status": 200,
+        "ok": true,
+        "usage": {
+          "completion_tokens": 64,
+          "prompt_tokens": 192,
+          "prompt_tokens_details": {
+            "cached_tokens": 114
+          },
+          "total_characters": 0,
+          "total_tokens": 256
+        },
+        "has_tool_calls": false,
+        "reasoning_tokens": null,
+        "finish_reason": "length",
+        "snippet": "<think>\nThe user is asking me to calculate 13 * 17. Let me work through this step by step.\n\n13 * 17\n\nI can break this do"
+      }
+    }
+  }
+}

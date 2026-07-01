@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<script>
+  // Stub Tauri BEFORE loading the real page
+  const STUB = {
+    providers: [
+      { name: 'minnimax.chat', spec: 'minimax', base_url: 'https://minnimax.chat/v1', api_key: 'gw-ced****', timeout_ms: 120000 },
+      { name: 'deepseek',      spec: 'deepseek', base_url: 'https://api.deepseek.com', api_key: '${DEEPSEEK_API_KEY}', timeout_ms: 120000 },
+      { name: 'xiaomi',        spec: 'xiaomi', base_url: 'https://api.xiaomimimo.com/v1', api_key: '${MIMO_API_KEY}', timeout_ms: 120000 },
+      { name: 'zhipu',         spec: 'zhipu', base_url: 'https://open.bigmodel.cn/api/coding/paas/v4', api_key: '${ZHIPU_API_KEY}', timeout_ms: 120000 },
+      { name: 'minimax',       spec: 'minimax', base_url: 'https://api.minimaxi.com/v1', api_key: 'gw-ced****', timeout_ms: 120000 },
+    ],
+    enabled: [
+      { provider: 'minnimax.chat', model: 'MiniMax-M2.7',          context_window: 1430584, max_tokens: 196608 },
+      { provider: 'minnimax.chat', model: 'MiniMax-M2.7-highspeed', context_window: 1271631, max_tokens: 196608 },
+      { provider: 'minnimax.chat', model: 'MiniMax-M3',             context_window: 4967702, max_tokens: 200000 },
+    ],
+  };
+  window.__TAURI__ = {
+    core: { invoke: (cmd) => {
+      switch (cmd) {
+        case 'list_providers':     return Promise.resolve(STUB.providers);
+        case 'read_enabled_models':return Promise.resolve({ enabled: STUB.enabled, disabled: [] });
+        case 'load_model_presets': return Promise.resolve([]);
+        case 'match_model_preset': return Promise.resolve(null);
+        case 'get_config_paths':   return Promise.resolve({ godex_config: '/x/godex.yaml', godex_binary: '/x/godex.exe', godex_log: '/x/godex.log', studio_log: '/x/studio.log' });
+        case 'godex_status':       return Promise.resolve({ running: true, port: 5678, pid: 4360, mode: 'builtin' });
+        case 'godex_logs_tail':    return Promise.resolve([]);
+        case 'tail_trace_logs':    return Promise.resolve([]);
+        case 'get_replica_status': return Promise.resolve({ enabled: false, running: false, pid: null, replica_path: null });
+        default: return Promise.resolve(null);
+      }
+    }},
+    event: { listen: () => Promise.resolve(() => {}) },
+  };
+  // After stub is set, fetch and inject the real page body
+  fetch('file:///D:/Documents/VibeCoding/GodeX/studio-tauri/src/index.html').then(r => r.text()).then(html => {
+    document.open();
+    document.write(html);
+    document.close();
+    setTimeout(() => { window.__TEST__ = { providers: window.providers, probeModalOpen: document.getElementById('probe-modal')?.style.display }; }, 1500);
+  });
+</script>
+</body></html>

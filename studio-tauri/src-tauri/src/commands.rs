@@ -1,4 +1,4 @@
-﻿use crate::config::{self, EnabledModel, ProviderInfo};
+use crate::config::{self, EnabledModel, ProviderInfo};
 use crate::state::AppState;
 use crate::godex::LogLine;
 use serde::Serialize;
@@ -1062,5 +1062,370 @@ mod upsert_provider_inline_empty_tests {
         let raw = "this is :: not [ valid yaml";
         let updated = sync_default_provider(raw, "minnimax.chat");
         assert_eq!(updated, raw);
+
+// ============================================================
+// Model Probe Command - Comprehensive capability detection
+// ============================================================
+
+use reqwest::blocking::Client;
+use std::time::Duration;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProbeResultFull {
+    pub model: String,
+    pub context_window: Option<u64>,
+    pub max_tokens: Option<u64>,
+    pub text: Option<bool>,
+    pub image: Option<bool>,
+    pub video: Option<bool>,
+    pub audio: Option<bool>,
+    pub function: Option<bool>,
+    pub computer_use: Option<bool>,
+    pub tool_search: Option<bool>,
+    pub web_search: Option<bool>,
+    pub file_search: Option<bool>,
+    pub mcp: Option<bool>,
+    pub reasoning: Option<String>,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Full model probing with binary search for context window and comprehensive capability detection
+#[tauri::command]
+pub fn probe_model(
+    base_url: String,
+    api_key: String,
+    model: String,
+    claimed_ctx: u64,
+    claimed_max_tokens: u64,
+) -> Result<ProbeResultFull, String> {
+    crate::diag(&format!("[probe] Starting for {} claimed_ctx={} claimed_max={}", model, claimed_ctx, claimed_max_tokens));
+    
+    let client = Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let auth = format!("Bearer {}", api_key);
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(reqwest::header::AUTHORIZATION, auth.parse().unwrap());
+    headers.insert(reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap());
+
+    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    crate::diag(&format!("[probe] URL: {}", url));
+
+    // 1. Probe context window with binary search
+    let max_input = probe_context_window(&client, &url, &headers, &model, claimed_ctx);
+    
+    // 2. Probe max_tokens
+    let max_output = probe_max_tokens(&client, &url, &headers, &model, claimed_max_tokens);
+    
+    // 3. Probe capabilities
+    let caps = probe_capabilities(&client, &url, &headers, &model);
+
+    crate::diag(&format!("[probe] Done for {}: ctx={:?} max_tokens={:?}", model, max_input, max_output));
+
+    match (max_input, max_output, caps) {
+        (Ok(mi), Ok(mo), Ok(c)) => Ok(ProbeResultFull {
+            model,
+            context_window: mi,
+            max_tokens: mo,
+            text: c.text,
+            image: c.image,
+            video: c.video,
+            audio: c.audio,
+            function: c.function,
+            computer_use: c.computer_use,
+            tool_search: c.tool_search,
+            web_search: c.web_search,
+            file_search: c.file_search,
+            mcp: c.mcp,
+            reasoning: c.reasoning,
+            success: mi.is_some(),
+            error: None,
+        }),
+        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Ok(ProbeResultFull {
+            model,
+            context_window: None,
+            max_tokens: None,
+            text: None,
+            image: None,
+            video: None,
+            audio: None,
+            function: None,
+            computer_use: None,
+            tool_search: None,
+            web_search: None,
+            file_search: None,
+            mcp: None,
+            reasoning: None,
+            success: false,
+            error: Some(e),
+        }),
+    }
+}
+
+struct Capabilities {
+    text: Option<bool>,
+    image: Option<bool>,
+    video: Option<bool>,
+    audio: Option<bool>,
+    function: Option<bool>,
+    computer_use: Option<bool>,
+    tool_search: Option<bool>,
+    web_search: Option<bool>,
+    file_search: Option<bool>,
+    mcp: Option<bool>,
+    reasoning: Option<String>,
+}
+
+fn probe_context_window(
+    client: &Client,
+    url: &str,
+    headers: &reqwest::header::HeaderMap,
+    model: &str,
+    claimed: u64,
+) -> Result<Option<u64>, String> {
+    // Step 1: Fast range finding (claimed -> 2x -> 4x -> FAIL)
+    let mut test_val = claimed;
+    let mut last_ok = claimed;
+    let max_reasonable = 4_000_000u64;
+
+    while test_val <= max_reasonable {
+        let content_len = ((test_val as f64) * 0.75) as usize;
+        let content = "A".repeat(content_len.max(100));
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": 32
+        });
+
+        match client.post(url).headers(headers.clone()).json(&body).send() {
+            Ok(r) if r.status().is_success() => {
+                last_ok = test_val;
+                test_val = ((test_val as f64) * 2.0) as u64;
+            }
+            _ => break,
+        }
+    }
+
+    // Step 2: Binary search for exact value
+    if last_ok < max_reasonable {
+        let mut lo = last_ok;
+        let mut hi = test_val.min(max_reasonable);
+        
+        while lo + 10000 < hi {
+            let mid = (lo + hi) / 2;
+            let content_len = ((mid as f64) * 0.75) as usize;
+            let content = "A".repeat(content_len.max(100));
+
+            let body = serde_json::json!({
+                "model": model,
+                "messages": [{"role": "user", "content": content}],
+                "max_tokens": 32
+            });
+
+            match client.post(url).headers(headers.clone()).json(&body).send() {
+                Ok(r) if r.status().is_success() => lo = mid,
+                _ => hi = mid,
+            }
+        }
+        return Ok(Some(lo));
+    }
+
+    Ok(Some(last_ok))
+}
+
+fn probe_max_tokens(
+    client: &Client,
+    url: &str,
+    headers: &reqwest::header::HeaderMap,
+    model: &str,
+    _claimed: u64,
+) -> Result<Option<u64>, String> {
+    let test_values = vec![16384, 32768, 65536, 131072, 196608, 262144];
+
+    let mut last_ok = None;
+    for mt in test_values {
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "OK"}],
+            "max_tokens": mt
+        });
+
+        match client.post(url).headers(headers.clone()).json(&body).send() {
+            Ok(r) if r.status().is_success() => {
+                last_ok = Some(mt);
+            }
+            Ok(r) if r.status().as_u16() == 400 => {
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(last_ok)
+}
+
+fn probe_capabilities(
+    client: &Client,
+    url: &str,
+    headers: &reqwest::header::HeaderMap,
+    model: &str,
+) -> Result<Capabilities, String> {
+    // 1. Text (baseline)
+    let text = test_simple_chat(client, url, headers, model);
+
+    // 2. Image
+    let image = test_image(client, url, headers, model);
+
+    // 3. Video (hard to test, skip)
+    let video = None;
+
+    // 4. Audio (hard to test, skip)
+    let audio = None;
+
+    // 5. Function call
+    let function = test_function_call(client, url, headers, model);
+
+    // 6. Reasoning
+    let reasoning = test_reasoning(client, url, headers, model);
+
+    // 7. Other tools - batch test
+    let (computer_use, tool_search, web_search, file_search, mcp) = test_tools_batch(client, url, headers, model);
+
+    Ok(Capabilities {
+        text,
+        image,
+        video,
+        audio,
+        function,
+        computer_use,
+        tool_search,
+        web_search,
+        file_search,
+        mcp,
+        reasoning,
+    })
+}
+
+fn test_simple_chat(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 10
+    });
+
+    match client.post(url).headers(headers.clone()).json(&body).send() {
+        Ok(r) if r.status().is_success() => Some(true),
+        _ => Some(false),
+    }
+}
+
+fn test_image(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+    // Tiny 1x1 transparent PNG base64
+    let tiny_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What is this?"},
+                {"type": "image_url", "image_url": {"url": format!("data:image/png;base64,{}", tiny_png)}}
+            ]
+        }],
+        "max_tokens": 20
+    });
+
+    match client.post(url).headers(headers.clone()).json(&body).send() {
+        Ok(r) if r.status().is_success() => Some(true),
+        _ => Some(false),
+    }
+}
+
+fn test_function_call(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<bool> {
+    let tools = serde_json::json!([{
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get weather for a location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"}
+                }
+            }
+        }
+    }]);
+
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{"role": "user", "content": "What's the weather in Beijing?"}],
+        "tools": tools,
+        "tool_choice": "auto",
+        "max_tokens": 100
+    });
+
+    match client.post(url).headers(headers.clone()).json(&body).send() {
+        Ok(r) if r.status().is_success() => {
+            if let Ok(text) = r.text() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(choice) = json.get("choices").and_then(|c| c.as_array()).and_then(|a| a.first()) {
+                        if choice.get("message").and_then(|m| m.get("tool_calls")).is_some() {
+                            return Some(true);
+                        }
+                    }
+                }
+            }
+            Some(false)
+        }
+        _ => Some(false),
+    }
+}
+
+fn test_reasoning(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> Option<String> {
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{"role": "user", "content": "1+1=?"}],
+        "max_tokens": 50,
+        "reasoning_effort": "medium"
+    });
+
+    match client.post(url).headers(headers.clone()).json(&body).send() {
+        Ok(r) if r.status().is_success() => Some("medium".to_string()),
+        _ => None,
+    }
+}
+
+fn test_tools_batch(client: &Client, url: &str, headers: &reqwest::header::HeaderMap, model: &str) -> (Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
+    let all_tools = serde_json::json!([
+        {"type": "function", "function": {"name": "test", "description": "test", "parameters": {"type": "object", "properties": {}}}},
+        {"type": "computer_use", "provider": "windows"},
+        {"type": "tool_search"},
+        {"type": "web_search"},
+        {"type": "file_search"},
+    ]);
+
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": all_tools,
+        "tool_choice": "auto",
+        "reasoning_effort": "medium"
+    });
+
+    match client.post(url).headers(headers.clone()).json(&body).send() {
+        Ok(r) if r.status().is_success() => {
+            (Some(true), Some(true), Some(true), Some(true), Some(false))
+        }
+        Ok(r) if r.status().as_u16() == 400 => {
+            let function = test_function_call(client, url, headers, model);
+            (function, Some(false), Some(false), Some(false), Some(false))
+        }
+        _ => (Some(false), Some(false), Some(false), Some(false), Some(false)),
+    }
+}
+
     }
 }
