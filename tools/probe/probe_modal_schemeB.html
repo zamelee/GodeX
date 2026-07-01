@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Probe Modal 模拟 - 方案 B</title>
+<style>
+  :root {
+    --bg: #1e1e1e; --bg2: #252526; --bg3: #2d2d30;
+    --border: #3e3e42; --text: #e0e0e0; --text2: #969696;
+    --blue: #007acc; --green: #4ec9b0; --yellow: #dcdcaa;
+  }
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+  h2 { margin-top: 0; color: var(--yellow); }
+  .controls { background: var(--bg2); padding: 12px; border-radius: 4px; margin-bottom: 16px; border: 1px solid var(--border); }
+  .controls label { display: inline-block; margin-right: 20px; font-size: 12px; }
+  .controls input[type=range] { vertical-align: middle; width: 200px; }
+  .controls .value { color: var(--green); font-weight: bold; margin-left: 4px; }
+  .stage { display: flex; gap: 16px; align-items: flex-start; }
+  .viewport-wrap { border: 2px dashed var(--blue); border-radius: 4px; overflow: hidden; position: relative; background: #0a0a0a; }
+  .viewport-label { position: absolute; top: 4px; right: 8px; color: var(--blue); font-size: 11px; font-weight: bold; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 3px; z-index: 100; }
+  .bottom-line { position: absolute; left: 0; right: 0; height: 1px; background: red; pointer-events: none; z-index: 50; }
+  .bottom-label { position: absolute; right: 8px; background: red; color: white; padding: 1px 4px; font-size: 10px; font-weight: bold; border-radius: 2px; z-index: 51; pointer-events: none; }
+  .modal-box { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--bg2); overflow: hidden; }
+  h3.title { margin: 0; padding: 8px 12px; background: var(--bg3); border-bottom: 1px solid var(--border); font-size: 13px; color: var(--yellow); }
+  .section { flex: 0 0 auto; min-height: 50px; padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .section h4 { margin: 0; font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; }
+  .section .body { font-size: 11px; color: var(--text); }
+  .sash { flex: 0 0 6px; background: var(--bg3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: row-resize; }
+  .sash:hover { background: var(--blue); }
+  .mid-wrapper { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: rgba(78, 201, 176, 0.04); border: 1px dashed rgba(78, 201, 176, 0.4); }
+  .mid-wrapper > .section { flex: 0 0 auto; min-height: 50px; }
+  .mid-wrapper > .section.log-section { flex: 1 1 0; min-height: 0; }
+  .log-content { flex: 1; overflow-y: auto; background: #000; padding: 6px; font-family: Consolas, monospace; font-size: 10px; color: var(--green); border-radius: 3px; min-height: 60px; }
+  .results-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+  .results-table th, .results-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); text-align: center; }
+  .results-table th { background: var(--bg); color: var(--text2); }
+  .actions { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg3); border-top: 2px solid var(--yellow); flex-shrink: 0; }
+  .actions button { background: var(--blue); color: white; border: none; padding: 6px 14px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+  .actions button.gray { background: var(--bg); color: var(--text); }
+  .action-btns { display: flex; gap: 8px; }
+  .analysis { background: var(--bg2); padding: 12px; border-radius: 4px; border: 1px solid var(--border); margin-top: 16px; width: 360px; flex-shrink: 0; }
+  .analysis h3 { margin-top: 0; color: var(--yellow); font-size: 13px; }
+  .analysis .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; border-bottom: 1px dotted var(--border); }
+  .analysis .row:last-child { border: none; }
+  .ok { color: var(--green); font-weight: bold; }
+  .bad { color: #f48771; font-weight: bold; }
+  .legend { font-size: 11px; color: var(--text2); margin-top: 8px; line-height: 1.6; }
+  .legend span { display: inline-block; padding: 1px 4px; border-radius: 2px; margin-right: 4px; }
+  .lg-blue { background: var(--blue); color: white; }
+  .lg-red { background: red; color: white; }
+  .lg-yellow { background: var(--yellow); color: black; }
+  .lg-green { background: var(--green); color: black; }
+</style>
+</head>
+<body>
+
+<h2>Probe Modal 模拟 - 方案 B (mid-wrapper)</h2>
+
+<div class="controls">
+  <label>模拟窗口高度: <input type="range" id="vh" min="400" max="900" value="700"><span class="value" id="vv">700</span>px</label>
+  <label>中间区高度: <input type="range" id="mh" min="100" max="600" value="300"><span class="value" id="mv">300</span>px</label>
+  <label>日志高度: <input type="range" id="lh" min="40" max="500" value="120"><span class="value" id="lv">120</span>px</label>
+</div>
+
+<div class="stage">
+  <div class="viewport-wrap" id="vp" style="height:700px; width:780px;">
+    <div class="viewport-label" id="vpLabel">vp = 700px</div>
+    <div class="bottom-line" id="bottomLine" style="bottom:0"></div>
+    <div class="bottom-label" id="bottomLabel" style="bottom:-12px">viewport 底</div>
+
+    <div class="modal-box">
+      <h3 class="title">模型探测</h3>
+
+      <div class="section" style="flex:0 0 50px">
+        <h4>Provider</h4>
+        <div class="body">minnimax.chat [Select dropdown]</div>
+      </div>
+      <div class="sash"></div>
+
+      <div class="section" style="flex:0 0 80px">
+        <h4>选择模型 (3)</h4>
+        <div class="body">[x] M2.7 &nbsp; [x] M2.7-hs &nbsp; [x] M3 &nbsp; [+ add]</div>
+      </div>
+      <div class="sash"></div>
+
+      <div class="section" style="flex:0 0 130px">
+        <h4>能力探测</h4>
+        <div class="body" style="font-size:10px">
+          [x] Context [x] MaxTokens [x] Text [x] Image [ ] Video [ ] Audio<br>
+          [x] Func [x] Reason [ ] Computer [ ] ToolSearch [ ] WebSearch [ ] FileSearch [ ] MCP
+        </div>
+      </div>
+      <div class="sash"></div>
+
+      <div class="mid-wrapper" id="midWrapper" style="height:300px">
+        <div class="section" style="flex:0 0 auto">
+          <h4>结果</h4>
+          <div class="results-table-wrap">
+            <table class="results-table">
+              <thead><tr><th>Model</th><th>Ctx</th><th>Max</th><th>Txt</th><th>Img</th><th>Vid</th><th>Aud</th><th>Fn</th></tr></thead>
+              <tbody>
+                <tr><td>M2.7</td><td>204800</td><td>131072</td><td>Y</td><td>-</td><td>-</td><td>-</td><td>Y</td></tr>
+                <tr><td>M2.7hs</td><td>204800</td><td>131072</td><td>Y</td><td>-</td><td>-</td><td>-</td><td>Y</td></tr>
+                <tr><td>M3</td><td>1000000</td><td>131072</td><td>Y</td><td>Y</td><td>Y</td><td>Y</td><td>Y</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="sash"></div>
+        <div class="section log-section" id="logSection" style="flex:1 1 0">
+          <h4>日志</h4>
+          <div class="log-content" id="logContent">
+[09:14:12] 开始探测 3 个模型...
+[09:14:12] Provider: minnimax.chat
+[09:14:12]   [ctx] MiniMax-M2.7: claimed=204800
+[09:14:12]     256000 FAIL
+[09:14:12]     179200 FAIL
+[09:14:12]     140800 FAIL
+[09:14:12]     121600 FAIL
+[09:14:12]     112000 FAIL
+[09:14:13]   [ctx] MiniMax-M2.7-highspeed: claimed=204800
+[09:14:13]     256000 FAIL
+[09:14:13]     179200 FAIL
+[09:14:13]     140800 FAIL
+[09:14:13]     121600 FAIL
+[09:14:13]     112000 FAIL
+[09:14:14]   [ctx] MiniMax-M3: claimed=1000000
+[09:14:14]     1250000 FAIL
+[09:14:14]     875000 FAIL
+[09:14:14]     687500 FAIL
+[09:14:14]     593750 FAIL
+[09:14:14]     546875 FAIL
+[09:14:14]     523437 FAIL
+[09:14:14]     511718 FAIL
+[09:14:14]     505859 FAIL
+[09:14:14] 探测完成!
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" id="actionsBar">
+        <button id="btnStart">[>] 开始探测</button>
+        <div class="action-btns">
+          <button class="gray">保存</button>
+          <button class="gray">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="analysis">
+    <h3>实时分析</h3>
+    <div class="row"><span>模拟窗口高 vp</span><span id="a_vp" class="ok">700px</span></div>
+    <div class="row"><span>固定 sections 高</span><span id="a_fixed">315px</span></div>
+    <div class="row"><span>中间 wrapper 高</span><span id="a_mid">300px</span></div>
+    <div class="row"><span>日志 section 高</span><span id="a_log" class="ok">120px</span></div>
+    <div class="row"><span>actions 高</span><span id="a_act">42px</span></div>
+    <div class="row"><span>modal-box 总高</span><span id="a_total">657px</span></div>
+    <div class="row"><span>余量 (vp - total)</span><span id="a_spare">43px</span></div>
+    <div class="row"><span>按钮在 vp 内?</span><span id="a_visible" class="ok">[Y] 是</span></div>
+
+    <div class="legend">
+      <span class="lg-blue">蓝框</span>= 模拟窗口边界<br>
+      <span class="lg-red">红线</span>= viewport 底部<br>
+      <span class="lg-yellow">黄边</span>= 按钮区 (actions)<br>
+      <span class="lg-green">绿虚</span>= mid-wrapper (方案 B)
+    </div>
+    <div class="legend" style="margin-top:8px">
+      <b>方案 B 关键:</b><br>
+      - mid-wrapper: <code>flex:1; min-height:0; overflow:hidden</code><br>
+      - actions: <code>flex-shrink:0</code><br>
+      - log-content 内部 <code>overflow-y:auto</code><br>
+      <span class="ok">=> 按钮永远在 modal 底部, 不受中间内容影响</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const vp = document.getElementById('vp');
+  const vh = document.getElementById('vh');
+  const vv = document.getElementById('vv');
+  const mh = document.getElementById('mh');
+  const mv = document.getElementById('mv');
+  const lh = document.getElementById('lh');
+  const lv = document.getElementById('lv');
+  const midWrapper = document.getElementById('midWrapper');
+  const logSection = document.getElementById('logSection');
+  const vpLabel = document.getElementById('vpLabel');
+  const a_vp = document.getElementById('a_vp');
+  const a_fixed = document.getElementById('a_fixed');
+  const a_mid = document.getElementById('a_mid');
+  const a_act = document.getElementById('a_act');
+  const a_total = document.getElementById('a_total');
+  const a_spare = document.getElementById('a_spare');
+  const a_log = document.getElementById('a_log');
+  const a_visible = document.getElementById('a_visible');
+
+  function fixedHeight() { return 315; }
+
+  function recalc() {
+    vp.style.height = vh.value + 'px';
+    vpLabel.textContent = 'vp = ' + vh.value + 'px';
+    vv.textContent = vh.value;
+    midWrapper.style.height = mh.value + 'px';
+    mv.textContent = mh.value;
+    // Set log section to fixed height from slider (within mid-wrapper)
+    logSection.style.flex = '0 0 ' + lh.value + 'px';
+    logSection.style.minHeight = lh.value + 'px';
+    lv.textContent = lh.value + 'px';
+
+    const fixed = fixedHeight();
+    const total = fixed + parseInt(mh.value);
+    const spare = parseInt(vh.value) - total;
+    const visible = spare >= 0;
+
+    a_vp.textContent = vh.value + 'px';
+    a_fixed.textContent = fixed + 'px';
+    a_mid.textContent = mh.value + 'px';
+    a_log.textContent = lh.value + 'px';
+    a_act.textContent = '42px';
+    a_total.textContent = total + 'px';
+    a_spare.textContent = spare + 'px';
+    a_spare.className = spare >= 0 ? 'ok' : 'bad';
+    a_visible.textContent = visible ? '[Y] 是' : '[X] 否 (超 ' + (-spare) + 'px)';
+    a_visible.className = visible ? 'ok' : 'bad';
+  }
+
+  vh.addEventListener('input', recalc);
+  mh.addEventListener('input', recalc);
+  lh.addEventListener('input', recalc);
+  recalc();
+</script>
+
+</body>
+</html>
