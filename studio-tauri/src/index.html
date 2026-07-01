@@ -1326,6 +1326,21 @@ async function startProbeRun() {
     logEl.innerHTML += "[" + ts + "] " + msg + "\n";
     logEl.scrollTop = logEl.scrollHeight;
   }
+
+  // Listen for live probe-progress events from the 3 probe commands
+  let _unlistenProbe = null;
+  try {
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      const tauri = window.__TAURI__;
+      _unlistenProbe = await tauri.event.listen("probe-progress", (ev) => {
+        const p = ev.payload || {};
+        const stage = p.stage || "?";
+        const status = p.status || "?";
+        const detail = p.detail || "";
+        log("    " + stage + ":" + status + (detail ? " " + detail : ""));
+      });
+    }
+  } catch (e) { /* no tauri yet, ignore */ }
   
   const baseUrl = prov.base_url || "https://minnimax.chat/v1";
   
@@ -1339,43 +1354,51 @@ async function startProbeRun() {
       const model = modelNames[i];
       log("--- " + model + " [" + (i + 1) + "/" + modelNames.length + "] ---");
       
+      // Use the 3-split probe: ctx, max_tokens, caps
+      // Each emits "probe-progress" events (handled in startProbeRun wrapper)
+      const r = { model: model, success: true, error: null, context_window: null, max_tokens: null,
+        text: null, image: null, video: null, audio: null, function: null, reasoning: null,
+        web_search: null, file_search: null, computer_use: null, tool_search: null, mcp: null };
       try {
-        const r = await invoke("probe_model", {
-          baseUrl: baseUrl,
-          apiKey: prov.api_key,
-          model: model,
-          claimedCtx: 100000,
-          claimedMaxTokens: 131072
+        r.context_window = await invoke("probe_ctx", {
+          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: 100000
         });
-        
-        if (r.success) {
-          if (r.context_window) log("  Context: " + r.context_window + " tokens");
-          if (r.max_tokens) log("  MaxOut: " + r.max_tokens + " tokens");
-          const caps2 = [];
-          if (r.text) caps2.push("text");
-          if (r.image) caps2.push("image");
-          if (r.video) caps2.push("video");
-          if (r.audio) caps2.push("audio");
-          if (r.function) caps2.push("func");
-          if (r.reasoning) caps2.push("reason:" + r.reasoning);
-          if (caps2.length > 0) log("  Capabilities: " + caps2.join(", "));
-          
-          const m = enabled.find(em => em.provider === provName && em.model === model);
-          if (m) {
-            if (r.context_window && !m.context_window) m.context_window = r.context_window;
-            if (r.max_tokens && !m.max_tokens) m.max_tokens = r.max_tokens;
-          }
-        } else {
-          log("  FAILED: " + (r.error || "unknown error"));
+        if (r.context_window) log("  Context: " + r.context_window + " tokens");
+
+        r.max_tokens = await invoke("probe_max_tokens", {
+          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: 131072
+        });
+        if (r.max_tokens) log("  MaxOut: " + r.max_tokens + " tokens");
+
+        const caps = await invoke("probe_caps", {
+          baseUrl: baseUrl, apiKey: prov.api_key, model: model
+        });
+        r.text = caps.text; r.image = caps.image; r.video = caps.video;
+        r.audio = caps.audio; r.function = caps.function; r.reasoning = caps.reasoning;
+        r.web_search = caps.web_search; r.file_search = caps.file_search;
+        r.computer_use = caps.computer_use; r.tool_search = caps.tool_search; r.mcp = caps.mcp;
+        const caps2 = [];
+        if (r.text) caps2.push("text");
+        if (r.image) caps2.push("image");
+        if (r.video) caps2.push("video");
+        if (r.audio) caps2.push("audio");
+        if (r.function) caps2.push("func");
+        if (r.reasoning) caps2.push("reason");
+        if (caps2.length > 0) log("  Capabilities: " + caps2.join(", "));
+
+        const m = enabled.find(em => em.provider === provName && em.model === model);
+        if (m) {
+          if (r.context_window && !m.context_window) m.context_window = r.context_window;
+          if (r.max_tokens && !m.max_tokens) m.max_tokens = r.max_tokens;
         }
-        
         _probeResults.push(r);
         _probeChanged = true;
         updateProbeResultsTable();
-        
       } catch(e) {
         log("  ERROR: " + e);
-        _probeResults.push({ model: model, success: false, error: String(e) });
+        r.success = false;
+        r.error = String(e);
+        _probeResults.push(r);
         _probeChanged = true;
         updateProbeResultsTable();
       }
@@ -1389,7 +1412,8 @@ async function startProbeRun() {
     log("错误: " + e);
     showMsg("探测失败: " + e, "err");
   } finally {
-    btn.disabled = false;
+     if (_unlistenProbe) { try { _unlistenProbe(); } catch (e) {} _unlistenProbe = null; }
+       btn.disabled = false;
     btn.textContent = "开始探测";
   }
 }

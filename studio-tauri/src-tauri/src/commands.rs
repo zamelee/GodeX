@@ -1429,3 +1429,65 @@ fn test_tools_batch(client: &Client, url: &str, headers: &reqwest::header::Heade
 
     }
 }
+
+
+// ============================================================
+// New 3-command probe (split from probe_model for live progress)
+// ============================================================
+
+#[tauri::command]
+pub fn probe_ctx(
+    app: AppHandle,
+    base_url: String,
+    api_key: String,
+    model: String,
+    claimed: u64,
+) -> Result<Option<u64>, String> {
+    crate::diag(&format!("[probe_ctx] {} claimed={}", model, claimed));
+    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
+        .map_err(|e| format!("client: {}", e))?;
+    let result = client.probe_ctx(claimed);
+    let events = client.take_events();
+    for ev in events {
+        let _ = app.emit("probe-progress", &ev);
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn probe_max_tokens(
+    app: AppHandle,
+    base_url: String,
+    api_key: String,
+    model: String,
+    claimed: u64,
+) -> Result<Option<u64>, String> {
+    crate::diag(&format!("[probe_max_tokens] {} claimed={}", model, claimed));
+    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
+        .map_err(|e| format!("client: {}", e))?;
+    let result = client.probe_max_tokens(claimed);
+    let events = client.take_events();
+    for ev in events {
+        let _ = app.emit("probe-progress", &ev);
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn probe_caps(
+    app: AppHandle,
+    base_url: String,
+    api_key: String,
+    model: String,
+) -> Result<crate::probe::Capabilities, String> {
+    crate::diag(&format!("[probe_caps] {}", model));
+    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
+        .map_err(|e| format!("client: {}", e))?;
+    let caps = client.probe_caps();
+    let events = client.take_events();
+    for ev in events {
+        let _ = app.emit("probe-progress", &ev);
+    }
+    Ok(caps)
+}
+
