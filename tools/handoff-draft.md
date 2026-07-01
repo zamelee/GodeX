@@ -79,3 +79,50 @@
 | `studio-tauri/src-tauri/src/lib.rs` | 命令注册 |
 | `studio-tauri/src/index.html` | Modal UI |
 | `studio-tauri/src-tauri/Cargo.toml` | reqwest 依赖 |
+
+
+## 2026-07-01 探测发现
+
+fixture 用 PIL/wave/ffmpeg stub 生成的 ground-truth 内容（红底+RED字 PNG、440Hz WAV、mp4 stub）
+直接打 minnimax.chat，**比之前 probe-minnimax.py 的结论更准**：
+
+| 维度 | M2.7 | M2.7-hs | M3 | 说明 |
+|---|---|---|---|---|
+| text | ✅ | ✅ | ✅ | |
+| image | ❌ fake-200 | ❌ fake-200 | ✅ | M2.7/M2.7-hs 不真支持视觉 |
+| audio | ❌ 400 | ❌ 400 | ✅ | M2.7/M2.7-hs 真不支持音频 |
+| video | ⚠️ 200 fake | ⚠️ 200 fake | ❌ 400 | M2.7/M2.7-hs 假装支持，M3 拒绝（ffprobe 失败）|
+| function | ✅ | ✅ | ✅ | 真实 tool_calls |
+| reasoning | ❌ tokens=0 | ✅ | ✅ | M2.7 思考没开 |
+| web_search | ✅ | ✅ | ✅ | 200 |
+| file_search/computer_use/tool_search/mcp | ❌ 400 | ❌ 400 | ❌ 400 | 全部拒绝 |
+
+**之前结论错的原因**：旧 probe 用 `audio_url` (非标准 shape)，所以 M2.7/M2.7-hs 200 + "I don't see audio" 看起来像 proxy 假阳性。
+真相：用 `input_audio` (正确 shape) 后，**M2.7/M2.7-hs 直接 400 "invalid params, audio msg length"**，
+**M3 才真支持**。Proxy 没剥内容，是模型本身差异。
+
+## yaml 写入计划（待用户批准）
+
+```yaml
+MiniMax-M2.7:
+  image: false      # 假 200，模型看不到
+  audio: false      # 400 真拒
+  video: false      # 假 200
+  reasoning: false  # 0 token，没真开
+  function: true
+  web_search: true
+MiniMax-M2.7-highspeed:
+  image: false
+  audio: false
+  video: false
+  reasoning: true
+  function: true
+  web_search: true
+MiniMax-M3:
+  image: true       # 真看见红
+  audio: true       # 真听见
+  video: false      # ffprobe 拒绝
+  reasoning: true
+  function: true
+  web_search: true
+```

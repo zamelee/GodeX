@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root{--bg:#1e1e1e;--bg2:#252526;--bg3:#333;--border:#3c3c3c;--text:#ccc;--text2:#888;--blue:#4fc3f7;--red:rgba(255,0,0,.3);--lime:rgba(0,255,0,.15)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:13px}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;flex-shrink:0}
+header h1{font-size:15px;color:var(--blue)}
+main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
+.col-left{flex:0 0 200px;min-width:120px;background:var(--bg2);padding:8px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.sash-v{width:8px;height:100%;cursor:col-resize;user-select:none;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.sash-h{height:14px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}
+.sash-h:hover,.sash-h.dragging{background:#4fc3f7;opacity:0.5}
+.sash-h::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:4px;background:var(--border);border-radius:1px;transition:background .12s}
+.sash-h:hover::before,.sash-h.dragging::before{background:#fff}
+.col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.forms-area{flex:1 1 0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0;background:rgba(0,0,255,.03)}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;flex-shrink:0;margin:0 0 8px 0}
+.form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;border-bottom:1px solid var(--border)}
+.form-content{padding:8px}
+.log-region{flex:1 1 0;display:flex;flex-direction:column;min-height:120px;background:var(--bg)}
+button{margin:8px}
+</style>
+</head>
+<body>
+<header><h1>Sash 逻辑测试页</h1></header>
+<main>
+  <div class="col-left">
+    <div style="background:var(--bg3);padding:8px;border-radius:4px">服务商列表</div>
+    <div style="flex:1;background:var(--bg3);padding:8px;border-radius:4px">项目列表</div>
+  </div>
+  <div class="sash-v"></div>
+  <div class="col-right" id="col-right">
+    <div class="forms-area" id="forms-area">
+      <div class="form-section" id="fs-provider" style="border-color:#f44">
+        <div class="form-section-head">服务商信息</div>
+        <div class="form-content">API: <input placeholder="https://..." style="width:100%">
+        Key: <input type="password" style="width:100%">
+        <p style="margin-top:8px;color:var(--text2)">#fs-provider: flex:0 1 auto (shrink:1)</p>
+        <p style="color:var(--text2)">这行的高度 = 表单内容的自然高度，sash 拖动可以压缩它。</p>
+        </div>
+      </div>
+      <div class="sash-h" id="sash-forms"></div>
+      <div class="form-section" id="fs-models" style="border-color:#8f8">
+        <div class="form-section-head">已启用的模型</div>
+        <div class="form-content">模型列表...</div>
+      </div>
+    </div>
+    <div class="sash-h" id="sash-main-log" style="z-index:20"></div>
+    <div class="log-region" id="log-region">
+      <div style="flex:1;padding:8px;overflow:auto">
+        <p style="color:var(--text2)">日志面板 (可压缩)</p>
+        <p id="log-msg" style="margin-top:8px"></p>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+class Sash {
+  constructor({sashEl, beforeEl, afterEl, dir, minBefore=80, minAfter=80, defaultRatio=0.5}) {
+    this.sash = sashEl;
+    this.before = beforeEl;
+    this.after = afterEl;
+    this.dir = dir;
+    this.minBefore = minBefore;
+    this.minAfter = minAfter;
+    this.defaultRatio = defaultRatio;
+    this.container = sashEl.parentElement;
+    this._onMove = this._onMove.bind(this);
+    this._onUp = this._onUp.bind(this);
+    sashEl.addEventListener('mousedown', this._onDown.bind(this));
+    const me = this;
+    requestAnimationFrame(() => requestAnimationFrame(() => me._init()));
+  }
+  _init() {
+    this.applyRatio(this.defaultRatio, false);
+  }
+  applyRatio(r, persist=false) {
+    r = Math.max(0.05, Math.min(0.95, r));
+    this.before.style.flex = `0 0 ${(r*100).toFixed(2)}%`;
+    this.after.style.flex = '1 1 0';
+  }
+  _onDown(e) {
+    e.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add('dragging');
+    document.body.style.cursor = this.dir === 'v' ? 'col-resize' : 'row-resize';
+    window.addEventListener('mousemove', this._onMove);
+    window.addEventListener('mouseup', this._onUp);
+  }
+  _onMove(e) {
+    if (!this.dragging) return;
+    const rect = this.container.getBoundingClientRect();
+    let ratio;
+    if (this.dir === 'v') {
+      ratio = (e.clientX - rect.left) / rect.width;
+    } else {
+      ratio = (e.clientY - rect.top) / rect.height;
+    }
+    const totalPx = this.dir === 'v' ? rect.width : rect.height;
+    ratio = Math.max(this.minBefore/totalPx, Math.min(1-this.minAfter/totalPx, ratio));
+    this.applyRatio(ratio);
+    document.getElementById('log-msg').textContent = `比例: ${(ratio*100).toFixed(1)}% | sash: ${this.sash.id}`;
+  }
+  _onUp() {
+    this.dragging = false;
+    this.sash.classList.remove('dragging');
+    document.body.style.cursor = '';
+    window.removeEventListener('mousemove', this._onMove);
+    window.removeEventListener('mouseup', this._onUp);
+  }
+}
+
+// Init all sashes
+new Sash({sashEl: document.getElementById('sash-forms'), beforeEl: document.getElementById('fs-provider'), afterEl: document.getElementById('fs-models'), dir: 'h', minBefore:80, minAfter:80, defaultRatio:0.35});
+new Sash({sashEl: document.getElementById('sash-main-log'), beforeEl: document.getElementById('col-right'), afterEl: document.getElementById('log-region'), dir: 'h', minBefore:200, minAfter:120, defaultRatio:0.6});
+new Sash({sashEl: document.querySelector('.sash-v'), beforeEl: document.querySelector('.col-left'), afterEl: document.querySelector('.col-right'), dir: 'v', minBefore:120, minAfter:240, defaultRatio:0.22});
+</script>
+</body>
+</html>

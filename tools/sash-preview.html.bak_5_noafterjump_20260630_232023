@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Sash 模拟界面</title>
+<style>
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#2d333b;
+  --border:#3c3c3c;--text:#ccc;--text2:#888;
+  --blue:#4fc3f7;--green:#4ade80;--yellow:#facc15;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;
+  overflow:hidden;font-size:13px;
+}
+header{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:8px 14px;display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+header h2{color:var(--blue);font-size:14px}
+header .toolbar{display:flex;gap:6px;flex:1;flex-wrap:wrap}
+header button{
+  padding:5px 10px;background:var(--bg3);color:var(--text);
+  border:1px solid var(--border);border-radius:3px;
+  cursor:pointer;font-size:11px;
+}
+header button:hover{background:var(--blue);color:#000}
+header button.active{background:var(--blue);color:#000}
+header .indicator{
+  font-size:11px;color:var(--text2);font-family:monospace;
+  background:var(--bg3);padding:4px 8px;border-radius:3px;min-width:120px;
+}
+
+/* === Layout A: Studio 主页 (header / main / log-region) === */
+.layout-studio{display:flex;flex-direction:column;flex:1;min-height:0}
+.layout-studio > main{flex:1 1 0;display:flex;flex-direction:row;min-height:0;overflow:hidden}
+
+/* === Layout B: Probe Modal === */
+.layout-probe{display:flex;flex-direction:column;flex:1;min-height:0;padding:16px;gap:0;background:var(--bg2);overflow-y:auto}
+.layout-probe .probe-section{flex:0 0 auto;min-height:60px;display:flex;flex-direction:column;gap:6px}
+.layout-probe #probe-section-provider,
+.layout-probe #probe-section-models,
+.layout-probe #probe-section-caps { flex: 0 0 auto; min-height: 60px; }
+.layout-probe #probe-section-results { flex: 0 0 35%; }
+.layout-probe #probe-section-log { flex: 1 1 0; min-height: 100px; }
+
+/* === Sash common === */
+.sash{background:var(--bg2);flex-shrink:0;transition:background .12s;position:relative;z-index:5;display:flex;align-items:center;justify-content:center}
+.sash::before{content:"";position:absolute;background:var(--blue);transition:background .12s;opacity:0.5}
+.sash.dragging{background:var(--blue)!important;opacity:0.5}
+.sash.dragging::before{background:var(--blue)}
+.sash-h{height:14px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:4px;border-radius:1px}
+.sash-v{width:8px;height:100%;cursor:col-resize;user-select:none;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.sash-v::before{top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:36px;border-radius:1px}
+.cap-row{display:flex;gap:6px 14px;flex-wrap:wrap;padding:6px;background:var(--bg);border:1px solid var(--border);align-items:flex-start}
+.cap-item{display:flex;flex-direction:column;align-items:center;line-height:1.2;gap:1px}
+.cap-top{font-size:11px;font-weight:600;white-space:nowrap}
+.cap-zh{font-size:10px;color:var(--text2);white-space:nowrap}
+
+/* === Sections === */
+.sec{background:var(--bg2);border:1px solid var(--border);padding:8px;overflow:auto;font-size:11px;display:flex;flex-direction:column;gap:4px}
+.sec h3{color:var(--blue);font-size:11px;margin-bottom:4px}
+.sec .row{padding:3px 6px;border-radius:3px;background:var(--bg3);font-family:monospace}
+.col-left{flex:0 0 240px;background:var(--bg2);overflow:hidden;padding:8px;border-right:1px solid var(--border)}
+.col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg2);padding:8px}
+.form-section{background:var(--bg);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;overflow:auto;font-size:11px}
+.form-section h3{color:var(--text2);font-size:10px;text-transform:uppercase}
+.log-region{flex:1 1 0;background:var(--bg);min-height:120px;padding:8px;font-family:monospace;font-size:11px;overflow:auto;border:1px solid var(--border);border-radius:4px}
+.probe-results-section{flex:0 0 240px;min-height:100px}
+.probe-table-wrap{flex:1;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:4px}
+.probe-log-section{flex:1;min-height:160px}
+.probe-log{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px;font-family:monospace;font-size:11px;height:100%;overflow-y:auto;white-space:pre-wrap}
+
+.diag{position:fixed;bottom:10px;right:10px;background:#ff0;color:#000;z-index:9999;font-size:11px;padding:6px 10px;max-width:480px;font-family:monospace;border-radius:4px;line-height:1.5}
+.info{position:fixed;bottom:50px;right:10px;background:var(--blue);color:#000;padding:5px 9px;border-radius:4px;font-size:11px;z-index:99;font-family:monospace}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap}
+th{background:var(--bg2);color:var(--text2);font-weight:600;position:sticky;top:0}
+td.sticky-col,th.sticky-col{text-align:left;position:sticky;left:0;background:var(--bg2)}
+.empty-msg{text-align:center;color:var(--text2);padding:20px}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h2>Sash 模拟界面</h2>
+  <div class="toolbar">
+    <button id="btn-layout-studio" class="active" onclick="switchLayout('studio')">布局 A: Studio 主页</button>
+    <button id="btn-layout-probe" onclick="switchLayout('probe')">布局 B: Probe 弹窗</button>
+    <button onclick="resetAllRatios()">↺ 重置所有比例</button>
+    <button onclick="clearStorage()">清空 localStorage</button>
+  </div>
+  <div class="indicator" id="indicator">sash count: -</div>
+</header>
+
+<!-- =================== LAYOUT A: Studio main page (3 sashes) =================== -->
+<div class="layout-studio" id="layout-studio">
+  <main id="studio-main">
+    <div class="col-left" id="studio-col-left">
+      <h3 style="color:var(--blue);margin-bottom:6px">左栏(sash-cols 拖动)</h3>
+      <div class="row">服务商 1</div>
+      <div class="row">服务商 2</div>
+      <div class="row">服务商 3</div>
+      <div class="row">...</div>
+      <div style="margin-top:auto;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--text2)">
+        flex-basis 由 sash-cols 控制
+      </div>
+    </div>
+    <div class="sash sash-v" id="sash-cols" title="拖动调整左右比例"></div>
+    <div class="col-right" id="studio-col-right">
+      <div class="form-section" id="studio-fs-provider">
+        <h3>上半区(可压缩,sash-forms)</h3>
+        <div class="row">服务商信息(API URL, KEY, spec, timeout...)</div>
+        <div class="row">保存服务商</div>
+        <div class="row">刷新</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px">
+          当前高度:<span id="h-fs-provider">-</span>
+        </div>
+      </div>
+      <div class="sash sash-h" id="sash-forms" title="拖动调整上下编辑区比例"></div>
+      <div class="form-section" id="studio-fs-models">
+        <h3>下半区(可扩展)</h3>
+        <div class="row">已启用的模型</div>
+        <div class="row">从上游拉取 / 模型探测 / 手动添加 / 清空</div>
+        <div class="row">context_window / max_tokens / 余量% / capabilities</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px">
+          当前高度:<span id="h-fs-models">-</span>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div class="sash sash-h" id="sash-main-log" title="拖动调整主区与日志区比例"></div>
+  <div class="log-region" id="studio-log-region">
+    <b>日志面板(sash-main-log 拖动)</b>
+    <div style="font-size:10px;color:var(--text2);margin:4px 0">
+      [08:00] Studio manager is ALIVE<br>
+      [08:00] GodeX is RUNNING<br>
+      [08:01] ...<br>
+    </div>
+    <div style="font-size:10px;color:var(--text2)">当前高度:<span id="h-log-region">-</span></div>
+  </div>
+</div>
+
+<!-- =================== LAYOUT B: Probe modal (4 sashes) =================== -->
+<div class="layout-probe hidden" id="layout-probe">
+  <div class="probe-section" id="probe-section-provider">
+    <h3 style="color:var(--text2);font-size:11px;font-weight:600">Provider</h3>
+    <select style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:5px 8px">
+      <option>minnimax.chat</option>
+    </select>
+  </div>
+  <div class="sash sash-h" id="probe-sash-models" title="拖动调整 provider/models 比例"></div>
+  <div class="probe-section" id="probe-section-models">
+    <h3 style="color:var(--text2);font-size:11px;font-weight:600">选择模型(5 个 + 添加)</h3>
+    <div style="background:var(--bg);border:1px solid var(--border);padding:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <span style="background:var(--bg3);padding:3px 9px;border-radius:12px;font-size:11px;border:1px solid var(--border)">☑ MiniMax-M2.7 205K</span>
+      <span style="background:var(--bg3);padding:3px 9px;border-radius:12px;font-size:11px;border:1px solid var(--border)">☑ MiniMax-M2.7-highspeed 205K</span>
+      <span style="background:var(--bg3);padding:3px 9px;border-radius:12px;font-size:11px;border:1px solid var(--border)">☑ MiniMax-M3 1000K</span>
+      <span style="background:var(--bg3);padding:3px 9px;border-radius:12px;font-size:11px;border:1px solid var(--border)">☑ MiniMax-M3-7B 128K</span>
+      <span style="background:var(--bg3);padding:3px 9px;border-radius:12px;font-size:11px;border:1px solid var(--border)">☑ MiniMax-M5-Pro 500K</span>
+      <span style="background:transparent;padding:3px 9px;border-radius:12px;font-size:11px;border:1px dashed var(--border)">+ 手动添加</span>
+    </div>
+    <div style="font-size:10px;color:var(--text2);margin-top:4px">当前高度:<span id="h-probe-models">-</span></div>
+  </div>
+  <div class="sash sash-h" id="probe-sash-caps" title="拖动调整 models/caps 比例"></div>
+  <div class="probe-section" id="probe-section-caps">
+    <h3 style="color:var(--text2);font-size:11px;font-weight:600">能力探测(13 个 cap,横排 + 中文)</h3>
+        <div class="cap-row">
+      <div class="cap-item"><div class="cap-top">☑ Context</div><div class="cap-zh">上下文窗口</div></div>
+      <div class="cap-item"><div class="cap-top">☑ MaxTokens</div><div class="cap-zh">最大输出</div></div>
+      <div class="cap-item"><div class="cap-top">☑ Text</div><div class="cap-zh">文本</div></div>
+      <div class="cap-item"><div class="cap-top">☑ Image</div><div class="cap-zh">图片</div></div>
+      <div class="cap-item"><div class="cap-top">☐ Video</div><div class="cap-zh">视频</div></div>
+      <div class="cap-item"><div class="cap-top">☐ Audio</div><div class="cap-zh">音频</div></div>
+      <div class="cap-item"><div class="cap-top">☑ Func</div><div class="cap-zh">函数调用</div></div>
+      <div class="cap-item"><div class="cap-top">☑ Reason</div><div class="cap-zh">思维链</div></div>
+      <div class="cap-item"><div class="cap-top">☐ Computer</div><div class="cap-zh">计算机操作</div></div>
+      <div class="cap-item"><div class="cap-top">☐ ToolSearch</div><div class="cap-zh">工具搜索</div></div>
+      <div class="cap-item"><div class="cap-top">☐ WebSearch</div><div class="cap-zh">网页搜索</div></div>
+      <div class="cap-item"><div class="cap-top">☐ FileSearch</div><div class="cap-zh">文件搜索</div></div>
+      <div class="cap-item"><div class="cap-top">☐ MCP</div><div class="cap-zh">MCP 服务器</div></div>
+    </div>
+    <div style="font-size:10px;color:var(--text2);margin-top:4px">当前高度:<span id="h-probe-caps">-</span></div>
+  </div>
+  <div class="sash sash-h" id="probe-sash-results" title="拖动调整 caps/results 比例"></div>
+  <div class="probe-section probe-results-section" id="probe-section-results">
+    <h3 style="color:var(--text2);font-size:11px;font-weight:600">结果(14 列固定)</h3>
+    <div class="probe-table-wrap">
+      <table>
+        <thead><tr>
+          <th class="sticky-col">Model</th>
+          <th>Context</th><th>MaxOut</th>
+          <th>Text</th><th>Image</th><th>Video</th><th>Audio</th>
+          <th>Func</th><th>Reason</th>
+          <th>Computer</th><th>ToolSearch</th><th>WebSearch</th><th>FileSearch</th><th>MCP</th>
+        </tr></thead>
+        <tbody><tr><td colspan="14" class="empty-msg">等待探测...</td></tr></tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:var(--text2);margin-top:4px">当前高度:<span id="h-probe-results">-</span></div>
+  </div>
+  <div class="sash sash-h" id="probe-sash-log" title="拖动调整 results/log 比例"></div>
+  <div class="probe-section probe-log-section" id="probe-section-log">
+    <h3 style="color:var(--text2);font-size:11px;font-weight:600">日志</h3>
+    <div class="probe-log">[08:00] 开始探测 5 个模型...
+[08:00] Provider: minnimax.chat
+[08:00] Base URL: https://minnimax.chat/v1
+[08:01] --- MiniMax-M2.7 ---
+[08:01] Context: 204800 tokens
+[08:01] MaxOut: 131072 tokens
+[08:01] Capabilities: text, image, audio
+[08:01] --- ...</div>
+    <div style="font-size:10px;color:var(--text2);margin-top:4px">当前高度:<span id="h-probe-log">-</span></div>
+  </div>
+</div>
+
+<div class="info" id="info">拖动 sash 测试</div>
+<div class="diag" id="diag"></div>
+
+<script>
+/* ====== Sash class (port from index.html) ====== */
+class Sash {
+  constructor({sashEl, beforeEl, afterEl, dir, storageKey, minBefore=80, minAfter=80, defaultRatio=0.5, mode="pct", beforeStyle="pct"}) {
+    this.sash = sashEl;
+    this.before = beforeEl;
+    this.after = afterEl;
+    this.dir = dir;
+    this.storageKey = storageKey;
+    this.minBefore = minBefore;
+    this.minAfter = minAfter;
+    this.defaultRatio = defaultRatio;
+    this.mode = mode;
+    this.beforeStyle = beforeStyle;
+    this.container = sashEl.parentElement;
+    this._onMove = this._onMove.bind(this);
+    this._onUp = this._onUp.bind(this);
+    this._onDown = this._onDown.bind(this);
+    sashEl.addEventListener("mousedown", this._onDown);
+    const me = this;
+    requestAnimationFrame(() => requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); }));
+  }
+  _loadRatio() {
+    const v = parseFloat(localStorage.getItem(this.storageKey));
+    if (Number.isFinite(v) && v >= 0.05 && v <= 0.95) return v;
+    return this.defaultRatio;
+  }
+  applyRatio(ratio, persist=true) {
+    const r = Math.max(0.05, Math.min(0.95, ratio));
+    if (this.mode === "px") {
+      const total = this.dir === "v" ? this.container.clientWidth : this.container.clientHeight;
+      const px = Math.round(r * total);
+      this.before.style.flex = `0 0 ${px}px`;
+      this.after.style.flex = "1 1 0";
+    } else if (this.beforeStyle === "auto") {
+      // auto: leave CSS to size it (defaultRatio applies only on Reset)
+      this.before.style.flex = "";
+      this.after.style.flex = "";
+    } else {
+      this.before.style.flex = `0 0 ${(r*100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    }
+    this._lastRatio = r;            // 2D: cache so _currentRatio matches this same denominator
+    if (persist) localStorage.setItem(this.storageKey, String(r));
+  }
+  _onMove(ev) {
+    if (!this.dragging) return;
+    const rect = this.container.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    // 2D: ratio change = mouse delta / container length, anchored at mousedown.
+    const delta = this.dir === "v" ? (x - this._startX) : (y - this._startY);
+    let ratio = this._startRatio + delta / totalPx;
+    const minR = this.minBefore / totalPx;
+    const maxR = 1 - (this.minAfter / totalPx);
+    ratio = Math.max(minR, Math.min(maxR, ratio));
+    this.applyRatio(ratio, false);
+    document.getElementById('info').textContent = this.sash.id + ': ' + (ratio*100).toFixed(1) + '%';
+  }
+  _onDown(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
+    // 2D: capture anchor (mouse + current ratio) so first mousemove
+    // does NOT jump the sash to wherever the cursor happens to be.
+    this._startX = ev.clientX;
+    this._startY = ev.clientY;
+    // Promote auto -> pct and freeze current layout ratio as explicit %.
+    // Without this, an "auto" before would jump on first mousemove.
+    if (this.beforeStyle === "auto") {
+      // Capture layout-derived ratio BEFORE switching to pct — otherwise the
+      // stale _lastRatio (from init rAF applyRatio with defaultRatio) leaks in.
+      const layoutR = this._layoutRatio();
+      this.beforeStyle = "pct";
+      this.applyRatio(layoutR, false);
+    }
+    this._startRatio = this._currentRatio();
+    window.addEventListener("mousemove", this._onMove);
+    window.addEventListener("mouseup", this._onUp);
+  }
+  _layoutRatio() {
+    // Always derive from actual layout (ignores cached _lastRatio).
+    // Used both by _currentRatio in auto mode and by _onDown to capture
+    // a fresh value before promoting auto -> pct.
+    const rect = this.container.getBoundingClientRect();
+    const beforeRect = this.before.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+    return totalPx > 0 ? beforePx / totalPx : this.defaultRatio;
+  }
+  _currentRatio() {
+    // pct mode: prefer the last explicit ratio we applied (denominator matches flex-basis: N%).
+    // auto mode: derive from actual layout (content-driven); a stale cached _lastRatio
+    //   from init must NOT leak in here, so we explicitly use the layout path.
+    if (this.beforeStyle === "pct" && typeof this._lastRatio === "number") {
+      return this._lastRatio;
+    }
+    return this._layoutRatio();
+  }
+  _onUp() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.sash.classList.remove("dragging");
+    document.body.style.cursor = "";
+    const rect = this.container.getBoundingClientRect();
+    const beforeRect = this.before.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+    this.applyRatio(beforePx / totalPx, true);
+    window.removeEventListener("mousemove", this._onMove);
+    window.removeEventListener("mouseup", this._onUp);
+  }
+}
+
+/* ====== Init all 7 sashes ====== */
+const _godexSashes = [];
+
+function initSashes() {
+  // Studio layout (3)
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-cols"), beforeEl: $("studio-col-left"), afterEl: $("studio-col-right"),
+    dir: "v", storageKey: "sash-preview.colsRatio", minBefore: 120, minAfter: 240, defaultRatio: 0.22,
+  }));
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-forms"), beforeEl: $("studio-fs-provider"), afterEl: $("studio-fs-models"),
+    dir: "h", storageKey: "sash-preview.formsRatio", minBefore: 80, minAfter: 80, defaultRatio: 0.35, mode: "px",
+  }));
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-main-log"), beforeEl: $("studio-main"), afterEl: $("studio-log-region"),
+    dir: "h", storageKey: "sash-preview.mainLogRatio", minBefore: 200, minAfter: 120, defaultRatio: 0.6,
+  }));
+  // Probe layout (4)
+  _godexSashes.push(new Sash({
+    sashEl: $("probe-sash-models"), beforeEl: $("probe-section-provider"), afterEl: $("probe-section-models"),
+    dir: "h", storageKey: "sash-preview.probeModelsRatio", minBefore: 60, minAfter: 60, defaultRatio: 0.09, beforeStyle: "auto",
+  }));
+  _godexSashes.push(new Sash({
+    sashEl: $("probe-sash-caps"), beforeEl: $("probe-section-models"), afterEl: $("probe-section-caps"),
+    dir: "h", storageKey: "sash-preview.probeCapsRatio", minBefore: 60, minAfter: 60, defaultRatio: 0.20, beforeStyle: "auto",
+  }));
+  _godexSashes.push(new Sash({
+    sashEl: $("probe-sash-results"), beforeEl: $("probe-section-caps"), afterEl: $("probe-section-results"),
+    dir: "h", storageKey: "sash-preview.probeResultsRatio", minBefore: 80, minAfter: 80, defaultRatio: 0.16, beforeStyle: "auto",
+  }));
+  _godexSashes.push(new Sash({
+    sashEl: $("probe-sash-log"), beforeEl: $("probe-section-results"), afterEl: $("probe-section-log"),
+    dir: "h", storageKey: "sash-preview.probeLogRatio", minBefore: 80, minAfter: 80, defaultRatio: 0.35,
+  }));
+}
+
+function $(id){return document.getElementById(id);}
+
+/* ====== Layout switcher ====== */
+function switchLayout(name) {
+  document.getElementById('layout-studio').classList.toggle('hidden', name !== 'studio');
+  document.getElementById('layout-probe').classList.toggle('hidden', name !== 'probe');
+  document.getElementById('btn-layout-studio').classList.toggle('active', name === 'studio');
+  document.getElementById('btn-layout-probe').classList.toggle('active', name === 'probe');
+  // re-apply ratios on the now-visible layout (RAF so flex has settled)
+  setTimeout(() => {
+    for (const s of _godexSashes) {
+      try { s.applyRatio(s._loadRatio(), false); } catch(e){}
+    }
+    updateHeights();
+  }, 50);
+}
+
+function resetAllRatios() {
+  for (const s of _godexSashes) {
+    localStorage.removeItem(s.storageKey);
+    // For sash with beforeStyle!="pct" (i.e. init-mode auto), restore auto so
+    // CSS controls height again; otherwise just re-apply the default ratio.
+    if (s.beforeStyle !== "pct") {
+      s.applyRatio(s.defaultRatio, false);
+    } else {
+      s.beforeStyle = "auto";
+      s.applyRatio(s.defaultRatio, false);
+    }
+  }
+  updateHeights();
+}
+
+function clearStorage() {
+  for (const s of _godexSashes) localStorage.removeItem(s.storageKey);
+  alert('localStorage 已清空,请刷新页面');
+}
+
+/* ====== Height indicator ====== */
+function updateHeights() {
+  const ids = ['studio-fs-provider','studio-fs-models','studio-log-region','layout-probe'];
+  for (const id of ids) {
+    const el = $(id); if (!el) continue;
+    const cs = el.children[el.children.length-1];
+    if (cs && cs.textContent.startsWith('当前高度')) {} // skip
+  }
+  const map = {
+    'h-fs-provider': 'studio-fs-provider',
+    'h-fs-models': 'studio-fs-models',
+    'h-log-region': 'studio-log-region',
+  };
+  for (const [span, src] of Object.entries(map)) {
+    const el = $(src); const sp = $(span);
+    if (el && sp) sp.textContent = Math.round(el.getBoundingClientRect().height) + 'px';
+  }
+}
+
+/* ====== Diag display ====== */
+function updateDiag() {
+  const msg = [
+    'count=' + _godexSashes.length,
+    ..._godexSashes.map((s,i) => `${i}=${s.sash.id} (container=${s.container.tagName})`)
+  ].join(' | ');
+  document.getElementById('diag').textContent = msg;
+  document.getElementById('indicator').textContent = 'sash count: ' + _godexSashes.length;
+}
+
+/* ====== Boot ====== */
+initSashes();
+updateDiag();
+updateHeights();
+setInterval(updateHeights, 1000);
+window.addEventListener('resize', () => {
+  for (const s of _godexSashes) try { s.applyRatio(s._loadRatio(), false); } catch(e){}
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>GodeX Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#c9d1d9;--text2:#8b949e;--blue:#58a6ff;--green:#3fb950;
+  --red:#f85149;--yellow:#d29922;--purple:#8957e5;
+}
+body{font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:13px}
+header{background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:8px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+h1{font-size:15px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;vertical-align:middle;margin-right:6px}
+.dot.ok{background:var(--green)}
+.dot.warn{background:var(--yellow)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.hdr-right code{color:var(--blue);font-family:ui-monospace,monospace}
+main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
+.col-left{flex:0 0 240px;min-width:120px;max-width:60vw;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.col-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.sec{background:var(--bg2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);
+  letter-spacing:.05em;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sec .right{font-size:10px;font-weight:400;letter-spacing:0}
+.provider-list{padding:8px;overflow-y:auto;flex:1}
+.provider-item{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer}
+.provider-item:hover{border-color:var(--blue)}
+.provider-item.active{border-color:var(--blue);background:rgba(88,166,255,.1)}
+.provider-item.active .pname{color:var(--blue)}
+.provider-item .pname{font-size:13px;font-weight:600;word-break:break-all}
+.provider-item .psub{font-size:11px;color:var(--text2);font-weight:400;margin-top:2px;word-break:break-all}
+.provider-item .pmeta{font-size:10px;color:var(--text2);margin-top:2px}
+.provider-item .del{position:absolute;top:4px;right:6px;font-size:16px;color:var(--text2);cursor:pointer;opacity:0;transition:opacity .15s;line-height:1;padding:0 4px}
+.provider-item:hover .del{opacity:1}
+.provider-item .del:hover{color:var(--red)}
+.forms-area{flex:1 1 0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0}
+.form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;flex-shrink:0;margin:0 0 8px 0}
+#fs-provider{flex:0 1 auto;border:1px solid red;background:rgba(255,0,0,.05)}#fs-models{flex:1 1 0;margin-bottom:0;min-height:200px;border:1px solid lime;background:rgba(0,255,0,.05)}.forms-area{background:rgba(0,0,255,.05)}
+.form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.form-section-head .badge{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:400;padding:1px 6px;border-radius:3px}
+.form-section-head .right{margin-left:auto;display:flex;gap:6px}
+.form-grid{display:grid;grid-template-columns:130px 1fr;gap:0}
+.form-row{display:contents}
+.form-row label{padding:7px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;border-bottom:1px solid rgba(48,54,61,.5)}
+.form-row label .req{color:var(--red);margin-left:2px}
+input,select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-size:12px;width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--blue)}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:600}
+.action-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;background:var(--bg2)}
+.btn{background:#238636;border:none;border-radius:5px;color:#fff;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;font-family:inherit}
+.btn:hover{background:#2ea043}
+.btn:disabled{background:#444c56;cursor:not-allowed}
+.btn.purple{background:#6e40c9}
+.btn.purple:hover{background:var(--purple)}
+.btn.gray{background:var(--bg3);color:var(--text)}
+.btn.gray:hover{background:#3a3f47}
+.btn.danger{background:#b62324}
+.btn.danger:hover{background:#d1242f}
+.btn.small{padding:3px 8px;font-size:11px}
+.btn.tiny{padding:2px 6px;font-size:10px}
+.msg{font-size:12px;margin-left:8px}
+.msg.ok{color:var(--green)}
+.msg.err{color:var(--red)}
+/* --- sashes (drag to resize adjacent flex siblings) --- */
+.sash{background:var(--bg2);flex-shrink:0;transition:background .12s;position:relative;z-index:5;display:flex;align-items:center;justify-content:center}
+.sash::before{content:"";position:absolute;background:var(--blue);transition:background .12s;opacity:0.5}
+.sash:hover,.sash.dragging{background:var(--blue);opacity:0.5}
+.sash:hover::before,.sash.dragging::before{background:var(--blue)}
+.sash-h{height:14px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:4px;border-radius:1px}
+.sash-v{width:8px;height:100%;cursor:col-resize;user-select:none;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.sash-v::before{top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:36px;border-radius:1px}
+
+/* --- visible scrollbars on every scrollable surface --- */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--bg2)}
+*::-webkit-scrollbar-thumb{background:#444c56;border-radius:5px;border:2px solid var(--bg2)}
+*::-webkit-scrollbar-thumb:hover{background:var(--blue)}
+*::-webkit-scrollbar-corner{background:var(--bg2)}
+*{scrollbar-width:thin;scrollbar-color:#444c56 var(--bg2)}
+
+
+.log-region{flex:1 1 0;display:flex;flex-direction:column;min-height:120px;background:var(--bg)}
+.log-panel{display:flex;flex-direction:column;min-height:120px;background:var(--bg);overflow:hidden}
+.log-panel-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;height:30px}
+.log-panel-header .lp-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;transition:background .15s}
+.log-panel-header .lp-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:.02em}
+.log-panel-header .lp-sub{font-size:10px;color:var(--text2);font-weight:400}
+.log-panel-header .lp-status{font-family:ui-monospace,"Consolas",monospace;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
+.log-panel-header .lp-status.running{color:var(--green)}
+.log-panel-header .lp-status.stopped{color:var(--yellow)}
+.log-panel-header .lp-status.dead{color:var(--red)}
+.log-panel-header .lp-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.log-panel-header .lp-mid-ext{font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;padding:0 4px;border-radius:3px;transition:background .12s}
+.log-panel-header .lp-mid-ext:hover{background:var(--bg3)}
+.log-panel-header .lp-mid-ext input{width:auto;margin:0;cursor:pointer}
+.log-panel-header .lp-right select,.log-panel-header .lp-right input{font-size:10px;padding:1px 4px;width:auto;background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--text)}
+.log-panel-header .lp-count{font-size:10px;color:var(--text2);min-width:48px;text-align:right;font-family:ui-monospace,monospace}
+.log-panel-body{flex:1;overflow-y:auto;overflow-x:hidden;font-family:"Consolas","Courier New",monospace;font-size:11px;background:var(--bg);white-space:pre-wrap}
+.log-panel-body.nowrap{white-space:pre;overflow-x:auto;overflow-y:auto}
+.log-line{padding:1px 12px;border-bottom:1px solid rgba(22,27,34,.8);display:flex;gap:8px;align-items:flex-start;font-family:inherit;word-break:break-word}
+.log-line.nowrap{white-space:pre;word-break:normal}
+.log-line .ts{color:var(--text2);flex-shrink:0;font-variant-numeric:tabular-nums}
+.log-line .src{font-weight:600;flex-shrink:0;text-transform:uppercase;font-size:10px;padding:0 4px;border-radius:2px;align-self:center;letter-spacing:.03em}
+.log-line .src.studio{color:var(--purple);background:rgba(137,87,229,.12)}
+.log-line .src.godex{color:var(--blue);background:rgba(88,166,255,.12)}
+.log-line .src.cmd{color:var(--green);background:rgba(63,185,80,.12)}
+.log-line .msg{color:var(--text);flex:1;word-break:break-word;white-space:pre-wrap}
+.log-line.nowrap .msg{white-space:pre;word-break:normal}
+.log-line.error .msg{color:var(--red)}
+.log-line.warn .msg{color:var(--yellow)}
+.log-sash{height:6px;flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:row-resize;display:flex;align-items:center;justify-content:center;user-select:none;transition:background .12s}
+.log-sash:hover,.log-sash.dragging{background:var(--bg3)}
+.log-sash::before{content:"";width:36px;height:2px;background:var(--border);border-radius:1px;transition:background .12s}
+.log-sash:hover::before,.log-sash.dragging::before{background:var(--blue)}
+.model-toolbar{padding:8px 12px;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(48,54,61,.5);flex-wrap:wrap}
+.model-toolbar input[type=text]{flex:1;min-width:120px}
+.model-list{padding:0}
+.model-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px}
+.model-row:hover{background:rgba(255,255,255,.02)}
+.model-row .name{font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.model-row .name .src{font-size:9px;color:var(--text2);background:var(--bg3);padding:1px 4px;border-radius:3px}
+.model-row .name .preset{font-size:10px;color:var(--green)}
+.model-row .actions{display:flex;gap:4px;align-items:center;flex-shrink:0}
+.model-row .caps{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
+.model-row .cap{font-size:9px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--text2);cursor:pointer;user-select:none}
+.model-row .cap.on{background:rgba(63,185,80,.18);color:var(--green)}
+.model-row .cap.off{opacity:.45}
+.model-row .params{display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap}
+.model-row .params input{width:90px;padding:2px 6px;font-size:11px}
+.model-row .params label{font-size:10px;color:var(--text2)}
+.empty{padding:24px;text-align:center;color:var(--text2);font-size:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:340px;max-width:90vw;max-height:90vh;overflow-y:auto}
+.modal-box h3{margin-bottom:6px;color:var(--blue);font-size:14px}
+.modal-box .desc{font-size:11px;color:var(--text2);margin-bottom:12px}
+.modal-box .row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.modal-box .row label{font-size:11px;color:var(--text2)}
+.modal-box .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/*** Probe Modal Styles ***/
+.probe-modal-box {
+  min-width: 800px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.probe-section {
+  flex: 0 0 auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.probe-label {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.probe-sash {
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  margin: 4px 0;
+}
+.probe-sash:hover { background: var(--blue); }
+.probe-models-list {
+  flex: 1;
+  max-height: 150px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+}
+.probe-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.probe-model-item:hover { background: var(--bg3); }
+.probe-model-item input { width: auto; margin: 0; flex-shrink: 0; }
+.probe-model-name { flex: 1; font-size: 12px; }
+.probe-model-ctx { font-size: 10px; color: var(--blue); min-width: 50px; text-align: right; }
+.probe-caps-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.probe-caps-grid label { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.probe-caps-grid input { width: auto; margin: 0; }
+.probe-results-section { flex: 0 0 200px; min-height: 100px; }
+.probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+#probe-results-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+#probe-results-table th, #probe-results-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+#probe-results-table th { background: var(--bg2); position: sticky; top: 0; z-index: 1; }
+.sticky-col { position: sticky; left: 0; background: var(--bg2); z-index: 2; }
+#probe-results-table tr:hover .sticky-col { background: var(--bg3); }
+.probe-log-section { flex: 1; min-height: 150px; }
+.probe-log { flex: 1; min-height: 150px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; color: #7ee787; white-space: pre-wrap; }
+.empty-msg { color: var(--text2); font-size: 11px; padding: 8px; }
+.probe-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; }
+.probe-actions-right { display: flex; gap: 8px; }
+#probe-results-table th:nth-child(1), #probe-results-table td:nth-child(1) { width: 140px; }
+#probe-results-table th:nth-child(n+2), #probe-results-table td:nth-child(n+2) { width: 70px; }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>GodeX Studio</h1>
+  <div class="hdr-right">
+    <span>原生窗口 &middot; <code>Tauri 2</code></span>
+    <button class="btn small gray" onclick="openSettingsModal()" title="修改 Config / Binary 路径">⚙ 设置</button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="col-left" id="col-left">
+    <div class="sec">服务商列表 <span class="right" id="provider-count">0</span></div>
+    <div class="provider-list" id="provider-items">
+      <div class="empty">加载中...</div>
+    </div>
+    <div style="padding:8px;border-top:1px solid var(--border);background:var(--bg2)">
+      <button class="btn small" style="width:100%" onclick="openNewProviderModal()">+ 新建服务商</button>
+    </div>
+  </div>
+
+  <div class="sash sash-v" id="sash-cols" title="拖动调整左右比例"></div>
+  <div class="col-right" id="col-right">
+    <div id="editor-empty" class="empty" style="display:none;flex:1;align-items:center;justify-content:center">
+      <div>
+        <div style="font-size:14px;margin-bottom:8px">未选择服务商</div>
+        <div>请点击左侧已有服务商进行编辑,或点击下方"新建服务商"创建。</div>
+      </div>
+    </div>
+    <div id="editor" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="forms-area" id="forms-area">
+        <div class="form-section" id="fs-provider">
+          <div class="form-section-head">
+            <span id="form-provider-name">服务商</span>
+            <span class="badge" id="form-spec-badge">类型: ?</span>
+            <div class="right">
+              <button class="btn tiny" onclick="saveProvider()">保存服务商信息</button>
+              <button class="btn gray tiny" onclick="reloadProvider()">刷新</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-row"><label>名称</label>
+              <input id="f-name" type="text" readonly value=""/>
+            </div>
+            <div class="form-row"><label>接口地址 <span class="req">*</span></label>
+              <input id="f-base_url" type="text" placeholder="https://api.example.com/v1"/>
+            </div>
+            <div class="form-row"><label>API 密钥</label>
+              <input id="f-api_key" type="password" placeholder="sk-..."/>
+            </div>
+            <div class="form-row"><label>协议类型</label>
+              <select id="f-spec">
+                <option value="minimax">minimax (默认)</option>
+                <option value="deepseek">deepseek</option>
+                <option value="zhipu">zhipu</option>
+                <option value="openai">openai</option>
+              </select>
+            </div>
+            <div class="form-row"><label>超时(毫秒)</label>
+              <input id="f-timeout_ms" type="number" min="1000" step="1000" value="120000"/>
+            </div>
+            <div class="form-row"><label>备注</label>
+              <input id="f-note" type="text" placeholder="可选 (如:主线路、备用)"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="sash sash-h" id="sash-forms" title="拖动调整上下编辑区比例"></div>
+        <div class="form-section" id="fs-models">
+          <div class="form-section-head">
+            <span>已启用的模型</span>
+            <span class="badge" id="enabled-count">0 个已选</span>
+            <div class="right">
+              <button class="btn gray tiny" id="btn-fetch" onclick="fetchRemoteModels()">从上游拉取</button>
+              <button class="btn gray tiny" onclick="launchModelProbe()">模型探测</button>
+              <button class="btn gray tiny" onclick="addManualModel()">+ 手动添加</button>
+              <button class="btn gray tiny" onclick="clearEnabled()">清空</button>
+            </div>
+          </div>
+          <div class="model-toolbar">
+            <input id="model-filter" type="text" placeholder="按模型名筛选..." oninput="renderModels()"/>
+            <span id="model-stats" style="font-size:11px;color:var(--text2)"></span>
+          </div>
+          <div class="model-list" id="model-list">
+            <div class="empty">暂无已启用模型。点击"从上游拉取"或"+ 手动添加"。</div>
+          </div>
+          <div style="padding:6px 12px;background:rgba(255,255,255,.02);border-top:1px solid rgba(48,54,61,.5);font-size:10px;color:var(--text2)">
+            未勾选行不会保存。留空的 context_window / max_tokens / capabilities 也会跳过。
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="saveEnabled()">保存模型配置</button>
+        <button class="btn purple" onclick="saveAndRestart()">保存并重启 godex</button>
+        <button class="btn gray" onclick="resetEditor()">重置</button>
+        <span class="msg" id="action-msg"></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)" id="editor-status"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="sash sash-h" id="sash-main-log" title="拖动调整主区与日志区比例"></div>
+
+<div class="log-region" id="log-region">
+  <div class="log-panel" id="lp-studio">
+    <div class="log-panel-header">
+      <span class="lp-dot" id="lp-studio-dot"></span>
+      <span class="lp-title">Studio</span>
+      <span class="lp-sub">管理器自身日志</span>
+      <span class="lp-status running" id="lp-studio-status">● ALIVE</span>
+      <div class="lp-right">
+        <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
+          <input type="checkbox" id="lp-studio-wrap" checked style="width:auto;margin:0"/> Wrap
+        </label>
+        <select id="lp-studio-level" title="按级别过滤">
+          <option value="all">全部级别</option>
+          <option value="warn">警告及以上</option>
+          <option value="error">仅错误</option>
+        </select>
+        <button class="btn gray tiny" id="lp-studio-clear">清空</button>
+        <span class="lp-count" id="lp-studio-count">0</span>
+      </div>
+    </div>
+    <div class="log-panel-body" id="lp-studio-body"></div>
+  </div>
+
+  <div class="log-sash" id="log-sash" title="拖动调整上下日志区域比例"></div>
+
+  <div class="log-panel" id="lp-godex">
+    <div class="log-panel-header">
+      <span class="lp-dot stopped" id="lp-godex-dot"></span>
+      <span class="lp-title">GodeX</span>
+      <span class="lp-sub">网关代理日志</span>
+      <span class="lp-status stopped" id="lp-godex-status">● STOPPED</span>
+      <label class="lp-mid-ext" title="外挂模式 godex 可见窗口运行 Studio 从 trace DB 读日志"><input type="checkbox" id="lp-godex-extmode" onchange="onLogPanelExtModeToggle(this.checked)"/>外挂</label>
+      <div class="lp-right">
+        <label style="font-size:10px;color:var(--text2);display:flex;align-items:center;gap:3px;cursor:pointer">
+          <input type="checkbox" id="lp-godex-wrap" checked style="width:auto;margin:0"/> Wrap
+        </label>
+        <select id="lp-godex-level" title="按级别过滤">
+          <option value="all">全部级别</option>
+          <option value="warn">警告及以上</option>
+          <option value="error">仅错误</option>
+        </select>
+        <button class="btn gray tiny" id="lp-godex-clear">清空</button>
+        <button class="btn purple tiny" id="lp-godex-restart" title="重启 godex 进程">↻ 重启</button>
+        <span class="lp-count" id="lp-godex-count">0</span>
+      </div>
+    </div>
+    <div class="log-panel-body" id="lp-godex-body"></div>
+  </div>
+</div>
+
+
+<div id="new-provider-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>新建服务商</h3>
+    <div class="desc">每个服务商是一个兼容 OpenAI 协议的 API 入口。不同服务商的同名模型可同时启用。</div>
+    <div class="row"><label>名称 <span style="color:var(--red)">*</span></label>
+      <input id="np-name" type="text" placeholder="如:minimax、jisu、deepseek-1"/></div>
+    <div class="row"><label>接口地址 <span style="color:var(--red)">*</span></label>
+      <input id="np-base_url" type="text" placeholder="https://api.proxy.com/v1"/></div>
+    <div class="row"><label>API 密钥</label>
+      <input id="np-api_key" type="password" placeholder="sk-..."/></div>
+    <div class="row"><label>协议类型</label>
+      <select id="np-spec">
+        <option value="minimax">minimax (默认)</option>
+        <option value="deepseek">deepseek</option>
+        <option value="zhipu">zhipu</option>
+        <option value="openai">openai</option>
+      </select></div>
+    <div class="row"><label>超时(毫秒)</label>
+      <input id="np-timeout_ms" type="number" value="120000"/></div>
+    <div class="actions">
+      <button class="btn gray" onclick="closeNewProviderModal()">取消</button>
+      <button class="btn" onclick="createProvider()">创建</button>
+    </div>
+  </div>
+</div>
+<div id="settings-modal" class="modal" style="display:none">
+  <div class="modal-box" style="min-width:480px">
+    <h3>设置</h3>
+    <div class="desc">GodeX 配置 / 二进制 / 端口。修改后保存即生效:Config 路径与 Binary 路径需重启 studio;Port 立即写入 config.yaml,下次启动 godex 时生效。优先级:环境变量 <code>GODEX_CONFIG</code>/<code>GODEX_BINARY</code> &gt; 此处保存的路径 &gt; 内置默认。</div>
+    <div class="row">
+      <label>Config 路径 <span style="color:var(--text2)">(godex config yaml)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-config" type="text" placeholder="C:\Users\Bliss\.godex\config.yaml" style="flex:1"/>
+        <button class="btn small" onclick="browseConfigPath()" title="浏览...">📁</button>
+        <button class="btn small" onclick="openConfigInEditor()" title="用系统编辑器打开">📄</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>Binary 路径 <span style="color:var(--text2)">(godex 可执行文件)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-binary" type="text" placeholder="D:\...\godex.exe" style="flex:1"/>
+        <button class="btn small" onclick="browseBinaryPath()" title="浏览...">📁</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>端口 <span style="color:var(--text2)">(godex server.port)</span></label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="set-port" type="number" min="1" max="65535" placeholder="5678" style="flex:1" oninput="refreshPortStatus()"/>
+        <span id="set-port-status" style="font-size:11px;color:var(--text2);min-width:160px"></span>
+      </div>
+    </div>
+    <div class="row">
+      <label>logging.file <span style="color:var(--text2)">(日志文件路径，可选)</span></label>
+      <div style="display:flex;gap:6px">
+        <input id="set-logging-file" type="text" placeholder="C:\Users\Bliss\.godex\godex.log" style="flex:1"/>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">外挂模式从此文件读日志；留空则从 trace DB 读</div>
+    </div>
+    <div class="row" id="replica-section" style="display:none">
+      <label>
+        <input type="checkbox" id="set-replica-mode" onchange="onReplicaModeChange()"/>
+        GodeX 副本运行
+      </label>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px">
+        <div>副本路径: <code id="set-replica-path" style="word-break:break-all">—</code></div>
+        <div>PID: <span id="set-replica-pid">—</span></div>
+        <div id="replica-status" style="margin-top:4px"></div>
+        <button class="btn gray small" onclick="startReplica()" id="btn-start-replica" style="margin-top:6px">启动副本</button>
+        <button class="btn gray small" onclick="killReplica()" id="btn-kill-replica" style="margin-top:6px;display:none">停止副本</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>数据库路径 <span style="color:var(--text2)">(只读，跟随 <code>~/.godex/data/</code>)</span></label>
+      <div style="font-size:11px;color:var(--text2);line-height:1.5">
+        <div>Session: <code id="set-session-db" style="word-break:break-all">?</code></div>
+        <div>Trace:&nbsp;&nbsp; <code id="set-trace-db" style="word-break:break-all">?</code></div>
+      </div>
+    </div>
+    <div id="set-error" class="desc" style="color:var(--red);display:none;margin-top:4px"></div>
+    <div id="set-hint" class="desc" style="color:var(--text2);margin-top:4px"></div>
+    <div class="actions">
+      <button class="btn gray" onclick="resetSettings()">恢复默认</button>
+      <button class="btn gray" onclick="closeSettingsModal()">取消</button>
+      <button class="btn" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="port-conflict-modal" class="modal" style="display:none">
+  <div class="modal-box" style="min-width:480px">
+    <h3 style="color:var(--yellow)">⚠ 端口冲突</h3>
+    <div class="desc" id="pc-desc">该端口已被其他进程占用。</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;margin:8px 0;font-size:12px;line-height:1.6">
+      <div>端口: <code id="pc-port" style="color:var(--blue)">?</code></div>
+      <div>进程: <code id="pc-name" style="color:var(--blue)">?</code> <span style="color:var(--text2)" id="pc-pid-wrap">(pid <span id="pc-pid">?</span>)</span></div>
+      <div>路径: <code id="pc-path" style="color:var(--text2);word-break:break-all">?</code></div>
+    </div>
+    <div class="actions">
+      <button class="btn gray" onclick="closePortConflictModal()">取消</button>
+      <button class="btn" onclick="conflictChangePort()" style="background:var(--yellow);color:#000">换个端口 (+1)</button>
+      <button class="btn" onclick="conflictKillProcess()" style="background:var(--red)">关闭该进程</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="probe-modal" class="modal" style="display:none">
+  <div class="modal-box probe-modal-box">
+    <h3>模型探测</h3>
+    <div class="probe-section">
+      <label class="probe-label">Provider</label>
+      <select id="probe-provider" onchange="onProbeProviderChange()">
+        <option value="">-- 选择 Provider --</option>
+      </select>
+    </div>
+    <div class="probe-sash" id="probe-sash-models"></div>
+    <div class="probe-section" id="probe-models-section">
+      <div class="probe-label">选择模型</div>
+      <div id="probe-models-list" class="probe-models-list"></div>
+    </div>
+    <div class="probe-sash" id="probe-sash-caps"></div>
+    <div class="probe-section" id="probe-caps-section">
+      <div class="probe-label">能力探测</div>
+      <div class="probe-caps-grid">
+        <label><input type="checkbox" id="cap-ctx" checked/> Context</label>
+        <label><input type="checkbox" id="cap-max" checked/> MaxTokens</label>
+        <label><input type="checkbox" id="cap-text" checked/> Text</label>
+        <label><input type="checkbox" id="cap-image" checked/> Image</label>
+        <label><input type="checkbox" id="cap-video"/> Video</label>
+        <label><input type="checkbox" id="cap-audio"/> Audio</label>
+        <label><input type="checkbox" id="cap-func" checked/> Func</label>
+        <label><input type="checkbox" id="cap-reason" checked/> Reason</label>
+        <label><input type="checkbox" id="cap-computer"/> Computer</label>
+        <label><input type="checkbox" id="cap-toolsearch"/> ToolSearch</label>
+        <label><input type="checkbox" id="cap-websearch"/> WebSearch</label>
+        <label><input type="checkbox" id="cap-filesearch"/> FileSearch</label>
+        <label><input type="checkbox" id="cap-mcp"/> MCP</label>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-results"></div>
+    <div class="probe-section probe-results-section" id="probe-results-section">
+      <div class="probe-label">结果</div>
+      <div class="probe-table-wrap">
+        <table id="probe-results-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">Model</th>
+              <th>Context</th>
+              <th>MaxOut</th>
+              <th>Text</th>
+              <th>Image</th>
+              <th>Video</th>
+              <th>Audio</th>
+              <th>Func</th>
+              <th>Reason</th>
+              <th>Computer</th>
+              <th>ToolSearch</th>
+              <th>WebSearch</th>
+              <th>FileSearch</th>
+              <th>MCP</th>
+            </tr>
+          </thead>
+          <tbody id="probe-results-body">
+            <tr><td colspan="14" class="empty-msg">等待探测...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-log"></div>
+    <div class="probe-section probe-log-section" id="probe-log-section">
+      <div class="probe-label">日志</div>
+      <div id="probe-log" class="probe-log"></div>
+    </div>
+    <div class="probe-actions">
+      <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
+      <div class="probe-actions-right">
+        <button class="btn gray" id="btn-probe-save" onclick="saveProbeResults()">保存</button>
+        <button class="btn gray" onclick="closeProbeModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+const CAPS = [
+  "text", "image_input", "audio_input", "video_input",
+  "image_output", "audio_output", "tool_use", "stream",
+];
+
+const CAP_LABELS = {
+  text: "文本",
+  image_input: "图像入",
+  audio_input: "音频入",
+  video_input: "视频入",
+  image_output: "图像出",
+  audio_output: "音频出",
+  tool_use: "工具",
+  stream: "流式",
+};
+
+// ── Rust-backed model presets (loaded from model-presets.json via Tauri) ──
+let _rustPresetData = null;   // { match_rules, presets[] } loaded from Rust
+let _rustPresetReady = false;
+
+// Fallback: tiny JS array used only if Rust loading fails
+const _FALLBACK_PRESETS = [
+  { match: /^MiniMax-M3$/i, ctx: 1000000, out: 16384, caps: { text:1, image_input:1, audio_input:1, tool_use:1, stream:1 } },
+  { match: /^MiniMax-M2\.7/i, ctx: 204800, out: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-reasoner$/i, ctx: 64000, out: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^deepseek-chat$/i, ctx: 64000, out: 8192, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^gpt-4o/i, ctx: 128000, out: 16384, caps: { text:1, image_input:1, tool_use:1, stream:1 } },
+  { match: /^o1/i, ctx: 200000, out: 100000, caps: { text:1, tool_use:1, stream:1 } },
+  { match: /^o3/i, ctx: 200000, out: 100000, caps: { text:1, tool_use:1, stream:1 } },
+];
+
+// Load presets from Rust backend (model-presets.json)
+async function loadRustPresets() {
+  try {
+    const data = await invoke("load_model_presets");
+    if (data && data.presets) {
+      _rustPresetData = data;
+      _rustPresetReady = true;
+      console.log("[preset] loaded " + data.presets.length + " presets from Rust");
+    }
+  } catch (e) {
+    console.warn("[preset] Rust load failed, using JS fallback:", e);
+  }
+}
+
+// Normalize a model ID according to match_rules (mirrors Rust logic)
+function _normalizeModelId(id, rules) {
+  let s = rules.case_sensitive ? id : id.toLowerCase();
+  for (const pfx of (rules.strip_prefixes || [])) {
+    const low = rules.case_sensitive ? pfx : pfx.toLowerCase();
+    if (s.startsWith(low)) s = s.slice(low.length);
+  }
+  for (const sfx of (rules.strip_suffixes || [])) {
+    const low = rules.case_sensitive ? sfx : sfx.toLowerCase();
+    if (s.endsWith(low)) s = s.slice(0, -low.length);
+  }
+  return s;
+}
+
+// Match a model ID against loaded presets using strategy_order
+function presetFor(modelId) {
+  // Try Rust presets first
+  if (_rustPresetReady && _rustPresetData) {
+    const rules = _rustPresetData.match_rules;
+    const presets = _rustPresetData.presets;
+    const normalized = _normalizeModelId(modelId, rules);
+    for (const strategy of (rules.strategy_order || ["exact","alias","contains"])) {
+      for (const p of presets) {
+        if (strategy === "exact") {
+          if (_normalizeModelId(p.name, rules) === normalized) return p;
+        } else if (strategy === "alias") {
+          for (const a of (p.aliases || [])) {
+            if (_normalizeModelId(a, rules) === normalized) return p;
+          }
+        } else if (strategy === "contains") {
+          const nameN = _normalizeModelId(p.name, rules);
+          if (nameN.includes(normalized) || normalized.includes(nameN)) return p;
+          for (const a of (p.aliases || [])) {
+            const aN = _normalizeModelId(a, rules);
+            if (aN.includes(normalized) || normalized.includes(aN)) return p;
+          }
+        }
+      }
+    }
+    return null;
+  }
+  // Fallback: old JS array
+  for (const p of _FALLBACK_PRESETS) if (p.match.test(modelId)) return p;
+  return null;
+}
+
+let providers = [];
+let activeProvider = null;
+let enabled = [];
+let discovered = [];
+let remoteModels = [];
+
+// Sash: drag the divider between two flex siblings to resize them.
+// Both siblings must be in the same flex container, side by side.
+// ratio = (size of `before`) / (total size of container) is persisted in localStorage.
+class Sash {
+  constructor({ sashEl, beforeEl, afterEl, dir, storageKey, minBefore = 80, minAfter = 80, defaultRatio = 0.5, mode = "pct" }) {
+    this.sash = sashEl;
+    this.before = beforeEl;
+    this.after = afterEl;
+    this.dir = dir; // 'h' (horizontal sash, vertical split) or 'v' (vertical sash, horizontal split)
+    this.storageKey = storageKey;
+    this.minBefore = minBefore;
+    this.minAfter = minAfter;
+    this.defaultRatio = defaultRatio;
+    this.mode = mode; // "pct" => flex-basis:%; "px" => flex-basis:px
+    this.container = sashEl.parentElement;
+    this._onMove = this._onMove.bind(this);
+    this._onUp = this._onUp.bind(this);
+    this._onDown = this._onDown.bind(this);
+    this._onTouchStart = this._onTouchStart.bind(this);
+    sashEl.addEventListener("mousedown", this._onDown);
+    sashEl.addEventListener("touchstart", this._onTouchStart, { passive: false });
+    // Defer to next frame so the flex layout has computed container size.
+    const me = this;
+    requestAnimationFrame(() => requestAnimationFrame(() => { me.applyRatio(me._loadRatio(), false); }));
+  }
+  _loadRatio() {
+    const v = parseFloat(localStorage.getItem(this.storageKey));
+    if (Number.isFinite(v) && v >= 0.05 && v <= 0.95) return v;
+    return this.defaultRatio;
+  }
+  applyRatio(ratio, persist = true) {
+    const r = Math.max(0.05, Math.min(0.95, ratio));
+    if (this.mode === "px") {
+      const total = this.dir === "v" ? this.container.clientWidth : this.container.clientHeight;
+      const px = Math.round(r * total);
+      this.before.style.flex = `0 0 ${px}px`;
+      this.after.style.flex = "1 1 0";
+    } else if (this.dir === "v") {
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    } else {
+      this.before.style.flex = `0 0 ${(r * 100).toFixed(2)}%`;
+      this.after.style.flex = "1 1 0";
+    }
+    if (persist) localStorage.setItem(this.storageKey, String(r));
+  }
+  _onMove(ev) {
+    if (!this.dragging) return;
+    const rect = this.container.getBoundingClientRect();
+    const pos = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+    const pos2 = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    let ratio;
+    if (this.dir === "v") {
+      ratio = (pos2 - rect.left) / rect.width;
+    } else {
+      ratio = (pos - rect.top) / rect.height;
+    }
+    // Enforce minimums.
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const minBeforeRatio = this.minBefore / totalPx;
+    const maxBeforeRatio = 1 - (this.minAfter / totalPx);
+    ratio = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
+    this.applyRatio(ratio, /*persist=*/false);
+  }
+  _onUp() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.sash.classList.remove("dragging");
+    document.body.style.cursor = "";
+    // Persist final ratio.
+    const rect = this.container.getBoundingClientRect();
+    const beforeRect = this.before.getBoundingClientRect();
+    const totalPx = this.dir === "v" ? rect.width : rect.height;
+    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+    this.applyRatio(beforePx / totalPx, /*persist=*/true);
+    window.removeEventListener("mousemove", this._onMove);
+    window.removeEventListener("mouseup", this._onUp);
+    window.removeEventListener("touchmove", this._onMove);
+    window.removeEventListener("touchend", this._onUp);
+  }
+  _onDown(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
+    window.addEventListener("mousemove", this._onMove);
+    window.addEventListener("mouseup", this._onUp);
+  }
+  _onTouchStart(ev) {
+    ev.preventDefault();
+    this.dragging = true;
+    this.sash.classList.add("dragging");
+    window.addEventListener("touchmove", this._onMove, { passive: false });
+    window.addEventListener("touchend", this._onUp);
+  }
+}
+
+// Wire up sashes once the DOM is ready.
+const _godexSashes = [];
+function initSashes() {
+  // A: header / main / log-region — between main and log-region.
+  // The parent of #sash-main-log is <body>.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-main-log"),
+    beforeEl: $("main"),
+    afterEl: $("log-region"),
+    dir: "h",
+    storageKey: "godex-studio.mainLogRatio",
+    minBefore: 200, minAfter: 120, defaultRatio: 0.6,
+  }));
+  // D: col-left / col-right — vertical split.
+  // E: forms area — vertical split between #fs-provider and #fs-models.
+  // The parent of #sash-forms is #forms-area.
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-forms"),
+    beforeEl: $("fs-provider"),
+    afterEl: $("fs-models"),
+    dir: "h",
+    storageKey: "godex-studio.formsRatio",
+    minBefore: 80, minAfter: 80, defaultRatio: 0.35, mode: "px",
+  }));
+
+  _godexSashes.push(new Sash({
+    sashEl: $("sash-cols"),
+    beforeEl: $("col-left"),
+    afterEl: $("col-right"),
+    dir: "v",
+    storageKey: "godex-studio.colsRatio",
+    minBefore: 120, minAfter: 240, defaultRatio: 0.22,
+  }));
+  // B: Studio / GodeX panels — horizontal split inside log-region.
+  _godexSashes.push(new Sash({
+    sashEl: $("log-sash"),
+    beforeEl: $("lp-studio"),
+    afterEl: $("lp-godex"),
+    dir: "h",
+    storageKey: "godex-studio.sashRatio",
+    minBefore: 120, minAfter: 80, defaultRatio: 0.6,
+  }));
+}
+
+// Each panel has its own level filter, wrap toggle, and Clear button.
+const LOG_MAX_LINES = 3000;
+class LogPanel {
+  constructor({ id, defaultSource, restartBtnId }) {
+    this.id = id;
+    this.bodyEl = $(id + "-body");
+    this.dotEl = $(id + "-dot");
+    this.statusEl = $(id + "-status");
+    this.countEl = $(id + "-count");
+    this.levelEl = $(id + "-level");
+    this.wrapEl = $(id + "-wrap");
+    this.clearEl = $(id + "-clear");
+    this.lines = []; // { ts, source, level, text }
+    this.defaultSource = defaultSource; // for visual chip color
+    const me = this;
+    this.levelEl.addEventListener("change", () => me.render());
+    this.wrapEl.addEventListener("change", () => {
+      me.bodyEl.classList.toggle("nowrap", !me.wrapEl.checked);
+      const lines = me.bodyEl.querySelectorAll(".log-line");
+      lines.forEach((n) => n.classList.toggle("nowrap", !me.wrapEl.checked));
+    });
+    this.clearEl.addEventListener("click", () => { me.lines = []; me.render(); me.countEl.textContent = "0"; });
+    if (restartBtnId) {
+      this.restartBtn = $(restartBtnId);
+      this.restartBtn.addEventListener("click", async () => {
+        const ok = confirm("确认重启 godex 进程?\n\n当前 godex 会被结束并重新拉起,正在进行的 Codex 请求会失败。");
+        if (!ok) return;
+        try {
+          this.restartBtn.disabled = true;
+          const oldText = this.restartBtn.textContent;
+          this.restartBtn.textContent = "重启中...";
+    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
+    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
+          this.restartBtn.textContent = "pid=" + pid;
+          setTimeout(() => { this.restartBtn.textContent = oldText; this.restartBtn.disabled = false; }, 1500);
+        } catch (e) {
+          this.restartBtn.textContent = "↻ 重启";
+          this.restartBtn.disabled = false;
+          alert("重启失败: " + e);
+        }
+      });
+    }
+  }
+  setStatus(running) {
+    this.dotEl.classList.remove("stopped", "dead");
+    this.statusEl.classList.remove("running", "stopped", "dead");
+    if (running === true) {
+      this.dotEl.style.background = "var(--green)";
+      this.statusEl.textContent = "● RUNNING";
+      this.statusEl.classList.add("running");
+    } else if (running === false) {
+      this.dotEl.style.background = "var(--yellow)";
+      this.statusEl.textContent = "● STOPPED";
+      this.statusEl.classList.add("stopped");
+    } else {
+      this.dotEl.style.background = "var(--red)";
+      this.statusEl.textContent = "● ERROR";
+      this.statusEl.classList.add("dead");
+    }
+  }
+  passesFilter(line) {
+    const lvl = this.levelEl.value;
+    if (lvl === "error" && line.level !== "error") return false;
+    if (lvl === "warn" && !(line.level === "warn" || line.level === "error")) return false;
+    return true;
+  }
+  push(line) {
+    this.lines.push(line);
+    if (this.lines.length > LOG_MAX_LINES) {
+      this.lines.splice(0, this.lines.length - LOG_MAX_LINES);
+    }
+    if (this.passesFilter(line)) {
+      this._appendNode(line);
+    }
+    this.countEl.textContent = String(this.lines.length);
+  }
+  _appendNode(line) {
+    const d = document.createElement("div");
+    d.className = "log-line " + (line.level === "error" ? "error" : line.level === "warn" ? "warn" : "");
+    if (!this.wrapEl.checked) d.classList.add("nowrap");
+    const ts = line.ts ? new Date(line.ts).toTimeString().slice(0, 8) : "--:--:--";
+    const src = (line.source || this.defaultSource || "");
+    d.innerHTML =
+      '<span class="ts">' + ts + '</span>' +
+      '<span class="src ' + esc(src) + '">' + esc(src) + '</span>' +
+      '<span class="msg">' + esc(line.text) + '</span>';
+    this.bodyEl.appendChild(d);
+    while (this.bodyEl.children.length > LOG_MAX_LINES) {
+      this.bodyEl.removeChild(this.bodyEl.firstChild);
+    }
+    this.bodyEl.scrollTop = this.bodyEl.scrollHeight;
+  }
+  render() {
+    this.bodyEl.innerHTML = "";
+    for (const line of this.lines) {
+      if (this.passesFilter(line)) this._appendNode(line);
+    }
+    this.countEl.textContent = String(this.lines.length);
+  }
+  clear() { this.lines = []; this.render(); this.countEl.textContent = "0"; }
+}
+
+const studioPanel = new LogPanel({ id: "lp-studio", defaultSource: "studio" });
+const godexPanel = new LogPanel({ id: "lp-godex", defaultSource: "godex", restartBtnId: "lp-godex-restart" });
+
+function pushLogLine(line) {
+  if (!line || !line.source) return;
+  if (line.source === "godex") godexPanel.push(line);
+  else studioPanel.push(line); // studio + cmd + anything unknown
+}
+
+
+
+function showMsg(text, type) {
+  const m = $("action-msg");
+  m.textContent = text;
+  m.className = "msg " + (type || "");
+  if (type === "ok") setTimeout(() => { if (m.textContent === text) { m.textContent = ""; m.className = "msg"; } }, 4000);
+}
+function setEditorStatus(text) { $("editor-status").textContent = text || ""; }
+
+function ek_(s) {
+  if (!s) return "(无)";
+  if (s.length <= 8) return s;
+  return s.slice(0, 4) + "..." + s.slice(-4);
+}
+
+function renderProviders() {
+  const el = $("provider-items");
+  el.innerHTML = "";
+  $("provider-count").textContent = String(providers.length);
+  if (!providers.length) {
+    el.innerHTML = '<div class="empty">暂无服务商<br/>点击下方"+ 新建服务商"</div>';
+    return;
+  }
+  for (const p of providers) {
+    const item = document.createElement("div");
+    item.className = "provider-item" + (p.name === activeProvider ? " active" : "");
+    item.innerHTML =
+      '<div class="pname">' + esc(p.name) + '</div>' +
+      '<div class="psub">' + esc(p.spec || "?") + ' &middot; ' + esc(p.base_url || "(无地址)") + '</div>' +
+      '<div class="pmeta">密钥: ' + ek_(p.api_key) + ' &middot; 超时: ' + (p.timeout_ms || 120000) + 'ms</div>' +
+      '<div class="del" title="删除" onclick="event.stopPropagation();deleteProvider(\'' + esc(p.name) + '\')">&times;</div>';
+    item.onclick = () => selectProvider(p.name);
+    el.appendChild(item);
+  }
+}
+
+function selectProvider(name) {
+  activeProvider = name;
+  renderProviders();
+  const p = providers.find((x) => x.name === name);
+  if (!p) {
+    $("editor-empty").style.display = "flex";
+    $("editor").style.display = "none";
+    return;
+  }
+  $("editor-empty").style.display = "none";
+  $("editor").style.display = "flex";
+  $("form-provider-name").textContent = p.name;
+  $("form-spec-badge").textContent = "类型: " + (p.spec || "?");
+  $("f-name").value = p.name;
+  $("f-base_url").value = p.base_url || "";
+  $("f-api_key").value = p.api_key || "";
+  $("f-spec").value = p.spec || "minimax";
+  $("f-timeout_ms").value = p.timeout_ms || 120000;
+  enabled = [];
+  discovered = [];
+  remoteModels = [];
+  loadEnabledForCurrent();
+  setEditorStatus("");
+}
+
+async function loadEnabledForCurrent() {
+  if (!activeProvider) return;
+  try {
+    const all = await invoke("read_enabled_models");
+    enabled = ((all && all.enabled) || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
+    discovered = ((all && all.discovered) || []).filter((m) => m.provider === activeProvider).map(normalizeEnabled);
+    renderModels();
+    setEditorStatus("已加载 " + enabled.length + " 个已启用, " + discovered.length + " 个已禁用模型");
+  } catch (e) { setEditorStatus("加载失败: " + e); }
+}
+
+function normalizeEnabled(o) {
+  const out = { provider: o.provider, model: o.model };
+  if (o.id) out.id = String(o.id);
+  if (o.context_window !== undefined && o.context_window !== null) out.context_window = Number(o.context_window);
+  if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = Number(o.max_tokens);
+  if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
+  if (o.capabilities && typeof o.capabilities === "object") out.capabilities = Object.assign({}, o.capabilities);
+  if (o.note) out.note = o.note;
+  return out;
+}
+
+function reloadProvider() {
+  if (!activeProvider) return;
+  loadProviders().then(() => selectProvider(activeProvider));
+}
+
+function applyPresetToRow(modelId, row) {
+  const p = presetFor(modelId);
+  if (!p) return false;
+  const ctx = p.context_window ?? p.ctx;
+  const out = p.max_tokens ?? p.out;
+  const caps = p.multimodal ?? p.caps ?? {};
+  if (row.context_window === undefined && ctx) row.context_window = ctx;
+  if (row.max_tokens === undefined && out) row.max_tokens = out;
+  if (!row.capabilities) row.capabilities = {};
+  for (const c of CAPS) {
+    if (caps[c] !== undefined && row.capabilities[c] === undefined) {
+      row.capabilities[c] = !!caps[c];
+    }
+  }
+  return true;
+}
+
+async function fetchRemoteModels() {
+  if (!activeProvider) return;
+  const p = providers.find((x) => x.name === activeProvider);
+  if (!p) return;
+  const btn = $("btn-fetch");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 拉取中';
+  setEditorStatus("正在从上游拉取模型列表...");
+  try {
+    const list = await invoke("fetch_remote_models", { baseUrl: p.base_url, apiKey: p.api_key || "" });
+    const ids = (list || []).map((m) => m.id);
+    remoteModels = ids;
+    let added = 0;
+    let updated = 0;
+    let skippedDup = 0;
+    for (const remote of (list || [])) {
+      const id = remote.id;
+      // enabled 已存在:不重复,只填空字段
+      const enIdx = enabled.findIndex((e) => e.model === id);
+      if (enIdx >= 0) {
+        if (applyPresetToRow(id, enabled[enIdx])) updated++;
+        continue;
+      }
+      // discovered 已存在:看参数是否跟 remote 完全一样
+      const disIdx = discovered.findIndex((d) => d.model === id);
+      if (disIdx >= 0) {
+        if (rowEqualsRemote(discovered[disIdx], remote)) {
+          skippedDup++;
+        }
+        // 不一样(用户编辑过):保留 discovered 版本,不动
+        continue;
+      }
+      // 都没有:加 enabled(默认勾选)
+      const row = { provider: activeProvider, model: id };
+      applyPresetToRow(id, row);
+      enabled.push(row);
+      added++;
+    }
+    renderModels();
+    setEditorStatus("已拉取 " + ids.length + " 个,新增 " + added + " 个,跳过重复 " + skippedDup + " 个,更新 " + updated + " 个");
+    showMsg("已拉取 " + ids.length + " 个 (新增 " + added + ",跳过重复 " + skippedDup + ")", "ok");
+  } catch (e) {
+    setEditorStatus("拉取失败: " + e);
+    showMsg("拉取失败: " + e, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "从上游拉取";
+  }
+}
+
+async function launchModelProbe() {
+  // Populate providers dropdown
+  const sel = document.getElementById("probe-provider");
+  sel.innerHTML = '<option value="">-- 选择 Provider --</option>';
+  for (const p of providers) {
+    const opt = document.createElement("option");
+    opt.value = p.name;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+  document.getElementById("probe-models-list").innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+  document.getElementById("probe-log").innerHTML = "";
+  document.getElementById("probe-results-body").innerHTML = "<tr><td colspan='14' class='empty-msg'>等待探测...</td></tr>";
+  document.getElementById("probe-modal").style.display = "flex";
+}
+
+
+function onProbeProviderChange() {
+  const provName = document.getElementById("probe-provider").value;
+  const container = document.getElementById("probe-models-list");
+  if (!provName) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+    return;
+  }
+  const prov = providers.find(p => p.name === provName);
+  if (!prov) return;
+  
+  const models = enabled.filter(m => m.provider === provName).sort((a, b) => a.model.localeCompare(b.model));
+  if (models.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:11px">该 Provider 没有已启用的模型</div>';
+    return;
+  }
+  
+  container.innerHTML = "";
+  for (const m of models) {
+    const div = document.createElement("div");
+    div.style = "display:flex;align-items:center;gap:6px;padding:4px";
+    div.innerHTML = '<input type="checkbox" class="probe-model-check" value="' + m.model + '" checked/>' +
+      '<span style="font-size:12px">' + m.model + '</span>' +
+      '<span style="font-size:10px;color:var(--blue);margin-left:auto">' + 
+      ((m.context_window || 0) / 1000) + "K</span>";
+    container.appendChild(div);
+  }
+}
+
+
+
+let _probeResults = [];
+let _probeChanged = false;
+
+async function startProbeRun() {
+  const provName = document.getElementById("probe-provider").value;
+  if (!provName) { showMsg("请选择 Provider", "err"); return; }
+  
+  const checks = document.querySelectorAll(".probe-model-check:checked");
+  if (checks.length === 0) { showMsg("请选择要探测的模型", "err"); return; }
+  
+  const prov = providers.find(p => p.name === provName);
+  if (!prov || !prov.api_key) { showMsg("该 Provider 没有 API Key", "err"); return; }
+  
+  const modelNames = Array.from(checks).map(c => c.value);
+  const btn = document.getElementById("btn-probe-start");
+  btn.disabled = true;
+  btn.textContent = "探测中...";
+  
+  const logEl = document.getElementById("probe-log");
+  const resultsBody = document.getElementById("probe-results-body");
+  logEl.innerHTML = "";
+  _probeResults = [];
+  _probeChanged = false;
+  
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString();
+    logEl.innerHTML += "[" + ts + "] " + msg + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  
+  const baseUrl = prov.base_url || "https://minnimax.chat/v1";
+  
+  try {
+    log("开始探测 " + modelNames.length + " 个模型...");
+    log("Provider: " + provName);
+    log("Base URL: " + baseUrl);
+    log("");
+    
+    for (let i = 0; i < modelNames.length; i++) {
+      const model = modelNames[i];
+      log("--- " + model + " [" + (i + 1) + "/" + modelNames.length + "] ---");
+      
+      try {
+        const r = await invoke("probe_model", {
+          baseUrl: baseUrl,
+          apiKey: prov.api_key,
+          model: model,
+          claimedCtx: 100000,
+          claimedMaxTokens: 131072
+        });
+        
+        if (r.success) {
+          if (r.context_window) log("  Context: " + r.context_window + " tokens");
+          if (r.max_tokens) log("  MaxOut: " + r.max_tokens + " tokens");
+          const caps2 = [];
+          if (r.text) caps2.push("text");
+          if (r.image) caps2.push("image");
+          if (r.video) caps2.push("video");
+          if (r.audio) caps2.push("audio");
+          if (r.function) caps2.push("func");
+          if (r.reasoning) caps2.push("reason:" + r.reasoning);
+          if (caps2.length > 0) log("  Capabilities: " + caps2.join(", "));
+          
+          const m = enabled.find(em => em.provider === provName && em.model === model);
+          if (m) {
+            if (r.context_window && !m.context_window) m.context_window = r.context_window;
+            if (r.max_tokens && !m.max_tokens) m.max_tokens = r.max_tokens;
+          }
+        } else {
+          log("  FAILED: " + (r.error || "unknown error"));
+        }
+        
+        _probeResults.push(r);
+        _probeChanged = true;
+        updateProbeResultsTable();
+        
+      } catch(e) {
+        log("  ERROR: " + e);
+        _probeResults.push({ model: model, success: false, error: String(e) });
+        _probeChanged = true;
+        updateProbeResultsTable();
+      }
+      
+      log("");
+    }
+    
+    log("探测完成!");
+    
+  } catch(e) {
+    log("错误: " + e);
+    showMsg("探测失败: " + e, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "开始探测";
+  }
+}
+
+function updateProbeResultsTable() {
+  const tbody = document.getElementById("probe-results-body");
+  if (_probeResults.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-msg">等待探测...</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  for (const r of _probeResults) {
+    const tr = document.createElement("tr");
+    const ok = (v) => v === true ? "&#10003;" : (v === false ? "&#10007;" : "-");
+    const num = (v) => v ? Math.round(v / 1000) + "K" : "-";
+    tr.innerHTML = '<td class="sticky-col">' + r.model + '</td>' +
+      '<td>' + num(r.context_window) + '</td>' +
+      '<td>' + num(r.max_tokens) + '</td>' +
+      '<td>' + ok(r.text) + '</td>' +
+      '<td>' + ok(r.image) + '</td>' +
+      '<td>' + ok(r.video) + '</td>' +
+      '<td>' + ok(r.audio) + '</td>' +
+      '<td>' + ok(r.function) + '</td>' +
+      '<td>' + ok(r.reasoning) + '</td>' +
+      '<td>' + ok(r.computer_use) + '</td>' +
+      '<td>' + ok(r.tool_search) + '</td>' +
+      '<td>' + ok(r.web_search) + '</td>' +
+      '<td>' + ok(r.file_search) + '</td>' +
+      '<td>' + ok(r.mcp) + '</td>';
+    tbody.appendChild(tr);
+  }
+}
+
+async function saveProbeResults() {
+  if (_probeResults.length === 0) {
+    showMsg("没有可保存的结果", "warn");
+    return;
+  }
+  showMsg("保存功能开发中...", "warn");
+}
+
+function closeProbeModal() {
+  if (_probeChanged) {
+    if (!confirm("有未保存的探测结果，确定关闭？")) return;
+  }
+  document.getElementById("probe-modal").style.display = "none";
+  renderModels();
+}
+
+
+// 判断 row 的参数是否跟 remote 默认完全一样
+function rowEqualsRemote(row, remote) {
+  if ((row.context_window || null) !== (remote.context_window || null)) return false;
+  if ((row.max_tokens || null) !== (remote.max_tokens || null)) return false;
+  return true;
+}
+
+function addManualModel() {
+  if (!activeProvider) return;
+  const id = prompt("为 " + activeProvider + " 添加模型名 (如 custom-experimental):");
+  if (!id) return;
+  const id2 = id.trim();
+  if (!id2) return;
+  if (enabled.find((e) => e.model === id2)) { showMsg("已存在", "err"); return; }
+  const row = { provider: activeProvider, model: id2 };
+  applyPresetToRow(id2, row);
+  enabled.push(row);
+  renderModels();
+  setEditorStatus("手动添加 " + id2);
+}
+
+function clearEnabled() {
+  if (!activeProvider) return;
+  if (!enabled.length) return;
+  if (!confirm("清空 " + activeProvider + " 的所有已启用模型? (其他服务商不受影响)")) return;
+  enabled = [];
+  renderModels();
+  setEditorStatus("已清空 (尚未保存)");
+}
+
+function toggleModel(modelId) {
+  // 在 enabled 找
+  const enIdx = enabled.findIndex((e) => e.model === modelId);
+  if (enIdx >= 0) {
+    const [removed] = enabled.splice(enIdx, 1);
+    discovered.push(removed);
+    renderModels();
+    return;
+  }
+  // 在 discovered 找
+  const disIdx = discovered.findIndex((d) => d.model === modelId);
+  if (disIdx >= 0) {
+    const [removed] = discovered.splice(disIdx, 1);
+    enabled.push(removed);
+    renderModels();
+    return;
+  }
+}
+
+function removeModel(modelId) {
+  const enIdx = enabled.findIndex((e) => e.model === modelId);
+  if (enIdx >= 0) { enabled.splice(enIdx, 1); renderModels(); return; }
+  const disIdx = discovered.findIndex((d) => d.model === modelId);
+  if (disIdx >= 0) { discovered.splice(disIdx, 1); renderModels(); return; }
+}
+
+function setModelCap(modelId, cap, val) {
+  const row = enabled.find((e) => e.model === modelId) || discovered.find((d) => d.model === modelId);
+  if (!row) return;
+  if (!row.capabilities) row.capabilities = {};
+  row.capabilities[cap] = !!val;
+  renderModels();
+}
+
+function setModelParam(modelId, key, val) {
+  const row = enabled.find((e) => e.model === modelId) || discovered.find((d) => d.model === modelId);
+  if (!row) return;
+  if (val === "" || val === null || val === undefined) {
+    delete row[key];
+  } else {
+    const n = Number(val);
+    if (!Number.isFinite(n)) { delete row[key]; }
+    else row[key] = n;
+  }
+  renderModels();
+}
+function renderModels() {
+  const list = $("model-list");
+  const filter = ($("model-filter").value || "").toLowerCase();
+  // 合并 enabled + discovered,保留各自操作顺序
+  const allRows = [
+    ...enabled.map((m) => ({ m, state: "enabled" })),
+    ...discovered.map((m) => ({ m, state: "discovered" })),
+  ];
+  if (!allRows.length) {
+    list.innerHTML = '<div class="empty">暂无模型。点击"从上游拉取"或"+ 手动添加"。</div>';
+    $("enabled-count").textContent = "0 个已选";
+    $("model-stats").textContent = "";
+    return;
+  }
+  const filtered = filter ? rows.filter((r) => r.m.model.toLowerCase().includes(filter)) : allRows;
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">无匹配 "' + esc(filter) + '"</div>';
+    $("enabled-count").textContent = enabled.length + " 个已选 / " + discovered.length + " 个已禁用";
+    $("model-stats").textContent = "0 / " + allRows.length;
+    return;
+  }
+  let html = "";
+  for (const { m, state } of filtered) {
+    const isEnabled = state === "enabled";
+    const preset = presetFor(m.model);
+    const mid = esc(m.model);
+    html += '<div class="model-row' + (isEnabled ? '' : ' disabled') + '">';
+    html += `<input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleModel('${mid}')" title="${isEnabled ? '取消勾选' : '勾选'}"/>`;
+    html += '<div>';
+    html += '<div class="name">' + esc(m.model);
+    html += ' <span class="src">' + esc(m.provider) + '</span>';
+    if (preset) html += ' <span class="preset">预设</span>';
+    if (!isEnabled) html += ' <span class="disabled-tag">已禁用</span>';
+    html += '</div>';
+    html += '<div class="params">';
+    html += `<label>上下文</label><input type="number" min="0" placeholder="(留空)" value="${m.context_window ?? ""}" oninput="setModelParam('${mid}','context_window',this.value)"/>`;
+    html += `<label>输出上限</label><input type="number" min="0" placeholder="(留空)" value="${m.max_tokens ?? ""}" oninput="setModelParam('${mid}','max_tokens',this.value)"/>`;
+    html += '</div>';
+    html += '<div class="params">';
+    const margin = m.margin != null ? m.margin : 0.95;
+    html += `<label>余量</label><input type="range" min="0" max="100" value="${Math.round(margin * 100)}" style="width:70px" oninput="setModelParam('${mid}','margin',(this.value/100).toFixed(3))"/><span style="font-size:11px;color:var(--text2);min-width:32px">${Math.round(margin * 100)}%</span>`;
+    html += '</div>';
+    html += '<div class="caps">';
+    for (const c of CAPS) {
+      const on = !!(m.capabilities && m.capabilities[c]);
+      const label = CAP_LABELS[c] || c;
+      html += `<span class="cap ${on ? 'on' : 'off'}" onclick="setModelCap('${mid}','${c}',${on ? 'false' : 'true'})" title="点击切换">${label}</span>`;
+    }
+    html += '</div>';
+    html += '</div>';
+    html += `<div class="actions"><button class="btn gray tiny" onclick="removeModel('${mid}')">删除</button></div>`;
+    html += '</div>';
+  }
+  list.innerHTML = html;
+  $("enabled-count").textContent = enabled.length + " 个已选 / " + discovered.length + " 个已禁用";
+  $("model-stats").textContent = filtered.length + " / " + allRows.length + (remoteModels.length ? " (上游 " + remoteModels.length + ")" : "");
+}
+
+function stripUndef(o) {
+  const out = { provider: o.provider, model: o.model };
+  if (o.id) out.id = String(o.id);
+  if (o.context_window !== undefined && o.context_window !== null) out.context_window = o.context_window;
+  if (o.max_tokens !== undefined && o.max_tokens !== null) out.max_tokens = o.max_tokens;
+  if (o.margin !== undefined && o.margin !== null) out.margin = o.margin;
+  if (o.multimodal !== undefined) out.multimodal = !!o.multimodal;
+  if (o.capabilities && typeof o.capabilities === "object") {
+    const cap = {};
+    for (const c of CAPS) {
+      if (o.capabilities[c] === true) cap[c] = true;
+      else if (o.capabilities[c] === false) cap[c] = false;
+    }
+    if (Object.keys(cap).length) out.capabilities = cap;
+  }
+  if (o.note) out.note = String(o.note);
+  return out;
+}
+
+async function saveProvider() {
+  if (!activeProvider) return;
+  const origName = $("form-provider-name").textContent;
+  const base_url = $("f-base_url").value.trim();
+  const api_key = $("f-api_key").value.trim();
+  const spec = $("f-spec").value;
+  const timeout_ms = parseInt($("f-timeout_ms").value) || 120000;
+  if (!base_url) { showMsg("接口地址必填", "err"); return; }
+  try {
+    await invoke("upsert_provider", { name: origName, baseUrl: base_url, apiKey: api_key, spec, timeoutMs: timeout_ms });
+    showMsg("已保存 " + origName, "ok");
+    setEditorStatus("服务商信息已保存");
+    await loadProviders();
+    selectProvider(origName);
+  } catch (e) { showMsg("保存失败: " + e, "err"); }
+}
+
+async function saveEnabled() {
+  if (!activeProvider) return;
+  let all;
+  try { all = await invoke("read_enabled_models"); }
+  catch (e) { showMsg("读取失败: " + e, "err"); return; }
+  const othersEnabled = ((all && all.enabled) || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
+  const othersDiscovered = ((all && all.discovered) || []).filter((m) => m.provider !== activeProvider).map(stripUndef);
+  const myEnabled = enabled.map(stripUndef);
+  const myDiscovered = discovered.map(stripUndef);
+  const mergedEnabled = othersEnabled.concat(myEnabled);
+  const mergedDiscovered = othersDiscovered.concat(myDiscovered);
+  try {
+    const count = await invoke("save_enabled_models", { enabled: mergedEnabled, discovered: mergedDiscovered });
+    showMsg("已保存 " + count + " 个模型 (未重启)", "ok");
+    setEditorStatus("保存于 " + new Date().toLocaleTimeString());
+  } catch (e) {
+    showMsg("保存失败: " + e, "err");
+  }
+}
+
+// Poll external godex logs from the log file / trace DB every 3 s when in
+// external mode. The ring buffer + stdout pipe path is internal-only.
+// Poll external godex logs from the log file / trace DB every 5 s when in
+// external mode. The ring buffer + stdout pipe path is internal-only.
+async function onLogPanelExtModeToggle(checked) {
+  const sc = $("lp-godex-extmode"); if (sc) sc.checked = !!checked;
+  try {
+    await invoke("set_external_mode", { externalMode: !!checked });
+    showMsg(checked ? "外挂模式已开启" : "外挂模式已关闭", "ok");
+    if (checked) {
+      // First-time (or re-toggle) full fetch, then poll incrementally.
+      loadTraceLogs({ reset: true });
+      if (_tracePollTimer) clearInterval(_tracePollTimer);
+      _tracePollTimer = setInterval(() => { loadTraceLogs(); }, 5000);
+    } else if (_tracePollTimer) {
+      clearInterval(_tracePollTimer);
+      _tracePollTimer = null;
+    }
+    return true;
+  } catch(e) {
+    showMsg("保存失败: " + e, "err");
+    $("lp-godex-extmode").checked = !checked;
+    if (sc) sc.checked = !checked;
+    return false;
+  }
+}
+
+let _traceLastId = 0;
+let _traceSeenIds = new Set();
+let _tracePollTimer = null;
+async function loadTraceLogs(opts) {
+  // opts = { fromId?: number, reset?: boolean }
+  // If reset, drop the dedupe set so the panel can be re-rendered from scratch.
+  if (opts && opts.reset) { _traceSeenIds.clear(); _traceLastId = 0; }
+  const params = { limit: 300 };
+  if (!(opts && opts.reset)) { params.fromId = _traceLastId; }
+  try {
+    const lines = await invoke("tail_trace_logs", params);
+    for (const l of (lines || [])) {
+      if (l && l.id != null) {
+        if (_traceSeenIds.has(l.id)) continue;
+        _traceSeenIds.add(l.id);
+        if (l.id > _traceLastId) _traceLastId = l.id;
+      }
+      pushLogLine(l);
+    }
+  } catch (e) { /* swallow */ }
+}
+
+async function saveAndRestart() {
+  await saveEnabled();
+  showMsg("正在重启 godex...", "");
+  setEditorStatus("重启中...");
+  try {
+    const isExt = $("lp-godex-extmode") && $("lp-godex-extmode").checked;
+    const pid = isExt ? await invoke("godex_external_start") : await invoke("godex_restart");
+    showMsg("已重启,pid=" + pid, "ok");
+    setEditorStatus("已重启,新 pid=" + pid);
+    refreshStatus();
+    if(isExt) loadTraceLogs();
+  } catch (e) {
+    showMsg("重启失败: " + e, "err");
+  }
+}
+
+async function loadProviders() {
+  try {
+    const res = await invoke("list_providers");
+    providers = res || [];
+  } catch (e) { providers = []; }
+  if (!activeProvider && providers.length) activeProvider = providers[0].name;
+  renderProviders();
+  return providers;
+}
+
+async function deleteProvider(name) {
+  if (!confirm("确定删除服务商 " + name + "? 这也会从 config 中删除它的启用模型。")) return;
+  try {
+    await invoke("delete_provider", { name });
+    if (activeProvider === name) activeProvider = null;
+    await loadProviders();
+    showMsg("已删除 " + name, "ok");
+  } catch (e) { showMsg("删除失败: " + e, "err"); }
+}
+
+function openNewProviderModal() { $("new-provider-modal").style.display = "flex"; }
+function closeNewProviderModal() { $("new-provider-modal").style.display = "none"; }
+
+async function createProvider() {
+  const name = $("np-name").value.trim();
+  const base_url = $("np-base_url").value.trim();
+  const api_key = $("np-api_key").value.trim();
+  const spec = $("np-spec").value;
+  const timeout_ms = parseInt($("np-timeout_ms").value) || 120000;
+  if (!name) { showMsg("名称必填", "err"); return; }
+  if (!base_url) { showMsg("接口地址必填", "err"); return; }
+  try {
+    await invoke("upsert_provider", { name, baseUrl: base_url, apiKey: api_key, spec, timeoutMs: timeout_ms });
+    showMsg("已创建 " + name, "ok");
+    closeNewProviderModal();
+    await loadProviders();
+      renderProviders();
+    selectProvider(name);
+  } catch (e) { showMsg("创建失败: " + e, "err"); }
+}
+
+function resetEditor() {
+  if (activeProvider) selectProvider(activeProvider);
+}
+
+
+
+async function refreshStatus() {
+  try {
+    const r = await invoke("godex_status");
+    if (r.running) {
+      godexPanel.setStatus(true);
+      $("lp-godex-status").textContent = r.pid ? ("● RUNNING pid=" + r.pid) : "● RUNNING";
+    } else {
+      godexPanel.setStatus(false);
+      $("lp-godex-status").textContent = "● STOPPED";
+    }
+  } catch (e) {
+    godexPanel.setStatus(null);
+    $("lp-godex-status").textContent = "● ERROR";
+  }
+}
+
+(async function init() {
+  loadProviders().catch(function(e){ console.error("[init] loadProviders:", e); });
+  setTimeout(function(){ if(!providers.length){ console.warn("[init] providers timeout, show empty"); renderProviders(); } }, 3000);
+  var presetTimer = setTimeout(function(){ console.warn("[init] presets timed out"); }, 5000);
+  loadRustPresets().then(function(){ clearTimeout(presetTimer); }).catch(function(e){ clearTimeout(presetTimer); console.warn("[init] loadRustPresets:", e); });
+  // Load external mode from config so the GodeX log panel checkbox reflects persisted state
+  // Always start with external mode OFF, regardless of any persisted value.
+  // The user opts in explicitly via the toggle; the server-side persisted
+  // flag will be overwritten by the next set_external_mode call.
+  try {
+    await invoke("set_external_mode", { externalMode: false });
+    const _em = $("lp-godex-extmode");
+    if (_em) _em.checked = false;
+  } catch(e) { console.warn("[init] reset ext mode:", e); }
+  try { initSashes(); } catch(e) { console.error("[init] initSashes:", e); }
+  try { refreshStatus(); } catch(e) { console.error("[init] refreshStatus:", e); }
+  setInterval(function(){ try { refreshStatus(); } catch(e){} }, 5000);
+  try { listen("godex://log", function(ev){ pushLogLine(ev.payload); }); } catch(e) { console.warn("[init] listen:", e); }
+  // Listen for model-probe save events and refresh model list
+  try { listen("probe-saved", async function(ev){
+    console.log("[init] probe-saved event received, refreshing models...");
+    try {
+      await loadProviders();
+      // Also refresh model details display
+      const activeProvider = localStorage.getItem("activeProvider");
+      if (activeProvider && providers.find(function(x){ return x.name === activeProvider; })) {
+        selectProvider(activeProvider);
+      }
+    } catch(e) { console.error("[init] probe-saved refresh error:", e); }
+  }); } catch(e) { console.warn("[init] listen probe-saved:", e); }
+  try { invoke("godex_logs_tail", { limit: 500 }).then(function(tail){ if (tail) tail.forEach(function(line){ pushLogLine(line); }); }); } catch(e) { console.warn("[init] tail:", e); }
+  if (activeProvider && providers.find(function(x){ return x.name === activeProvider; })) {
+    try { selectProvider(activeProvider); } catch(e) { console.error("[init] selectProvider:", e); }
+  } else {
+    var emptyEl = document.getElementById("editor-empty"); var editorEl = document.getElementById("editor");
+    if (emptyEl) emptyEl.style.display = "flex";
+    if (editorEl) editorEl.style.display = "none";
+  }
+  var formsSash = _godexSashes.find(function(s){ return s.storageKey === "godex-studio.formsRatio"; });
+  if (formsSash) { try { formsSash.applyRatio(formsSash._loadRatio(), false); } catch(e){} }
+})();
+
+// --- Settings modal ---
+async function openSettingsModal() {
+  try {
+    const p = await invoke("get_config_paths");
+    $("set-config").value = p.godex_config;
+    $("set-binary").value = p.godex_binary;
+    $("set-port").value = p.godex_port || 5678;
+    const logEl = document.getElementById("set-logging-file"); if(logEl) logEl.value = p.logging_file || "";
+    $("set-session-db").textContent = p.session_db_path || "?";
+    $("set-trace-db").textContent = p.trace_db_path || "?";
+    $("set-error").style.display = "none";
+    $("set-hint").textContent = "Config/Binary 路径需重启 studio 生效;Port 立即写入 config.yaml。";
+    await refreshPortStatus();
+    if (p.path_change_notice) {
+      const n = p.path_change_notice;
+      const reasonLabel = n.reason === "missing_file" ? "找不到了" : n.reason;
+      $("set-hint").textContent = `⚠ 上次记住的 config 路径 ${n.from} ${reasonLabel}，已自动切到 ${n.to}。下次启动仍然实际使用后者。`;
+      $("set-hint").style.color = "var(--yellow)";
+    } else if (p.path_provision_notice) {
+      const pn = p.path_provision_notice;
+      const sourceLabel = pn.source === "copied_from_example" ? "已从 godex.example.yaml 复制出" : "已创建一份最小可用的";
+      $("set-hint").textContent = `✦ ${sourceLabel} config: ${pn.path}（仅含 server 与 minimax 默认 provider，请在设置里补充 api_key）。`;
+      $("set-hint").style.color = "var(--blue)";
+    }
+    $("settings-modal").style.display = "flex";
+    loadReplicaStatus();
+  } catch (e) {
+    showMsg("读取路径失败: " + e, "err");
+  }
+}
+function closeSettingsModal() {
+  $("settings-modal").style.display = "none";
+}
+
+async function saveSettings() {
+  const cfg = $("set-config").value.trim();
+  const bin = $("set-binary").value.trim();
+  const port = parseInt($("set-port").value, 10);
+  $("set-error").style.display = "none";
+  if (!cfg || !bin) {
+    $("set-error").textContent = "Config 路径和 Binary 路径都必须填写";
+    $("set-error").style.display = "block";
+    return;
+  }
+  if (!port || port < 1 || port > 65535) {
+    $("set-error").textContent = "端口必须是 1-65535 之间的数字";
+    $("set-error").style.display = "block";
+    return;
+  }
+  // Defensive: any of these DOM lookups can return null in odd startup
+  // states (e.g. partial modal render before first openSettingsModal).
+  const loggingEl = document.getElementById("set-logging-file");
+  const loggingFile = loggingEl ? loggingEl.value.trim() : "";
+  try {
+    await invoke("set_config_paths", { godexConfig: cfg, godexBinary: bin, godexPort: port, loggingFile: loggingFile || null });
+    showMsg("设置已保存。Config/Binary 需重启 studio 生效;Port 已写入 config.yaml。", "ok");
+    closeSettingsModal();
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    // Show via both showMsg (visible banner) and set-error (modal slot),
+    // and guard set-error in case the modal isn't in the DOM.
+    showMsg("保存失败: " + msg, "err");
+    try {
+      const errEl = document.getElementById("set-error");
+      if (errEl) { errEl.textContent = "保存失败: " + msg; errEl.style.display = "block"; }
+    } catch (_) { /* ignore */ }
+  }
+}
+async function resetSettings() {
+  if (!confirm("确定恢复默认路径?\n\n会清除已保存的设置(下次启动生效)。")) return;
+  try {
+    const p = await invoke("reset_paths");
+    $("set-config").value = p.godex_config;
+    $("set-binary").value = p.godex_binary;
+    $("set-port").value = p.godex_port || 5678;
+    $("set-hint").textContent = "已重置为默认。重启 studio 后 Config/Binary 路径生效;Port 已写入 config.yaml。";
+    const logEl2 = document.getElementById("set-logging-file"); if(logEl2) logEl2.value = "";
+    showMsg("已恢复默认。", "ok");
+    await refreshPortStatus();
+  } catch (e) {
+    showMsg("恢复失败: " + e, "err");
+  }
+}
+
+async function loadReplicaStatus() {
+  try {
+    const s = await invoke("get_replica_status");
+    $("set-replica-mode").checked = s.enabled;
+    const section = $("replica-section");
+    section.style.display = s.enabled ? "block" : "none";
+    if (s.replica_path) $("set-replica-path").textContent = s.replica_path;
+    $("set-replica-pid").textContent = s.pid ?? "---";
+    if (s.running) {
+      $("btn-start-replica").style.display = "none";
+      $("btn-kill-replica").style.display = "inline-block";
+      $("replica-status").innerHTML = '<span style="color:var(--green)">运行中</span>';
+    } else {
+      $("btn-start-replica").style.display = "inline-block";
+      $("btn-kill-replica").style.display = "none";
+      $("replica-status").innerHTML = '<span style="color:var(--text2)">未运行</span>';
+    }
+  } catch(e) { console.warn("replica status:", e); }
+}
+
+async function onReplicaModeChange() {
+  const enabled = $("set-replica-mode").checked;
+  try {
+    await invoke("set_replica_mode", { enabled });
+    await loadReplicaStatus();
+  } catch(e) { showMsg("设置失败: " + e, "err"); }
+}
+
+async function startReplica() {
+  $("btn-start-replica").disabled = true;
+  $("replica-status").innerHTML = '<span style="color:var(--yellow)">启动中...</span>';
+  try {
+    await invoke("start_godex_replica");
+    await loadReplicaStatus();
+  } catch(e) {
+    showMsg("启动副本失败: " + e, "err");
+    $("replica-status").innerHTML = '<span style="color:var(--red)">启动失败</span>';
+    $("btn-start-replica").disabled = false;
+  }
+}
+
+async function killReplica() {
+  try {
+    await invoke("kill_godex_replica");
+    await loadReplicaStatus();
+  } catch(e) { showMsg("停止失败: " + e, "err"); }
+}
+
+// --- Port helpers ---
+async function refreshPortStatus() {
+  const portEl = $("set-port");
+  const statusEl = $("set-port-status");
+  const port = parseInt(portEl.value, 10);
+  if (!port || port < 1 || port > 65535) {
+    statusEl.textContent = "";
+    return;
+  }
+  try {
+    const info = await invoke("check_port", { port });
+    if (info) {
+      statusEl.textContent = "X 被 " + info.name + " 占用";
+      statusEl.style.color = "var(--red)";
+    } else {
+      statusEl.textContent = "OK 空闲";
+      statusEl.style.color = "var(--green)";
+    }
+  } catch (e) {
+    statusEl.textContent = "检查失败";
+    statusEl.style.color = "var(--red)";
+  }
+}
+
+// --- File browse (Task 3) ---
+async function browseConfigPath() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "YAML", extensions: ["yaml","yml"] }, { name: "All", extensions: ["*"] }],
+        title: "选择 GodeX config 文件"
+      }
+    });
+    if (path) $("set-config").value = path;
+  } catch (e) { showMsg("文件选择失败: " + e, "err"); }
+}
+
+async function openConfigInEditor() {
+  const cfg = $("set-config").value.trim();
+  if (!cfg) { showMsg("请先填写 Config 路径", "err"); return; }
+  try {
+    await invoke("open_in_editor", { path: cfg });
+  } catch (e) { showMsg("打开失败: " + e, "err"); }
+}
+
+async function browseBinaryPath() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Executable", extensions: ["exe"] }, { name: "All", extensions: ["*"] }],
+        title: "选择 GodeX binary 文件"
+      }
+    });
+    if (path) $("set-binary").value = path;
+  } catch (e) { showMsg("文件选择失败: " + e, "err"); }
+}
+
+// --- Port conflict modal ---
+let _conflictState = null;
+
+async function preCheckAndRestartGodex() {
+  let p;
+  try { p = await invoke("get_config_paths"); } catch (e) { showMsg("读取配置失败: " + e, "err"); return; }
+  const port = p.godex_port;
+  let info = null;
+  try { info = await invoke("check_port", { port }); } catch (e) { showMsg("检查端口失败: " + e, "err"); return; }
+  if (info) { showPortConflictModal(port, info); } else { doGodexRestart(); }
+}
+
+function showPortConflictModal(port, info) {
+  $("pc-port").textContent = String(port);
+  $("pc-name").textContent = info.name;
+  $("pc-pid").textContent = String(info.pid);
+  $("pc-path").textContent = "(在 tasklist 中查询失败)";
+  $("pc-desc").innerHTML = 'GodeX 配置的端口 <code style="color:var(--yellow)">' + port + '</code> 已被占用,无法启动 godex。';
+  _conflictState = { port, pid: info.pid, name: info.name };
+  $("port-conflict-modal").style.display = "flex";
+}
+
+function closePortConflictModal() {
+  $("port-conflict-modal").style.display = "none";
+  _conflictState = null;
+}
+
+async function conflictChangePort() {
+  if (!_conflictState) return;
+  const oldPort = _conflictState.port;
+  closePortConflictModal();
+  let newPort;
+  try { newPort = await invoke("find_free_port", { start: oldPort + 1 }); }
+  catch (e) { showMsg("找空闲端口失败: " + e, "err"); return; }
+  if (!newPort || newPort === oldPort) { showMsg("找不到空闲端口", "err"); return; }
+  try {
+    const p = await invoke("get_config_paths");
+    await invoke("set_config_paths", { godexConfig: p.godex_config, godexBinary: p.godex_binary, godexPort: newPort });
+    showMsg("已切换到端口 " + newPort + ",正在重启 godex...", "ok");
+    await new Promise(r => setTimeout(r, 200));
+    doGodexRestart();
+  } catch (e) { showMsg("切换端口失败: " + e, "err"); }
+}
+
+async function conflictKillProcess() {
+  if (!_conflictState) return;
+  const pid = _conflictState.pid;
+  closePortConflictModal();
+  try {
+    await invoke("kill_pid", { pid });
+    showMsg("已关闭 pid=" + pid + ",正在重启 godex...", "ok");
+    await new Promise(r => setTimeout(r, 200));
+    doGodexRestart();
+  } catch (e) { showMsg("关闭进程失败: " + e, "err"); }
+}
+
+async function doGodexRestart() {
+  try { await invoke("godex_restart"); } catch (e) { showMsg("重启 godex 失败: " + e, "err"); }
+}
+
+
+
+
+
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+

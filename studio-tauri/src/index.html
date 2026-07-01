@@ -41,7 +41,7 @@ main{display:flex;flex:1 1 0;overflow:hidden;min-height:0}
 .provider-item .del:hover{color:var(--red)}
 .forms-area{flex:1 1 0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:0;min-height:0}
 .form-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:auto;display:flex;flex-direction:column;min-height:0;flex-shrink:0;margin:0 0 8px 0}
-#fs-provider{flex:0 0 auto;border:1px solid red;background:rgba(255,0,0,.05)}#fs-models{flex:1 1 0;margin-bottom:0;min-height:200px;border:1px solid lime;background:rgba(0,255,0,.05)}.forms-area{background:rgba(0,0,255,.05)}
+#fs-provider{flex:0 1 auto;border:1px solid red;background:rgba(255,0,0,.05)}#fs-models{flex:1 1 0;margin-bottom:0;min-height:200px;border:1px solid lime;background:rgba(0,255,0,.05)}.forms-area{background:rgba(0,0,255,.05)}
 .form-section-head{background:rgba(255,255,255,.03);padding:8px 12px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .form-section-head .badge{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:400;padding:1px 6px;border-radius:3px}
 .form-section-head .right{margin-left:auto;display:flex;gap:6px}
@@ -74,8 +74,8 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .sash::before{content:"";position:absolute;background:var(--blue);transition:background .12s;opacity:0.5}
 .sash:hover,.sash.dragging{background:var(--blue);opacity:0.5}
 .sash:hover::before,.sash.dragging::before{background:var(--blue)}
-.sash-h{height:8px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-.sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:2px;border-radius:1px}
+.sash-h{height:14px;width:100%;cursor:row-resize;user-select:none;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.sash-h::before{left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:4px;border-radius:1px}
 .sash-v{width:8px;height:100%;cursor:col-resize;user-select:none;background:var(--bg2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
 .sash-v::before{top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:36px;border-radius:1px}
 
@@ -179,15 +179,66 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   margin: 4px 0;
 }
 .probe-sash:hover { background: var(--blue); }
-.probe-models-list {
-  flex: 1;
-  max-height: 150px;
-  overflow-y: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px;
-}
+  .probe-models-list {
+    flex: 1;
+    min-height: 60px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px 6px;
+  }
+  .probe-model-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s;
+  }
+  .probe-model-item:hover { background: var(--bg3); }
+  .probe-model-item input { margin: 0; cursor: pointer; }
+  .probe-model-item .ctx-badge {
+    font-size: 9px;
+    color: var(--blue);
+    padding-left: 3px;
+  }
+  .probe-model-item.custom {
+    border-color: var(--blue);
+    background: rgba(79, 195, 247, 0.08);
+  }
+  .probe-model-item.custom .model-name::before {
+    content: "\271A";
+    font-size: 9px;
+    color: var(--blue);
+    margin-right: 3px;
+  }
+  .probe-model-item.add-pill {
+    background: transparent;
+    border: 1px dashed var(--border);
+    padding: 3px 8px;
+  }
+  .probe-model-item.add-pill input {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 11px;
+    outline: none;
+    width: 110px;
+    padding: 0;
+  }
+  .probe-model-item.add-pill input::placeholder { color: var(--text2); }
+  .probe-model-item.add-pill:focus-within { border-color: var(--blue); }
 .probe-model-item {
   display: flex;
   align-items: center;
@@ -203,6 +254,33 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .probe-caps-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .probe-caps-grid label { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
 .probe-caps-grid input { width: auto; margin: 0; }
+
+.cap-item {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+.cap-item:hover { background: var(--bg2); }
+.cap-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.cap-top input { width: auto; margin: 0; cursor: pointer; }
+.cap-zh {
+  font-size: 10px;
+  color: var(--text2);
+  padding-left: 17px;
+  line-height: 1.3;
+}
 .probe-results-section { flex: 0 0 200px; min-height: 100px; }
 .probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
 #probe-results-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
@@ -229,7 +307,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </header>
 
-<main>
+<main id="main">
   <div class="col-left" id="col-left">
     <div class="sec">服务商列表 <span class="right" id="provider-count">0</span></div>
     <div class="provider-list" id="provider-items">
@@ -498,20 +576,59 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     <div class="probe-sash" id="probe-sash-caps"></div>
     <div class="probe-section" id="probe-caps-section">
       <div class="probe-label">能力探测</div>
-      <div class="probe-caps-grid">
-        <label><input type="checkbox" id="cap-ctx" checked/> Context</label>
-        <label><input type="checkbox" id="cap-max" checked/> MaxTokens</label>
-        <label><input type="checkbox" id="cap-text" checked/> Text</label>
-        <label><input type="checkbox" id="cap-image" checked/> Image</label>
-        <label><input type="checkbox" id="cap-video"/> Video</label>
-        <label><input type="checkbox" id="cap-audio"/> Audio</label>
-        <label><input type="checkbox" id="cap-func" checked/> Func</label>
-        <label><input type="checkbox" id="cap-reason" checked/> Reason</label>
-        <label><input type="checkbox" id="cap-computer"/> Computer</label>
-        <label><input type="checkbox" id="cap-toolsearch"/> ToolSearch</label>
-        <label><input type="checkbox" id="cap-websearch"/> WebSearch</label>
-        <label><input type="checkbox" id="cap-filesearch"/> FileSearch</label>
-        <label><input type="checkbox" id="cap-mcp"/> MCP</label>
+            <div class="probe-caps-grid">
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-ctx" checked/><span>Context</span></span>
+          <span class="cap-zh">上下文窗口大小</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-max" checked/><span>MaxTokens</span></span>
+          <span class="cap-zh">单次输出 token 上限</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-text" checked/><span>Text</span></span>
+          <span class="cap-zh">文本</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-image" checked/><span>Image</span></span>
+          <span class="cap-zh">图片</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-video"/><span>Video</span></span>
+          <span class="cap-zh">视频</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-audio"/><span>Audio</span></span>
+          <span class="cap-zh">音频 / 音乐</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-func" checked/><span>Func</span></span>
+          <span class="cap-zh">函数调用</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-reason" checked/><span>Reason</span></span>
+          <span class="cap-zh">推理 / 思维链</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-computer"/><span>Computer</span></span>
+          <span class="cap-zh">计算机操作</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-toolsearch"/><span>ToolSearch</span></span>
+          <span class="cap-zh">工具搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-websearch"/><span>WebSearch</span></span>
+          <span class="cap-zh">网页搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-filesearch"/><span>FileSearch</span></span>
+          <span class="cap-zh">文件搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-mcp"/><span>MCP</span></span>
+          <span class="cap-zh">MCP 服务器</span>
+        </label>
       </div>
     </div>
     <div class="probe-sash" id="probe-sash-results"></div>
@@ -1092,30 +1209,91 @@ async function launchModelProbe() {
 function onProbeProviderChange() {
   const provName = document.getElementById("probe-provider").value;
   const container = document.getElementById("probe-models-list");
+  container.innerHTML = "";
   if (!provName) {
-    container.innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+    renderEmptyMsg(container, "先选择 Provider");
+    appendAddPill(container);
     return;
   }
   const prov = providers.find(p => p.name === provName);
   if (!prov) return;
-  
+
   const models = enabled.filter(m => m.provider === provName).sort((a, b) => a.model.localeCompare(b.model));
   if (models.length === 0) {
-    container.innerHTML = '<div style="color:var(--text2);font-size:11px">该 Provider 没有已启用的模型</div>';
+    renderEmptyMsg(container, "该 Provider 没有已启用的模型。下方可手动添加任意模型名。");
+  } else {
+    models.forEach(function(m) { appendModelPill(container, m.model, m.context_window || 0, false); });
+  }
+  appendAddPill(container);
+}
+
+function appendModelPill(container, name, ctx, isCustom) {
+  const label = document.createElement("label");
+  label.className = "probe-model-item" + (isCustom ? " custom" : "");
+  const chk = document.createElement("input");
+  chk.type = "checkbox";
+  chk.className = "probe-model-check";
+  chk.value = name;
+  chk.checked = true;
+  if (isCustom) chk.dataset.custom = "1";
+  const span = document.createElement("span");
+  span.className = "model-name";
+  span.textContent = name;
+  label.appendChild(chk);
+  label.appendChild(span);
+  if (ctx > 0) {
+    const badge = document.createElement("span");
+    badge.className = "ctx-badge";
+    badge.textContent = Math.round(ctx / 1000) + "K";
+    label.appendChild(badge);
+  }
+  container.appendChild(label);
+}
+
+function appendAddPill(container) {
+  const wrap = document.createElement("label");
+  wrap.className = "probe-model-item add-pill";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "probe-custom-input";
+  input.placeholder = "+ 手动添加模型名";
+  wrap.appendChild(input);
+  container.appendChild(wrap);
+  input.addEventListener("keydown", function(ev) {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      addCustomModel();
+    }
+  });
+}
+
+function addCustomModel() {
+  const input = document.querySelector(".probe-custom-input");
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  const safeName = name.replace(/"/g, '\\"');
+  if (document.querySelector('.probe-model-check[value="' + safeName + '"]')) {
+    input.value = "";
     return;
   }
-  
-  container.innerHTML = "";
-  for (const m of models) {
-    const div = document.createElement("div");
-    div.style = "display:flex;align-items:center;gap:6px;padding:4px";
-    div.innerHTML = '<input type="checkbox" class="probe-model-check" value="' + m.model + '" checked/>' +
-      '<span style="font-size:12px">' + m.model + '</span>' +
-      '<span style="font-size:10px;color:var(--blue);margin-left:auto">' + 
-      ((m.context_window || 0) / 1000) + "K</span>";
-    container.appendChild(div);
-  }
+  const container = document.getElementById("probe-models-list");
+  appendModelPill(container, name, 0, true);
+  container.appendChild(input.parentElement);
+  input.value = "";
+  input.focus();
 }
+
+function renderEmptyMsg(container, msg) {
+  const div = document.createElement("div");
+  div.style.cssText = "color:var(--text2);font-size:11px;padding:8px;width:100%";
+  div.textContent = msg;
+  container.appendChild(div);
+  // Note: do NOT call appendAddPill here. The caller in onProbeProviderChange()
+  // appends the add-pill once after the if/else block, so we keep a single source of truth.
+}
+
+
 
 
 

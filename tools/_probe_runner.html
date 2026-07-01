@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>loading</title></head><body><script>
+  const f = document.createElement('iframe');
+  f.src = 'file:///D:/Documents/VibeCoding/GodeX/tools/_index_with_stub.html';
+  f.style.cssText = 'width:1px;height:1px;border:0;position:absolute;left:-9999px';
+  f.onload = () => {
+    const w = f.contentWindow;
+    setTimeout(() => {
+      w.__RUN__().then(r => { document.title = 'RESULT:' + r; });
+    }, 500);
+  };
+  document.body.appendChild(f);
+</script></body></html>

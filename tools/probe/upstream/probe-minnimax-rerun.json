@@ -1,0 +1,531 @@
+{
+  "MiniMax-M2.7": {
+    "model": "MiniMax-M2.7",
+    "context_window_max": 610304,
+    "ctx_probe_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 4.98,
+        "actual_tokens": 28243,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 9.69,
+        "actual_tokens": 56443,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 200,
+        "time": 22.83,
+        "actual_tokens": 112243,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 524288,
+        "status": 200,
+        "time": 3.44,
+        "actual_tokens": 224441,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 1048576,
+        "status": 400,
+        "time": 5.87,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 786432,
+        "status": 400,
+        "time": 3.51,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 655360,
+        "status": 400,
+        "time": 2.71,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 589824,
+        "status": 200,
+        "time": 9.81,
+        "actual_tokens": 252641,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 622592,
+        "status": 400,
+        "time": 2.89,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 606208,
+        "status": 200,
+        "time": 6.96,
+        "actual_tokens": 259841,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 614400,
+        "status": 400,
+        "time": 4.02,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 610304,
+        "status": 200,
+        "time": 5.88,
+        "actual_tokens": 261641,
+        "ok": true,
+        "err": null
+      }
+    ],
+    "image": {
+      "model": "MiniMax-M2.7",
+      "kind": "image_inline",
+      "image_max_tokens": 4096,
+      "status": 200,
+      "time": 4.02,
+      "usage": {
+        "completion_tokens": 195,
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "prompt_tokens": 56,
+        "prompt_tokens_details": {
+          "cached_tokens": 13
+        },
+        "total_characters": 0,
+        "total_tokens": 251
+      },
+      "reply_text": "<think>The user asks: \"Briefly describe this image in one sentence (mention dominant color).\" The user has not provided an image or link to an image. We must respond appropriately. Since we don't have the image, we can ask for clarification. We cannot see the image. The user hasn't provided an image. According to policy, we must be honest: we cannot see the image. So we need to ask for the image or description. Also we can ask clarifying question: \"Could you provide a description or link?\" So we need to respond accordingly. The request is to describe the image briefly, mention dominant color. We cannot do it because we don't have image. So ask user to provide image or details. That's all.\n\nWe should comply.\n</think>\n\n\nI’m sorry—I don’t have the ability to view images directly. Could you provide a description of the image or a link so I can help with a brief one‑sentence description that includes the dominant color?",
+      "err": null
+    },
+    "function_call_required": {
+      "model": "MiniMax-M2.7",
+      "kind": "function_call_required",
+      "max_tokens": 8192,
+      "status": 200,
+      "time": 2.3,
+      "usage": {
+        "completion_tokens": 60,
+        "completion_tokens_details": {
+          "reasoning_tokens": 36
+        },
+        "prompt_tokens": 205,
+        "total_characters": 0,
+        "total_tokens": 265
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\": \"Tokyo\"} ",
+      "reply_text": "<think>\nThe user is asking for the weather in Tokyo and specifically wants me to use the get_weather function. I'll call that function with Tokyo as the city parameter.\n</think>\n\n\n",
+      "err": null
+    },
+    "function_call_auto": {
+      "model": "MiniMax-M2.7",
+      "kind": "function_call_auto",
+      "max_tokens": 4096,
+      "status": 200,
+      "time": 2.47,
+      "usage": {
+        "completion_tokens": 59,
+        "completion_tokens_details": {
+          "reasoning_tokens": 35
+        },
+        "prompt_tokens": 205,
+        "total_characters": 0,
+        "total_tokens": 264
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\": \"Tokyo\"} ",
+      "reply_text": "<think>\nThe user is asking for the weather in Tokyo and specifically mentioned to use the get_weather function. I'll call the function with Tokyo as the city parameter.\n</think>\n\n\n",
+      "err": null
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "model": "MiniMax-M2.7-highspeed",
+    "context_window_max": 610304,
+    "ctx_probe_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 1.54,
+        "actual_tokens": 28241,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 2.18,
+        "actual_tokens": 56441,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 200,
+        "time": 2.51,
+        "actual_tokens": 112241,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 524288,
+        "status": 200,
+        "time": 3.21,
+        "actual_tokens": 224441,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 1048576,
+        "status": 400,
+        "time": 3.76,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 786432,
+        "status": 400,
+        "time": 3.32,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 655360,
+        "status": 400,
+        "time": 2.99,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 589824,
+        "status": 200,
+        "time": 8.04,
+        "actual_tokens": 252641,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 622592,
+        "status": 400,
+        "time": 3.74,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 606208,
+        "status": 200,
+        "time": 6.57,
+        "actual_tokens": 259841,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 614400,
+        "status": 400,
+        "time": 3.28,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 610304,
+        "status": 200,
+        "time": 5.56,
+        "actual_tokens": 261641,
+        "ok": true,
+        "err": null
+      }
+    ],
+    "image": {
+      "model": "MiniMax-M2.7-highspeed",
+      "kind": "image_inline",
+      "image_max_tokens": 4096,
+      "status": 200,
+      "time": 5.38,
+      "usage": {
+        "completion_tokens": 222,
+        "completion_tokens_details": {
+          "reasoning_tokens": 192
+        },
+        "prompt_tokens": 54,
+        "total_characters": 0,
+        "total_tokens": 276
+      },
+      "reply_text": "<think>\nThe user asks: \"Briefly describe this image in one sentence (mention dominant color).\" The user hasn't provided any image. Possibly they intended to attach an image but didn't. According to policy, we must respond that we need the image or description. However, we can guess? It's not provided. According to policy: we must respond that we cannot view images unless provided. So we must ask for the image or a description. We can ask for the image or we can say we need it. The user says \"Briefly describe this image in one sentence (mention dominant color).\" So we must say we cannot see the image and need it to describe. Possibly we can ask them to provide the image or more details. The best response: \"I’m unable to view the image, could you provide it or a description?\" The policies: we can ask for clarification. This is straightforward.\n\nThus final answer: request image or description.\n</think>\n\nI’m unable to view the image, so I can’t provide a description. Could you please share the image or give a brief description of it?",
+      "err": null
+    },
+    "function_call_required": {
+      "model": "MiniMax-M2.7-highspeed",
+      "kind": "function_call_required",
+      "max_tokens": 8192,
+      "status": 200,
+      "time": 1.72,
+      "usage": {
+        "completion_tokens": 55,
+        "completion_tokens_details": {
+          "reasoning_tokens": 31
+        },
+        "prompt_tokens": 205,
+        "total_characters": 0,
+        "total_tokens": 260
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\": \"Tokyo\"} ",
+      "reply_text": "<think>\nThe user wants to know the weather in Tokyo. I should use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+      "err": null
+    },
+    "function_call_auto": {
+      "model": "MiniMax-M2.7-highspeed",
+      "kind": "function_call_auto",
+      "max_tokens": 4096,
+      "status": 200,
+      "time": 2.4,
+      "usage": {
+        "completion_tokens": 72,
+        "completion_tokens_details": {
+          "reasoning_tokens": 48
+        },
+        "prompt_tokens": 205,
+        "total_characters": 0,
+        "total_tokens": 277
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\": \"Tokyo\"} ",
+      "reply_text": "<think>\nThe user is asking about the weather in Tokyo and explicitly wants me to use the get_weather function. I have a function called get_weather that takes a city parameter. Tokyo is the city I need to query.\n</think>\n\n\n",
+      "err": null
+    }
+  },
+  "MiniMax-M3": {
+    "model": "MiniMax-M3",
+    "context_window_max": 2441216,
+    "ctx_probe_history": [
+      {
+        "try": 65536,
+        "status": 200,
+        "time": 4.21,
+        "actual_tokens": 28376,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 131072,
+        "status": 200,
+        "time": 5.53,
+        "actual_tokens": 56576,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 262144,
+        "status": 200,
+        "time": 8.32,
+        "actual_tokens": 112376,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 524288,
+        "status": 200,
+        "time": 26.86,
+        "actual_tokens": 224576,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 1048576,
+        "status": 200,
+        "time": 50.24,
+        "actual_tokens": 448976,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 1572864,
+        "status": 200,
+        "time": 13.35,
+        "actual_tokens": 673976,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 2097152,
+        "status": 200,
+        "time": 26.88,
+        "actual_tokens": 898376,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 4194304,
+        "status": 400,
+        "time": 26.98,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 3145728,
+        "status": 400,
+        "time": 21.52,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 2621440,
+        "status": 400,
+        "time": 16.16,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 2359296,
+        "status": 200,
+        "time": 71.03,
+        "actual_tokens": 1010576,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 2490368,
+        "status": 400,
+        "time": 24.26,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 2424832,
+        "status": 200,
+        "time": 93.15,
+        "actual_tokens": 1038776,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 2457600,
+        "status": 400,
+        "time": 14.62,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 2441216,
+        "status": 200,
+        "time": 110.39,
+        "actual_tokens": 1045376,
+        "ok": true,
+        "err": null
+      },
+      {
+        "try": 2449408,
+        "status": 400,
+        "time": 15.27,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'type': 'error', 'error': {'type': 'bad_request_error', 'message': 'invalid params, context window exceeds limit (2013)', 'http_code': '400'}, 'reque"
+      },
+      {
+        "try": 2445312,
+        "status": 0,
+        "time": 121.84,
+        "actual_tokens": null,
+        "ok": false,
+        "err": "{'err': 'The read operation timed out'}"
+      }
+    ],
+    "image": {
+      "model": "MiniMax-M3",
+      "kind": "image_inline",
+      "image_max_tokens": 4096,
+      "status": 200,
+      "time": 3.98,
+      "usage": {
+        "completion_tokens": 110,
+        "prompt_tokens": 205,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 315
+      },
+      "reply_text": "<think>The user wants a brief one-sentence description of the image, including the dominant color. Let me look at the image carefully.\n\nThe image shows a stone pedestal with columns and arches in a rocky, desert-like landscape. It appears to be from a video game, likely Red Dead Redemption or similar Wild West setting. The scene has a sepia/orange tone due to the lighting or filter applied.</think>\n\nA stone pedestal with classical columns and arches stands in a rocky, desert-like Western landscape, bathed in warm sepia and orange tones.",
+      "err": null
+    },
+    "function_call_required": {
+      "model": "MiniMax-M3",
+      "kind": "function_call_required",
+      "max_tokens": 8192,
+      "status": 200,
+      "time": 6.65,
+      "usage": {
+        "completion_tokens": 54,
+        "completion_tokens_details": {
+          "reasoning_tokens": 24
+        },
+        "prompt_tokens": 418,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "total_characters": 0,
+        "total_tokens": 472
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\":\"Tokyo\"} ",
+      "reply_text": "<think>The user wants me to get the weather in Tokyo using the get_weather function. This is a straightforward tool call.</think>\n\n",
+      "err": null
+    },
+    "function_call_auto": {
+      "model": "MiniMax-M3",
+      "kind": "function_call_auto",
+      "max_tokens": 4096,
+      "status": 200,
+      "time": 3.39,
+      "usage": {
+        "completion_tokens": 66,
+        "completion_tokens_details": {
+          "reasoning_tokens": 36
+        },
+        "prompt_tokens": 418,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_characters": 0,
+        "total_tokens": 484
+      },
+      "has_tool_calls": true,
+      "tool_args": "{\"city\":\"Tokyo\"} ",
+      "reply_text": "<think>The user is asking about the weather in Tokyo and has explicitly requested that I use the get_weather function. I'll make the function call with the city parameter set to \"Tokyo\".</think>\n\n",
+      "err": null
+    }
+  }
+}
