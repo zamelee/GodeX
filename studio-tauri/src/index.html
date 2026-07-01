@@ -156,6 +156,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   display: flex;
   flex-direction: column;
   padding: 16px;
+  overflow: hidden; /* SCHEME B: prevent inner content overflow pushing buttons out */
 }
 .probe-section {
   flex: 0 0 auto;
@@ -179,6 +180,20 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   margin: 4px 0;
 }
 .probe-sash:hover { background: var(--blue); }
+/* SCHEME B: mid-wrapper for results+log so actions stay at bottom */
+.probe-flex-mid {
+  flex: 1 1 0;
+  min-height: 0; /* critical: allow flex children to shrink */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed rgba(78, 201, 176, 0.3); /* debug tint; safe to keep */
+}
+.probe-flex-mid > .probe-section { flex: 0 0 auto; min-height: 50px; }
+.probe-flex-mid > .probe-section.probe-log-section { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.probe-flex-mid > .probe-log { flex: 1; overflow-y: auto; min-height: 0; }
+.probe-actions { flex-shrink: 0; /* SCHEME B: never compress buttons */ }
+
   .probe-models-list {
     flex: 1;
     min-height: 60px;
@@ -304,6 +319,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   <div class="hdr-right">
     <span>原生窗口 &middot; <code>Tauri 2</code></span>
     <button class="btn small gray" onclick="openSettingsModal()" title="修改 Config / Binary 路径">⚙ 设置</button>
+  </div>
   </div>
 </header>
 
@@ -631,6 +647,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
         </label>
       </div>
     </div>
+    <div class="probe-flex-mid">
     <div class="probe-sash" id="probe-sash-results"></div>
     <div class="probe-section probe-results-section" id="probe-results-section">
       <div class="probe-label">结果</div>
@@ -665,6 +682,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       <div class="probe-label">日志</div>
       <div id="probe-log" class="probe-log"></div>
     </div>
+  </div>
     <div class="probe-actions">
       <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
       <div class="probe-actions-right">
