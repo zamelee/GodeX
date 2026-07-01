@@ -5,6 +5,8 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 use chrono::Utc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 #[derive(Serialize, Clone)]
 pub struct PathInfo {
@@ -1436,7 +1438,7 @@ fn test_tools_batch(client: &Client, url: &str, headers: &reqwest::header::Heade
 // ============================================================
 
 #[tauri::command]
-pub fn probe_ctx(
+pub async fn probe_ctx(
     app: AppHandle,
     base_url: String,
     api_key: String,
@@ -1444,18 +1446,17 @@ pub fn probe_ctx(
     claimed: u64,
 ) -> Result<Option<u64>, String> {
     crate::diag(&format!("[probe_ctx] {} claimed={}", model, claimed));
-    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
-        .map_err(|e| format!("client: {}", e))?;
-    let result = client.probe_ctx(claimed);
-    let events = client.take_events();
-    for ev in events {
-        let _ = app.emit("probe-progress", &ev);
-    }
-    Ok(result)
+    let cancel = get_probe_cancel();
+    cancel.store(false, Ordering::SeqCst);
+    let app2 = app.clone();
+    let live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync> =
+        Box::new(move |ev: crate::probe::ProbeEvent| { let _ = app2.emit("probe-progress", &ev); });
+    let join = tauri::async_runtime::spawn_blocking(move || run_probe_ctx_inner(&base_url, &api_key, &model, claimed, cancel, live_emit));
+    join.await.map_err(|e| format!("probe_ctx join: {}", e))?
 }
 
 #[tauri::command]
-pub fn probe_max_tokens(
+pub async fn probe_max_tokens(
     app: AppHandle,
     base_url: String,
     api_key: String,
@@ -1463,31 +1464,93 @@ pub fn probe_max_tokens(
     claimed: u64,
 ) -> Result<Option<u64>, String> {
     crate::diag(&format!("[probe_max_tokens] {} claimed={}", model, claimed));
-    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
-        .map_err(|e| format!("client: {}", e))?;
-    let result = client.probe_max_tokens(claimed);
-    let events = client.take_events();
-    for ev in events {
-        let _ = app.emit("probe-progress", &ev);
-    }
-    Ok(result)
+    let cancel = get_probe_cancel();
+    cancel.store(false, Ordering::SeqCst);
+    let app2 = app.clone();
+    let live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync> =
+        Box::new(move |ev: crate::probe::ProbeEvent| { let _ = app2.emit("probe-progress", &ev); });
+    let join = tauri::async_runtime::spawn_blocking(move || run_probe_max_tokens_inner(&base_url, &api_key, &model, claimed, cancel, live_emit));
+    join.await.map_err(|e| format!("probe_max_tokens join: {}", e))?
 }
 
 #[tauri::command]
-pub fn probe_caps(
+pub async fn probe_caps(
     app: AppHandle,
     base_url: String,
     api_key: String,
     model: String,
 ) -> Result<crate::probe::Capabilities, String> {
     crate::diag(&format!("[probe_caps] {}", model));
-    let mut client = crate::probe::ProbeClient::new(&base_url, &api_key, &model)
-        .map_err(|e| format!("client: {}", e))?;
-    let caps = client.probe_caps();
-    let events = client.take_events();
-    for ev in events {
-        let _ = app.emit("probe-progress", &ev);
-    }
-    Ok(caps)
+    let cancel = get_probe_cancel();
+    cancel.store(false, Ordering::SeqCst);
+    let app2 = app.clone();
+    let live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync> =
+        Box::new(move |ev: crate::probe::ProbeEvent| { let _ = app2.emit("probe-progress", &ev); });
+    let join = tauri::async_runtime::spawn_blocking(move || run_probe_caps_inner(&base_url, &api_key, &model, cancel, live_emit));
+    join.await.map_err(|e| format!("probe_caps join: {}", e))?
+}
+
+// ============================================================
+// Phase 16: probe worker helpers (called from spawn_blocking)
+// ============================================================
+fn run_probe_ctx_inner(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    claimed: u64,
+    cancel: Arc<AtomicBool>,
+    live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync>,
+) -> Result<Option<u64>, String> {
+    let mut client = crate::probe::ProbeClient::new(base_url, api_key, model)
+        .map_err(|e| format!("client: {}", e))?
+        .with_cancel(cancel)
+        .with_live_emit(live_emit);
+    Ok(client.probe_ctx(claimed))
+}
+
+fn run_probe_max_tokens_inner(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    claimed: u64,
+    cancel: Arc<AtomicBool>,
+    live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync>,
+) -> Result<Option<u64>, String> {
+    let mut client = crate::probe::ProbeClient::new(base_url, api_key, model)
+        .map_err(|e| format!("client: {}", e))?
+        .with_cancel(cancel)
+        .with_live_emit(live_emit);
+    Ok(client.probe_max_tokens(claimed))
+}
+
+fn run_probe_caps_inner(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    cancel: Arc<AtomicBool>,
+    live_emit: Box<dyn Fn(crate::probe::ProbeEvent) + Send + Sync>,
+) -> Result<crate::probe::Capabilities, String> {
+    let mut client = crate::probe::ProbeClient::new(base_url, api_key, model)
+        .map_err(|e| format!("client: {}", e))?
+        .with_cancel(cancel)
+        .with_live_emit(live_emit);
+    Ok(client.probe_caps())
+}
+// ============================================================
+// Phase 16: shared probe cancel flag
+// ============================================================
+static PROBE_CANCEL: OnceLock<Arc<AtomicBool>> =
+    OnceLock::new();
+
+fn get_probe_cancel() -> Arc<AtomicBool> {
+    PROBE_CANCEL
+        .get_or_init(|| Arc::new(AtomicBool::new(false)))
+        .clone()
+}
+
+#[tauri::command]
+pub fn probe_stop() {
+    get_probe_cancel().store(true, Ordering::SeqCst);
+    crate::diag("[probe_stop] cancel flag set");
 }
 

@@ -685,6 +685,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
     <div class="probe-actions">
       <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
+      <button class="btn gray" id="btn-probe-stop" style="display:none" onclick="stopProbeRun()">停止</button>
       <div class="probe-actions-right">
         <button class="btn gray" id="btn-probe-save" onclick="saveProbeResults()">保存</button>
         <button class="btn gray" onclick="closeProbeModal()">关闭</button>
@@ -702,8 +703,12 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
 
 const CAPS = [
+  // 输入/上下文
   "text", "image_input", "audio_input", "video_input",
-  "image_output", "audio_output", "tool_use", "stream",
+  // 输出/能力
+  "image_output", "audio_output", "stream", "reasoning",
+  // 工具调用 (function 已映射到 tool_use, 其他 5 项为探测新增)
+  "tool_use", "web_search", "file_search", "computer_use", "tool_search", "mcp",
 ];
 
 const CAP_LABELS = {
@@ -715,6 +720,12 @@ const CAP_LABELS = {
   audio_output: "音频出",
   tool_use: "工具",
   stream: "流式",
+  reasoning: "思维链",
+  web_search: "网页搜",
+  file_search: "文件搜",
+  computer_use: "计算机",
+  tool_search: "工具搜",
+  mcp: "MCP",
 };
 
 // ── Rust-backed model presets (loaded from model-presets.json via Tauri) ──
@@ -1291,6 +1302,9 @@ async function launchModelProbe() {
   document.getElementById("probe-models-list").innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
   document.getElementById("probe-log").innerHTML = "";
   document.getElementById("probe-results-body").innerHTML = "<tr><td colspan='14' class='empty-msg'>等待探测...</td></tr>";
+  // Reset stale state from a previous session (close-without-save, etc.)
+  _probeResults = [];
+  _probeChanged = false;
   document.getElementById("probe-modal").style.display = "flex";
 }
 
@@ -1384,6 +1398,21 @@ function renderEmptyMsg(container, msg) {
 let _probeResults = [];
 let _probeChanged = false;
 
+async function stopProbeRun() {
+  try {
+    const stopBtn = document.getElementById("btn-probe-stop");
+    stopBtn.disabled = true;
+    stopBtn.textContent = "停止中...";
+    await invoke("probe_stop");
+    const logEl = document.getElementById("probe-log");
+    const ts = new Date().toLocaleTimeString();
+    logEl.innerHTML += "[" + ts + "] [probe] 停止信号已发送，等待当前探测结束...\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  } catch (e) {
+    showMsg("停止失败: " + e, "err");
+  }
+}
+
 async function startProbeRun() {
   const provName = document.getElementById("probe-provider").value;
   if (!provName) { showMsg("请选择 Provider", "err"); return; }
@@ -1396,8 +1425,11 @@ async function startProbeRun() {
   
   const modelNames = Array.from(checks).map(c => c.value);
   const btn = document.getElementById("btn-probe-start");
+  const stopBtn = document.getElementById("btn-probe-stop");
   btn.disabled = true;
-  btn.textContent = "探测中...";
+  btn.style.display = "none";
+  stopBtn.style.display = "";
+  btn.textContent = "开始探测";
   
   const logEl = document.getElementById("probe-log");
   const resultsBody = document.getElementById("probe-results-body");
@@ -1443,14 +1475,19 @@ async function startProbeRun() {
       const r = { model: model, success: true, error: null, context_window: null, max_tokens: null,
         text: null, image: null, video: null, audio: null, function: null, reasoning: null,
         web_search: null, file_search: null, computer_use: null, tool_search: null, mcp: null };
+      // Use the model current context_window/max_tokens as the starting claimed value.
+      // Fallback to conservative defaults when not yet known.
+      const em = enabled.find(em => em.provider === provName && em.model === model);
+      const claimedCtx = (em && em.context_window) ? em.context_window : 100000;
+      const claimedMax = (em && em.max_tokens) ? em.max_tokens : 131072;
       try {
         r.context_window = await invoke("probe_ctx", {
-          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: 100000
+          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: claimedCtx
         });
         if (r.context_window) log("  Context: " + r.context_window + " tokens");
 
         r.max_tokens = await invoke("probe_max_tokens", {
-          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: 131072
+          baseUrl: baseUrl, apiKey: prov.api_key, model: model, claimed: claimedMax
         });
         if (r.max_tokens) log("  MaxOut: " + r.max_tokens + " tokens");
 
@@ -1470,10 +1507,10 @@ async function startProbeRun() {
         if (r.reasoning) caps2.push("reason");
         if (caps2.length > 0) log("  Capabilities: " + caps2.join(", "));
 
-        const m = enabled.find(em => em.provider === provName && em.model === model);
-        if (m) {
-          if (r.context_window && !m.context_window) m.context_window = r.context_window;
-          if (r.max_tokens && !m.max_tokens) m.max_tokens = r.max_tokens;
+        // Persist results into enabled[] (only when not already set; manual edits win).
+        if (em) {
+          if (r.context_window && !em.context_window) em.context_window = r.context_window;
+          if (r.max_tokens && !em.max_tokens) em.max_tokens = r.max_tokens;
         }
         _probeResults.push(r);
         _probeChanged = true;
@@ -1497,7 +1534,9 @@ async function startProbeRun() {
     showMsg("探测失败: " + e, "err");
   } finally {
      if (_unlistenProbe) { try { _unlistenProbe(); } catch (e) {} _unlistenProbe = null; }
-       btn.disabled = false;
+    btn.disabled = false;
+    btn.style.display = "";
+    stopBtn.style.display = "none";
     btn.textContent = "开始探测";
   }
 }
@@ -1536,7 +1575,98 @@ async function saveProbeResults() {
     showMsg("没有可保存的结果", "warn");
     return;
   }
-  showMsg("保存功能开发中...", "warn");
+  const provName = document.getElementById("probe-provider").value;
+  if (!provName) { showMsg("请先选择 Provider", "err"); return; }
+  // Filter to successful probes (failed rows are skipped, but stay in results table)
+  const toSave = _probeResults.filter((r) => r.success !== false);
+  if (toSave.length === 0) {
+    showMsg("没有成功的探测结果可保存", "warn");
+    return;
+  }
+  // Count update vs add for the confirm prompt
+  let updateCount = 0, addCount = 0;
+  for (const r of toSave) {
+    const existing = enabled.find((em) => em.provider === provName && em.model === r.model);
+    if (existing) updateCount++; else addCount++;
+  }
+  // Confirm: user-visible list of what will change
+  const confirmMsg =
+    "将保存 " + toSave.length + " 个探测结果到 " + provName + "：\n" +
+    "  更新 " + updateCount + " 个已有模型（覆盖 context_window / max_tokens / capabilities）\n" +
+    "  新增 " + addCount + " 个模型到 enabled[]\n\n" +
+    "确定继续？";
+  if (!confirm(confirmMsg)) return;
+  // Disable save button during persist
+  const btn = document.getElementById("btn-probe-save");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+  try {
+    // Probe result field -> CAPS field. Fallback: only write when r.<key> is true/false;
+    // null/undefined probe results do NOT touch existing capability values.
+    const PROBE_TO_CAP = {
+      text: "text",
+      image: "image_input",
+      audio: "audio_input",
+      video: "video_input",
+      function: "tool_use",
+      reasoning: "reasoning",
+      web_search: "web_search",
+      file_search: "file_search",
+      computer_use: "computer_use",
+      tool_search: "tool_search",
+      mcp: "mcp",
+    };
+    for (const r of toSave) {
+      const m = enabled.find((em) => em.provider === provName && em.model === r.model);
+      if (m) {
+        // Overwrite existing model: ctx, max_tokens, capabilities
+        if (r.context_window != null) m.context_window = r.context_window;
+        if (r.max_tokens != null) m.max_tokens = r.max_tokens;
+        if (!m.capabilities) m.capabilities = {};
+        for (const probeKey in PROBE_TO_CAP) {
+          const v = r[probeKey];
+          if (v === true || v === false) {
+            m.capabilities[PROBE_TO_CAP[probeKey]] = v;
+          }
+        }
+      } else {
+        // Add new model to enabled[]
+        const newRow = { provider: provName, model: r.model };
+        if (r.context_window != null) newRow.context_window = r.context_window;
+        if (r.max_tokens != null) newRow.max_tokens = r.max_tokens;
+        const caps = {};
+        let anyCap = false;
+        for (const probeKey in PROBE_TO_CAP) {
+          const v = r[probeKey];
+          if (v === true || v === false) {
+            caps[PROBE_TO_CAP[probeKey]] = v;
+            anyCap = true;
+          }
+        }
+        if (anyCap) newRow.capabilities = caps;
+        enabled.push(newRow);
+      }
+    }
+    // Persist via the same path as saveEnabled():
+    const all = await invoke("read_enabled_models");
+    const othersEnabled = ((all && all.enabled) || []).filter((m) => m.provider !== provName).map(stripUndef);
+    const othersDiscovered = ((all && all.discovered) || []).filter((m) => m.provider !== provName).map(stripUndef);
+    const myEnabled = enabled.map(stripUndef);
+    const myDiscovered = discovered.map(stripUndef);
+    const mergedEnabled = othersEnabled.concat(myEnabled);
+    const mergedDiscovered = othersDiscovered.concat(myDiscovered);
+    const count = await invoke("save_enabled_models", { enabled: mergedEnabled, discovered: mergedDiscovered });
+    showMsg("已保存 " + toSave.length + " 个探测结果 (合计 " + count + " 个模型)", "ok");
+    setEditorStatus("探测结果已保存于 " + new Date().toLocaleTimeString());
+    _probeChanged = false;  // saved, so close will not ask again
+    renderModels();
+  } catch (e) {
+    showMsg("保存失败: " + e, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 function closeProbeModal() {
