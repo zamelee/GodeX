@@ -791,3 +791,80 @@ the height change is proportional (1:1) to mouse movement.
 - Do not touch Rust / godex2.exe / CodeX / Codex++.
 - Push only to fork (zamelee/GodeX), never origin (Ahoo-Wang/GodeX).
 - Compile (`cargo build --release`) only after explicit user OK.
+
+
+# Phase 15.1 - Fix press-without-move jump on probe-sash-models / probe-sash-caps (2026-07-01)
+
+## Bug
+After the Phase 15 fix, two of the four probe sashes still showed a small
+height jump on `mousedown` followed by `mouseup` without any actual movement.
+This was especially noticeable AFTER the user had manually dragged any sash
+(at which point the afterEl had a concrete flex-basis that got clobbered).
+
+Root cause: `_onUp` always called `this.applyRatio(beforePx / totalPx, true)`
+on every release. The intent was to persist the final ratio. But applyRatio
+sets BOTH `before.style.flex` AND `after.style.flex`. For probe-sash-models,
+the `afterEl` is probe-models-section; for probe-sash-caps, the `afterEl`
+is probe-caps-section. Both of those have explicit flex-basis percentages
+("0 0 18.00%" and "0 0 14.00%" by default). After a manual drag of the
+preceding sash, those had been overwritten to "1 1 0" — and the next
+mouseup on a neighbour would either re-set them or leave them at "1 1 0",
+producing a small but visible snap.
+
+probe-sash-results and probe-sash-log did not show this because their
+afterEl (`probe-flex-mid`, `probe-log-section`) is always "1 1 0" already.
+
+## Fix
+Track whether `_onMove` actually changed the ratio. Only call applyRatio on
+mouseup if movement happened. New Sash state: `this.moved` (boolean).
+
+```js
+// _onDown / _onTouchStart:  this.moved = false;
+
+// _onMove:
+const clamped = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
+if (clamped !== this._dragStartRatio) this.moved = true;
+this.applyRatio(clamped, false);
+
+// _onUp:
+const wasMoved = this.moved;
+this.dragging = false;
+this.moved = false;
+this.sash.classList.remove("dragging");
+document.body.style.cursor = "";
+if (wasMoved) {
+  // persist the rendered ratio
+  this.applyRatio(beforePx / totalPx, true);
+}
+// (always remove window listeners)
+```
+
+## Verification
+
+### Press-without-move (user-reported scenario)
+Run `python tools/probe/_test_press_release.py`:
+- probe-sash-models : beforeH 73 -> 73 -> 73   afterFlex unchanged
+- probe-sash-caps    : beforeH 132 -> 132 -> 132 afterFlex unchanged
+- probe-sash-results : beforeH 102 -> 102 -> 102 afterFlex unchanged
+- probe-sash-log     : beforeH 153 -> 153 -> 153 afterFlex unchanged
+
+### Drag still works
+Run `python tools/probe/_test_drag.py`:
+- All four sashes: drag 50px -> ~50px height delta, persists on release.
+
+### Cross-sash scenario (the actual bug)
+Run `python tools/probe/_test_user_scenario.py`:
+- After dragging probe-sash-models 80px (which sets models-section to
+  "1 1 0"), then mousedown probe-sash-caps without moving, then release:
+  models-section and caps-section heights and flex values stay constant.
+
+## What is NOT changed
+- delta-drag math (Phase 15) unchanged.
+- _computeCurrentRatio unchanged.
+- All probe-sash registrations unchanged.
+- No Rust / GodeX touched.
+
+## Hard no-no (carried forward)
+- Do not touch Rust / godex2.exe / CodeX / Codex++.
+- Push only to fork (zamelee/GodeX), never origin (Ahoo-Wang/GodeX).
+- Compile (`cargo build --release`) only after explicit user OK.

@@ -881,20 +881,25 @@ class Sash {
     // Enforce minimums.
     const minBeforeRatio = this.minBefore / totalPx;
     const maxBeforeRatio = 1 - (this.minAfter / totalPx);
-    ratio = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
-    this.applyRatio(ratio, /*persist=*/false);
+    const clamped = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
+    if (clamped !== this._dragStartRatio) this.moved = true;
+    this.applyRatio(clamped, /*persist=*/false);
   }
   _onUp() {
     if (!this.dragging) return;
+    const wasMoved = this.moved;
     this.dragging = false;
+    this.moved = false;
     this.sash.classList.remove("dragging");
     document.body.style.cursor = "";
-    // Persist final ratio.
-    const rect = this.container.getBoundingClientRect();
-    const beforeRect = this.before.getBoundingClientRect();
-    const totalPx = this.dir === "v" ? rect.width : rect.height;
-    const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
-    this.applyRatio(beforePx / totalPx, /*persist=*/true);
+    if (wasMoved) {
+      // Persist final ratio (the actual rendered one).
+      const rect = this.container.getBoundingClientRect();
+      const beforeRect = this.before.getBoundingClientRect();
+      const totalPx = this.dir === "v" ? rect.width : rect.height;
+      const beforePx = this.dir === "v" ? beforeRect.width : beforeRect.height;
+      this.applyRatio(beforePx / totalPx, /*persist=*/true);
+    }
     window.removeEventListener("mousemove", this._onMove);
     window.removeEventListener("mouseup", this._onUp);
     window.removeEventListener("touchmove", this._onMove);
@@ -903,6 +908,7 @@ class Sash {
   _onDown(ev) {
     ev.preventDefault();
     this.dragging = true;
+    this.moved = false;
     this.sash.classList.add("dragging");
     document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
     // DELTA-BASED DRAG: capture initial mouse position + current ratio.
@@ -915,6 +921,7 @@ class Sash {
   _onTouchStart(ev) {
     ev.preventDefault();
     this.dragging = true;
+    this.moved = false;
     this.sash.classList.add("dragging");
     // DELTA-BASED DRAG: same capture pattern as _onDown
     this._dragStartY = ev.touches[0].clientY;
