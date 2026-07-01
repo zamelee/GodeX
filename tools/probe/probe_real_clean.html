@@ -87,7 +87,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 *::-webkit-scrollbar-corner{background:var(--bg2)}
 *{scrollbar-width:thin;scrollbar-color:#444c56 var(--bg2)}
 
-
 .log-region{flex:1 1 0;display:flex;flex-direction:column;min-height:120px;background:var(--bg)}
 .log-panel{display:flex;flex-direction:column;min-height:120px;background:var(--bg);overflow:hidden}
 .log-panel-header{background:var(--bg2);padding:5px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;height:30px}
@@ -315,7 +314,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 #probe-results-table th:nth-child(n+2), #probe-results-table td:nth-child(n+2) { width: 70px; }
 
 </style>
-<script>window.__TAURI__ = { core: { invoke: () => Promise.reject("mock") }, event: { listen: () => Promise.resolve(()=>{}) } };</script>
 </head>
 <body>
 <header>
@@ -472,7 +470,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </div>
 
-
 <div id="new-provider-modal" class="modal" style="display:none">
   <div class="modal-box">
     <h3>新建服务商</h3>
@@ -578,7 +575,6 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </div>
 
-
 <div id="probe-modal" class="modal">
   <div class="modal-box probe-modal-box">
     <h3>模型探测</h3>
@@ -652,7 +648,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
       </div>
     </div>
     <div class="probe-sash" id="probe-sash-results"></div>
-    <div class="probe-flex-mid">
+    <div class="probe-flex-mid" id="probe-flex-mid">
     <div class="probe-section probe-results-section" id="probe-results-section">
       <div class="probe-label">结果</div>
       <div class="probe-table-wrap">
@@ -697,9 +693,13 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   </div>
 </div>
 
-
 <script>
-
+  // __TAURI__ mock for browser preview (no real backend).
+  window.__TAURI__ = window.__TAURI__ || {};
+  window.__TAURI__.core = window.__TAURI__.core || { invoke: async () => ({}) };
+  window.__TAURI__.event = window.__TAURI__.event || { listen: async () => () => {} };
+</script>
+<script>
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -833,6 +833,27 @@ class Sash {
     if (Number.isFinite(v) && v >= 0.05 && v <= 0.95) return v;
     return this.defaultRatio;
   }
+  // Read current flex-basis of beforeEl as a ratio of the container.
+  // Used by delta-based drag so a press without movement does not snap the layout.
+  _computeCurrentRatio() {
+    const rect = this.container.getBoundingClientRect();
+    const total = (this.dir === "v") ? rect.width : rect.height;
+    if (total <= 0) return this.defaultRatio;
+    // Prefer the inline flex-basis (set by applyRatio). Falls back to the
+    // actual rendered size when the element uses flex: 1 1 0 (no explicit basis).
+    const flex = this.before.style.flex || getComputedStyle(this.before).flex;
+    const m = flex.match(/([\d.]+)(px|%)/);
+    if (m) {
+      const val = parseFloat(m[1]);
+      const unit = m[2];
+      if (unit === "%") return val / 100;
+      if (unit === "px" && val > 0) return val / total;
+      // basis === 0 means flex-grow is in effect; fall through to rendered-size fallback
+    }
+    const beforeRect = this.before.getBoundingClientRect();
+    const beforePx = (this.dir === "v") ? beforeRect.width : beforeRect.height;
+    return beforePx / total;
+  }
   applyRatio(ratio, persist = true) {
     const r = Math.max(0.05, Math.min(0.95, ratio));
     if (this.mode === "px") {
@@ -854,14 +875,15 @@ class Sash {
     const rect = this.container.getBoundingClientRect();
     const pos = (ev.touches ? ev.touches[0].clientY : ev.clientY);
     const pos2 = (ev.touches ? ev.touches[0].clientX : ev.clientX);
-    let ratio;
-    if (this.dir === "v") {
-      ratio = (pos2 - rect.left) / rect.width;
-    } else {
-      ratio = (pos - rect.top) / rect.height;
-    }
-    // Enforce minimums.
     const totalPx = this.dir === "v" ? rect.width : rect.height;
+    if (totalPx <= 0) return;
+    // DELTA-BASED DRAG: new ratio = initial ratio + (mouse delta / container size).
+    // This avoids the snap-to-cursor problem of absolute-position drag.
+    const delta = (this.dir === "v")
+      ? (pos2 - this._dragStartX) / totalPx
+      : (pos - this._dragStartY) / totalPx;
+    let ratio = this._dragStartRatio + delta;
+    // Enforce minimums.
     const minBeforeRatio = this.minBefore / totalPx;
     const maxBeforeRatio = 1 - (this.minAfter / totalPx);
     ratio = Math.max(minBeforeRatio, Math.min(maxBeforeRatio, ratio));
@@ -888,6 +910,10 @@ class Sash {
     this.dragging = true;
     this.sash.classList.add("dragging");
     document.body.style.cursor = this.dir === "v" ? "col-resize" : "row-resize";
+    // DELTA-BASED DRAG: capture initial mouse position + current ratio.
+    this._dragStartY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    this._dragStartX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    this._dragStartRatio = this._computeCurrentRatio();
     window.addEventListener("mousemove", this._onMove);
     window.addEventListener("mouseup", this._onUp);
   }
@@ -895,6 +921,10 @@ class Sash {
     ev.preventDefault();
     this.dragging = true;
     this.sash.classList.add("dragging");
+    // DELTA-BASED DRAG: same capture pattern as _onDown
+    this._dragStartY = ev.touches[0].clientY;
+    this._dragStartX = ev.touches[0].clientX;
+    this._dragStartRatio = this._computeCurrentRatio();
     window.addEventListener("touchmove", this._onMove, { passive: false });
     window.addEventListener("touchend", this._onUp);
   }
@@ -942,42 +972,44 @@ function initSashes() {
     storageKey: "godex-studio.sashRatio",
     minBefore: 120, minAfter: 80, defaultRatio: 0.6,
   }));
+
+  // Probe modal sashes - only constructed when the probe modal elements exist
+  // (they may be absent if the user never opens the modal). Bail out cleanly.
+  if ($("probe-sash-models")) {
+    _godexSashes.push(new Sash({
+      sashEl: $("probe-sash-models"),
+      beforeEl: $("probe-provider-section"),
+      afterEl: $("probe-models-section"),
+      dir: "h",
+      storageKey: "godex-studio.probe.providerModels",
+      minBefore: 60, minAfter: 60, defaultRatio: 0.10,
+    }));
+    _godexSashes.push(new Sash({
+      sashEl: $("probe-sash-caps"),
+      beforeEl: $("probe-models-section"),
+      afterEl: $("probe-caps-section"),
+      dir: "h",
+      storageKey: "godex-studio.probe.modelsCaps",
+      minBefore: 60, minAfter: 100, defaultRatio: 0.18,
+    }));
+    _godexSashes.push(new Sash({
+      sashEl: $("probe-sash-results"),
+      beforeEl: $("probe-caps-section"),
+      afterEl: $("probe-flex-mid"),
+      dir: "h",
+      storageKey: "godex-studio.probe.capsMid",
+      minBefore: 100, minAfter: 200, defaultRatio: 0.14,
+    }));
+    _godexSashes.push(new Sash({
+      sashEl: $("probe-sash-log"),
+      beforeEl: $("probe-results-section"),
+      afterEl: $("probe-log-section"),
+      dir: "h",
+      storageKey: "godex-studio.probe.resultsLog",
+      minBefore: 80, minAfter: 80, defaultRatio: 0.5,
+    }));
+  }
 }
-
-  // --- Probe Modal sashes ---
-  _godexSashes.push(new Sash({
-    sashEl: $("probe-sash-models"),
-    beforeEl: $("probe-provider-section"),
-    afterEl: $("probe-models-section"),
-    dir: "h",
-    storageKey: "godex-studio.probe.providerModels",
-    minBefore: 60, minAfter: 60, defaultRatio: 0.10,
-  }));
-  _godexSashes.push(new Sash({
-    sashEl: $("probe-sash-caps"),
-    beforeEl: $("probe-models-section"),
-    afterEl: $("probe-caps-section"),
-    dir: "h",
-    storageKey: "godex-studio.probe.modelsCaps",
-    minBefore: 60, minAfter: 100, defaultRatio: 0.18,
-  }));
-  _godexSashes.push(new Sash({
-    sashEl: $("probe-sash-results"),
-    beforeEl: $("probe-caps-section"),
-    afterEl: $("probe-flex-mid"),
-    dir: "h",
-    storageKey: "godex-studio.probe.capsMid",
-    minBefore: 100, minAfter: 200, defaultRatio: 0.22,
-  }));
-  _godexSashes.push(new Sash({
-    sashEl: $("probe-sash-log"),
-    beforeEl: $("probe-results-section"),
-    afterEl: $("probe-log-section"),
-    dir: "h",
-    storageKey: "godex-studio.probe.resultsLog",
-    minBefore: 80, minAfter: 80, defaultRatio: 0.5,
-  }));
-
 
 // Each panel has its own level filter, wrap toggle, and Clear button.
 const LOG_MAX_LINES = 3000;
@@ -1089,8 +1121,6 @@ function pushLogLine(line) {
   if (line.source === "godex") godexPanel.push(line);
   else studioPanel.push(line); // studio + cmd + anything unknown
 }
-
-
 
 function showMsg(text, type) {
   const m = $("action-msg");
@@ -1262,7 +1292,6 @@ async function launchModelProbe() {
   document.getElementById("probe-modal").style.display = "flex";
 }
 
-
 function onProbeProviderChange() {
   const provName = document.getElementById("probe-provider").value;
   const container = document.getElementById("probe-models-list");
@@ -1349,10 +1378,6 @@ function renderEmptyMsg(container, msg) {
   // Note: do NOT call appendAddPill here. The caller in onProbeProviderChange()
   // appends the add-pill once after the if/else block, so we keep a single source of truth.
 }
-
-
-
-
 
 let _probeResults = [];
 let _probeChanged = false;
@@ -1519,7 +1544,6 @@ function closeProbeModal() {
   document.getElementById("probe-modal").style.display = "none";
   renderModels();
 }
-
 
 // 判断 row 的参数是否跟 remote 默认完全一样
 function rowEqualsRemote(row, remote) {
@@ -1820,8 +1844,6 @@ async function createProvider() {
 function resetEditor() {
   if (activeProvider) selectProvider(activeProvider);
 }
-
-
 
 async function refreshStatus() {
   try {
@@ -2134,19 +2156,7 @@ async function doGodexRestart() {
   try { await invoke("godex_restart"); } catch (e) { showMsg("重启 godex 失败: " + e, "err"); }
 }
 
-
-
-
-
-
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
 

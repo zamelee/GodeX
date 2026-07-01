@@ -337,8 +337,10 @@ studio-tauri/model-probe/
 **根因**：model-probe/src-tauri/src/lib.rs:240 的 setup() 硬编码扫 USERPROFILE/.godex/config.yaml 和 cwd/godex.yaml，**没有读** std::env::args()，所以 studio 传的 --config= 被无视。
 
 **修复**：
-1. main.rs 在调 un() 前 parse_args() 拿到 --config=<path>，存 OnceLock<PathBuf>
-2. un() 把 OnceLock 里的路径作为 config_path 初值塞进 AppState
+1. main.rs 在调 
+un() 前 parse_args() 拿到 --config=<path>，存 OnceLock<PathBuf>
+2. 
+un() 把 OnceLock 里的路径作为 config_path 初值塞进 AppState
 3. setup() 降级为兜底（仅在显式路径不存在时扫 USERPROFILE/cwd）
 4. 前端 UI 的"Config 路径"输入框继续保留，作运行时修改入口
 
@@ -403,10 +405,12 @@ one / nabled / max，UI 用下拉切换。
 
 ### G. 输入卡顿 + 渲染优化
 
-**根因**：oninput 触发 setModelParam → enderModels() 整表 innerHTML 重写，输入框被销毁重建。
+**根因**：oninput 触发 setModelParam → 
+enderModels() 整表 innerHTML 重写，输入框被销毁重建。
 
 **优化方案**：
-1. setModelParam 用 equestAnimationFrame 节流（200ms），仅 idle 时再重渲
+1. setModelParam 用 
+equestAnimationFrame 节流（200ms），仅 idle 时再重渲
 2. model-row 加 contain: layout style; 告诉浏览器离屏渲染
 3. model-list 加 contain: strict
 4. 排版微调：行高 32px → 26px；不换行模型名 + ellipsis
@@ -426,7 +430,8 @@ function validateModel(m) {
 `
 **E. 探测时间超过 30 天加黄标**：Studio UI 显示"探测时间"，过期提醒重测
 
-**D（godex 启动失败时给清晰错误）不做**：Studio 的 ead_enabled_models 命令读 yaml 失败时直接报错即可。
+**D（godex 启动失败时给清晰错误）不做**：Studio 的 
+ead_enabled_models 命令读 yaml 失败时直接报错即可。
 
 ---
 
@@ -453,7 +458,8 @@ function validateModel(m) {
 ~/.godex/logs/godex.log 中持续出现 Model not found: gpt-5.4 错误（status 400），累计 371 条（2026-06-26 12:20 ~ 2026-06-27 09:24），间隔从 1ms 到几十秒不等。
 
 ### 调查方法
-1. godex 端：godex.log 中错误前后的 equest.received / provider.request.sending / stream.completed 记录
+1. godex 端：godex.log 中错误前后的 
+equest.received / provider.request.sending / stream.completed 记录
 2. Codex 端：~/.codex/sessions/2026/06/{26,27}/*.jsonl 中 session_meta / 	urn_context 字段
 3. Codex 端：~/.codex/config.toml 内容
 4. godex 端：model-presets.json 中 gpt-5.4 的预设归属
@@ -472,12 +478,18 @@ base_url = "http://127.0.0.1:5678/v1"
 **没有 model 字段**。之前 config - 副本.toml 有 model = "MiniMax-M2.7-highspeed"，但当前被覆盖/删除。
 
 **b) 所有 Codex session 的 session_meta.payload.model 都是空字符串**（6 个 session 全部 model=''）：
-- ollout-2026-06-26T10-08-43: model='' provider='custom' cli=0.142.0-alpha.6
-- ollout-2026-06-26T14-43-12: model='' provider='custom' cli=0.142.0-alpha.6
-- ollout-2026-06-26T16-55-10: model='' provider='custom' cli=0.142.0-alpha.6
-- ollout-2026-06-26T19-37-51: model='' provider='custom' cli=0.142.0-alpha.6
-- ollout-2026-06-26T20-31-42: model='' provider='custom' cli=0.142.0-alpha.6
-- ollout-2026-06-26T21-48-47: model='' provider='custom' cli=0.142.2
+- 
+ollout-2026-06-26T10-08-43: model='' provider='custom' cli=0.142.0-alpha.6
+- 
+ollout-2026-06-26T14-43-12: model='' provider='custom' cli=0.142.0-alpha.6
+- 
+ollout-2026-06-26T16-55-10: model='' provider='custom' cli=0.142.0-alpha.6
+- 
+ollout-2026-06-26T19-37-51: model='' provider='custom' cli=0.142.0-alpha.6
+- 
+ollout-2026-06-26T20-31-42: model='' provider='custom' cli=0.142.0-alpha.6
+- 
+ollout-2026-06-26T21-48-47: model='' provider='custom' cli=0.142.2
 
 **c) session 实际 turn_context 用的是带前缀 model**（不是默认的 gpt-5.4）：
 - minnimax.chat/MiniMax-M2.7 / MiniMax-M2.7-highspeed / minnimax/MiniMax-M3 等
@@ -700,3 +712,82 @@ godex.log 中同时有 98 条 invalid params, context window exceeds limit (2013
 ## Verification (run before compile)
 python tools/probe/verify_modal_render.py
   -> Expect display===flex, midWrapperH>=200, logH>=100.
+
+
+
+# Phase 15 - Probe Modal Delta-Drag + Sash Move-Inside-initSashes (2026-07-01)
+
+## Background
+Phase 14 committed (3ac46a54) the probe-modal layout fix and 4 probe sashes.
+Two cosmetic / correctness issues remained:
+
+1. **Snap-on-press bug**: pressing a probe sash (mousedown without movement)
+   caused the before-element height to jump to the cursor position because
+   the Sash drag math was absolute-position-based, not delta-based.
+   This was the same class of bug visible on all sashes, not only the probe ones.
+2. **Probe sashes outside initSashes()**: the 4 probe-sash pushes were placed
+   in global scope after the closing brace of initSashes(). This worked in
+   Phase 14 because the DOM already had all probe-* elements at that point,
+   but it bypassed the initSashes() invocation gate and was brittle.
+
+## Changes
+All edits in `studio-tauri/src/index.html`. No Rust / Tauri / GodeX changes.
+
+1. **New Sash method `_computeCurrentRatio()`** (inserted before `applyRatio`):
+   reads the current flex-basis of `this.before` as a ratio of the container.
+   Falls back to the rendered bounding-rect size when the element uses
+   `flex: 1 1 0` (no explicit basis). Used by delta-based drag so a press
+   without movement does not snap the layout.
+
+2. **`_onMove` rewritten as delta-based drag**:
+   new ratio = `_dragStartRatio + (mouse delta / container size)`.
+   Replaces the absolute-position formula `(pos - rect.top) / rect.height`.
+   Guard: return early when `totalPx <= 0`.
+
+3. **`_onDown` and `_onTouchStart` capture the drag-start state**:
+   `_dragStartY`, `_dragStartX`, `_dragStartRatio` (via `_computeCurrentRatio()`).
+
+4. **Lower `probe-sash-results` defaultRatio from 0.22 to 0.14**:
+   the caps section is small; 22% allocated too much vertical space.
+
+5. **Move 4 probe-sash pushes from global scope into `initSashes()`**:
+   wrapped in `if ($("probe-sash-models")) { ... }` so the construction
+   is skipped cleanly when the probe modal has not been opened yet
+   (defensive — the modal is in the DOM at page load, so the guard
+   is currently always true, but it future-proofs the function).
+
+6. **Bugfix: add `id="probe-flex-mid"` to the wrapper div** (line 651).
+   The probe-sash-results `afterEl: $("probe-flex-mid")` was returning null
+   because the wrapper only had `class="probe-flex-mid"`. Phase 14 forgot
+   the id, causing the applyRatio RAF callback in the Sash constructor to
+   throw `Cannot read properties of null (reading "style")` and silently
+   skip registration for that sash.
+
+## Mock preview (browser)
+`tools/probe/probe_real_clean.html` regenerated from `studio-tauri/src/index.html`:
+- strips `display:none` from `#probe-modal`
+- injects `window.__TAURI__.core.invoke` and `window.__TAURI__.event.listen`
+  safe stubs so the page initialises in plain Chromium without Tauri.
+
+## Verification (all probe sashes, delta-drag behaviour)
+Run `python tools/probe/_vd6.py` (per-sash; each call ~5s):
+- probe-sash-models : initial 73 / hChangeOnPress 0 / hChangeOn5pxMove +5 / noSnap true
+- probe-sash-caps    : initial 132 / hChangeOnPress 0 / hChangeOn5pxMove +5 / noSnap true
+- probe-sash-results : initial 102 / hChangeOnPress 0 / hChangeOn5pxMove +5 / noSnap true
+- probe-sash-log     : initial 153 / hChangeOnPress 0 / hChangeOn5pxMove +5 / noSnap true
+
+All four sashes now snap-to-cursor on mousedown with no movement, and
+the height change is proportional (1:1) to mouse movement.
+
+## What is NOT changed
+- No Rust / Tauri / `model-probe` code touched.
+- `_onUp` (persistence) untouched.
+- `_loadRatio()` (localStorage read) untouched.
+- `applyRatio()` body untouched (still writes inline flex on before/after).
+- Studio main sashes (sash-main-log, sash-forms, sash-cols, log-sash) untouched.
+
+## Hard no-no (carried forward)
+- Do not move `.probe-actions` inside `.probe-flex-mid`.
+- Do not touch Rust / godex2.exe / CodeX / Codex++.
+- Push only to fork (zamelee/GodeX), never origin (Ahoo-Wang/GodeX).
+- Compile (`cargo build --release`) only after explicit user OK.
