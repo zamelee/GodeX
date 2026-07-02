@@ -1,0 +1,585 @@
+{
+  "MiniMax-M2.7": {
+    "judge_model": "MiniMax-M2.7",
+    "probe_elapsed": 51.85446262359619,
+    "judge_elapsed": 37.30244302749634,
+    "judgments": {
+      "text": [
+        "true",
+        "status 200, response 132 chars"
+      ],
+      "function_call": [
+        "true",
+        "tool_calls = [\"get_weather\"]"
+      ],
+      "reasoning": [
+        "true",
+        "3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=137, shot2:st=200,rt=111, shot3:st=200,rt=249]"
+      ],
+      "web_search": [
+        "true",
+        "tool_calls has function name containing web_search"
+      ],
+      "file_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "computer_use": [
+        "false_upstream",
+        "status 400"
+      ],
+      "tool_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "mcp": [
+        "false_upstream",
+        "status 400"
+      ],
+      "image_input": [
+        "false_model",
+        "LLM inconclusive -> code-fallback: false_model:RED_PNG: refusal phrase in 200 response / false_model:GREEN_CIRCLE: refusal phrase in 200 response"
+      ],
+      "audio_input": [
+        "false_upstream",
+        "all fixtures 4xx"
+      ],
+      "video_input": [
+        "false_model",
+        "LLM inconclusive -> code-fallback: false_model:video_input_single: refusal phrase in 200 response"
+      ]
+    },
+    "raw": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "response_text": "<think>\nThe user asks: \"Say hi in 3 words.\" So we need to produce a greeting that is exactly 3 words. Something like \"Hello\n</think>\n",
+        "error_code": null
+      },
+      "image_input": {
+        "cap": "image_input",
+        "fixtures": [
+          {
+            "name": "RED_PNG",
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"Describe this image. What color and any text?\" They didn't provide any image. The conversation context: There's no image attached. There's no way to view any image. We need to respond that I cannot see any image and ask for details. The user likely expects description of some image. Since we can't view the image, we must ask for clarification or mention we cannot see any image.\n\nWe must follow policy: The user is requesting description of an image. No violation. So we respond accordingly: \"I don't see any image attached; please provide it or describe.\" Or \"If you give a...[truncated]",
+            "error_code": null
+          },
+          {
+            "name": "GREEN_CIRCLE",
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"Describe this image briefly. What shape and color?\" But no image attached. Possibly the user wants a description of an image, but we have no image. So we need to respond asking for clarification or indicating we can't see the image. According to policies, we must not hallucinate content from an image we cannot see. Should ask user to provide image or describe it.\n\nThus: respond politely asking for image or more context.\n</think>\n\nI’m sorry—I don’t have the ability to view images directly. Could you please share the image or describe its contents so I can give you a brie...[truncated]",
+            "error_code": null
+          }
+        ]
+      },
+      "audio_input": {
+        "cap": "audio_input",
+        "status": 400,
+        "response_text": "",
+        "error_code": "bad_request_error"
+      },
+      "video_input": {
+        "cap": "video_input",
+        "status": 200,
+        "response_text": "<think>\nThe user asks: \"Describe this video briefly.\" There's no video attached. We have no context. As a language model, we cannot see any video. There's no video provided. The user presumably expects a description of a video but we have no video. So we must respond that we need more info or the video. Also note the policy: no disallowed content. There's no problematic content. We can ask for clarification. But the user didn't provide any video. So we can ask: \"Could you share the video?\" Also we might ask for a description or the link. Since we cannot see any video, we cannot describe it. So...[truncated]",
+        "error_code": null
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\": \"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "chatcmpl-tool-851cbadecb4da68a",
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>The user wants to know the weather in Tokyo. I should use the get_weather function with \"Tokyo\" as the city parameter.\n</think>\n\n"
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "shots": [
+          {
+            "shot": 1,
+            "status": 200,
+            "response_text": "<think>\nWe have a user asking: \"What is 13 * 17? Think step by step.\" So they want multiplication. We need to provide the answer with step by step reasoning.\n\nWe should answer the question.\n\nWe can do multiplication.\n\n13 * 17 = (10+3) * 17 = 10*17 + 3*17 = 170 + 51 = 221.\n\nAlternatively, using long multiplication: 13 * 17 = 221.\n\nThus answer: 221.\n\nWe should show steps.\n\nGiven the conversation is straightforward. Should produce final answer: 221.\n\nThus the answer is straightforward.\n\nThus answer: 221.\n</think>\n\nTo multiply \\(13\\) by \\(17\\), you can break the numbers into parts:\n\n1. **Break dow...[truncated]",
+            "usage": {
+              "completion_tokens": 307,
+              "completion_tokens_details": {
+                "reasoning_tokens": 137
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 361
+            }
+          },
+          {
+            "shot": 2,
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\" This is a simple arithmetic multiplication request. The answer is 221. They request step-by-step thinking, so I will break down the multiplication.\n\nThe response should be straightforward. No disallowed content. It's allowed. So I can comply.\n\nThus the answer: 13 times 17 = 221. Show steps: 10*17=170, 3*17=51, sum 221.\n\nAlternatively use lattice method.\n\nProceed.\n</think>\n\nSure! Let’s multiply 13 by 17 step by step.\n\n1. **Break the numbers into tens and units**  \n   - 13 = 10 + 3  \n   - 17 = 10 + 7  \n\n2. **Use the distributive prope...[truncated]",
+            "usage": {
+              "completion_tokens": 353,
+              "completion_tokens_details": {
+                "reasoning_tokens": 111
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 407
+            }
+          },
+          {
+            "shot": 3,
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\"\n\nWe need to compute 13*17. We can do mental multiplication: 13 * 10 = 130; 13 * 7 = 91; sum = 221.\n\nAlternatively, 17 * 13 = (20 - 3) * 13 = 260 - 39 = 221.\n\nThus answer: 221.\n\nWe need to \"think step by step\". So we can present the reasoning in steps.\n\nHence answer: 221.\n\nWe must ensure we follow policy. No issues. So produce final answer.\n\nPotential nuance: Since the user wants step-by-step, we should outline steps. That's it.\n\nThus final: 221.\n\nWe could also show multiplication algorithm: 13 x 17:\n\n- Multiply 13 by 7: 13 * 7 = 91,...[truncated]",
+            "usage": {
+              "completion_tokens": 462,
+              "completion_tokens_details": {
+                "reasoning_tokens": 249
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 516
+            }
+          }
+        ],
+        "n_shots": 3
+      },
+      "web_search": {
+        "cap": "web_search",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"query_key\": \"今日新闻 2026年7月2日\", \"query_tag_list\": [\"科技\", \"娱乐\", \"体育\", \"文化\", \"健康\", \"教育\", \"生活\", \"汽车\", \"房产\", \"商业\", \"政治\"]}",
+              "name": "plugin_web_search"
+            },
+            "id": "call_function_ox7nejv16vg9_1",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>\nThe user is asking for the latest news today (July 2, 2026). Since this is a request about current news, I should search for today's news headlines. I'll need to use the plugin_web_search function with appropriate parameters.\n</think>\n\n\n"
+      },
+      "file_search": {
+        "cap": "file_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "computer_use": {
+        "cap": "computer_use",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "tool_search": {
+        "cap": "tool_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "mcp": {
+        "cap": "mcp",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      }
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "judge_model": "MiniMax-M2.7-highspeed",
+    "probe_elapsed": 43.80205178260803,
+    "judge_elapsed": 32.72512698173523,
+    "judgments": {
+      "text": [
+        "true",
+        "status 200, response 130 chars"
+      ],
+      "function_call": [
+        "true",
+        "tool_calls = [\"get_weather\"]"
+      ],
+      "reasoning": [
+        "true",
+        "3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=105, shot2:st=200,rt=128, shot3:st=200,rt=213]"
+      ],
+      "web_search": [
+        "true",
+        "tool_calls has function name containing web_search"
+      ],
+      "file_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "computer_use": [
+        "false_upstream",
+        "status 400"
+      ],
+      "tool_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "mcp": [
+        "false_upstream",
+        "status 400"
+      ],
+      "image_input": [
+        "false_model",
+        ""
+      ],
+      "audio_input": [
+        "false_other",
+        ""
+      ],
+      "video_input": [
+        "false_model",
+        "LLM inconclusive -> code-fallback: false_model:video_input_single: refusal phrase in 200 response"
+      ]
+    },
+    "raw": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "response_text": "<think>\nThe user says: \"Say hi in 3 words.\"\n\nThey want a greeting in 3 words. This is a simple request. There's no policy\n</think>\n",
+        "error_code": null
+      },
+      "image_input": {
+        "cap": "image_input",
+        "fixtures": [
+          {
+            "name": "RED_PNG",
+            "status": 200,
+            "response_text": "<think>\nThe user says: \"Describe this image. What color and any text?\" There is no image attached in the message. The user might be expecting an image but none is provided. According to the policy, if the user asks for describing an image but no image is provided, I must note that I cannot see the image. Must ask for the image or clarification. However, the user might have attempted to attach an image but it's missing. The correct response: \"I’m sorry, but I don’t see an image attached. Could you please provide the image?\" The policy says to ask for clarification. So the response should be tha...[truncated]",
+            "error_code": null
+          },
+          {
+            "name": "GREEN_CIRCLE",
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"Describe this image briefly. What shape and color?\" But there is no image attached. There's just the prompt. So we must respond acknowledging that there is no image attached, maybe ask for details or say that we cannot see the image.\n\nWe must follow the policy. The user is requesting description of an image. Since no image provided, we can ask clarifying question.\n\nWe can also note we cannot see the image. So respond: \"I don't see an image. Could you provide it?\" Something like that.\n\nWe must keep it short. Also mention if we need the shape and color. So ask the user to...[truncated]",
+            "error_code": null
+          }
+        ]
+      },
+      "audio_input": {
+        "cap": "audio_input",
+        "status": 400,
+        "response_text": "",
+        "error_code": "bad_request_error"
+      },
+      "video_input": {
+        "cap": "video_input",
+        "status": 200,
+        "response_text": "<think>\nThe user asks: \"Describe this video briefly.\" There is no video attached or no context about a video. According to policy, we have no content to describe. The user might be referencing something that we cannot see. We need to politely ask for more details or clarify. Possibly ask for a link or description. There's no policy violation. So answer: \"I’m sorry, I don’t have access to the video; could you provide a description?\" etc.\n</think>\n\nI’m sorry—I don’t have the ability to view videos. If you can give me a brief description of what’s in the video (for example, the main action, setti...[truncated]",
+        "error_code": null
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\": \"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "call_function_ygl246yqixb7_1",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>\nThe user is asking for the weather in Tokyo and explicitly wants me to use the get_weather function. I should call the function with \"Tokyo\" as the city parameter.\n</think>\n\n\n"
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "shots": [
+          {
+            "shot": 1,
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\" The user is asking for a simple multiplication, with a request for step-by-step thinking. There's no policy violation. It's a straightforward math problem. So answer: 221. I should break down steps: multiply 13 by 17: 13*10 =130, 13*7=91, sum =221. Or using long multiplication: 13*17 = 221.\n\nThus produce answer.\n</think>\n\nSure! Let’s multiply 13 by 17 step by step.\n\n1. Break 17 into a tens part and a ones part:  \n   \\(17 = 10 + 7\\).\n\n2. Multiply 13 by the tens part:  \n   \\(13 \\times 10 = 130\\).\n\n3. Multiply 13 by the ones part:  \n  ...[truncated]",
+            "usage": {
+              "completion_tokens": 225,
+              "completion_tokens_details": {
+                "reasoning_tokens": 105
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 279
+            }
+          },
+          {
+            "shot": 2,
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\"\n\nWe need to answer with step-by-step reasoning to compute 13*17.\n\nSimple multiplication: 13*17 = 13*10 + 13*7 = 130 + 91 = 221.\n\nAlternatively, 17*13 = (20-3)*13 = 260 - 39 = 221.\n\nThus answer: 221.\n\nWe can include step-by-step.\n\nWe should also note if any nuance? No.\n\nThus answer: 221.\n\nWe can mention using distributive property.\n\nTherefore final.\n</think>\n\n**Step‑by‑step multiplication of \\(13 \\times 17\\):**\n\n1. **Break one factor into tens and ones**  \n   \\(13 = 10 + 3\\)\n\n2. **Use the distributive property**  \n   \\[\n   13 \\times ...[truncated]",
+            "usage": {
+              "completion_tokens": 288,
+              "completion_tokens_details": {
+                "reasoning_tokens": 128
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 342
+            }
+          },
+          {
+            "shot": 3,
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\" This is a straightforward multiplication question. We need to compute 13 * 17. Let's break it down step by step: 13*10 = 130, 13*7 = 91, sum = 221. Or 17*13: 17*10 = 170, 17*3 = 51, sum = 221. So answer: 221.\n\nGiven the user request for step-by-step thinking, we will show steps. Provide answer and maybe mention mental math technique. Also be concise.\n\nNo policy issues.\n\nThus output: Step-by-step solution, answer 221.\n\nWe'll also double-check: 13*17 = (10+3)*(10+7) = 10*10 + 10*7 + 3*10 + 3*7 = 100 + 70 + 30 + 21 = 221. Yes.\n\nThus fi...[truncated]",
+            "usage": {
+              "completion_tokens": 430,
+              "completion_tokens_details": {
+                "reasoning_tokens": 213
+              },
+              "prompt_tokens": 54,
+              "total_characters": 0,
+              "total_tokens": 484
+            }
+          }
+        ],
+        "n_shots": 3
+      },
+      "web_search": {
+        "cap": "web_search",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"query_key\": \"今日新闻 最新 2026年7月2日\", \"query_tag_list\": [\"科技\"]}",
+              "name": "plugin_web_search"
+            },
+            "id": "call_function_k4u6ch6r2cmq_1",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>\nThe user wants me to search for the latest news today and provide a headline. Since this is about today's news (July 2, 2026), I should search for the latest news.\n</think>\n\n\n"
+      },
+      "file_search": {
+        "cap": "file_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "computer_use": {
+        "cap": "computer_use",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "tool_search": {
+        "cap": "tool_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "mcp": {
+        "cap": "mcp",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      }
+    }
+  },
+  "MiniMax-M3": {
+    "judge_model": "MiniMax-M3",
+    "probe_elapsed": 35.22706055641174,
+    "judge_elapsed": 5.461515665054321,
+    "judgments": {
+      "text": [
+        "true",
+        "status 200, response 74 chars"
+      ],
+      "function_call": [
+        "true",
+        "tool_calls = [\"get_weather\"]"
+      ],
+      "reasoning": [
+        "true",
+        "3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=192, shot2:st=200,rt=112, shot3:st=200,rt=237]"
+      ],
+      "web_search": [
+        "true",
+        "tool_calls has function name containing web_search"
+      ],
+      "file_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "computer_use": [
+        "false_upstream",
+        "status 400"
+      ],
+      "tool_search": [
+        "false_upstream",
+        "status 400"
+      ],
+      "mcp": [
+        "false_upstream",
+        "status 400"
+      ],
+      "image_input": [
+        "true",
+        "RED_PNG (status=200): Response substantively describes a red square with a black border and the word 'RED' in white text — genuine image processing. GREEN_CIRCLE (status=200): Response describes a green circle on a white background with specific details about shape and color — genuine image processing. Both fixtures are true, so overall image_input = true."
+      ],
+      "audio_input": [
+        "false_model",
+        "Status=200, but the response is a refusal: 'I don't see any audio file or attachment in your message. Could you try sharing the audio again?' The model did not process any audio content. This is a classic false_model refusal pattern."
+      ],
+      "video_input": [
+        "true",
+        "Status=200, and the response describes the video content: 'All the frames provided are entirely black. There is no visible action, objects, or text.' The model actually processed the video frames and gave a substantive description (albeit describing black frames). This confirms genuine video processing capability."
+      ]
+    },
+    "raw": {
+      "text": {
+        "cap": "text",
+        "status": 200,
+        "response_text": "<think>The user wants me to say hi in 3 words.</think>\n\nHey there, friend!",
+        "error_code": null
+      },
+      "image_input": {
+        "cap": "image_input",
+        "fixtures": [
+          {
+            "name": "RED_PNG",
+            "status": 200,
+            "response_text": "<think>The user is asking me to describe an image, including its color and any text. Let me analyze what I can see.\n\nThe image shows a square with a red background and a black border/frame around it. In the center, there is white text that reads \"RED\" in all capital letters.</think>\n\nThe image is a square graphic with the following features:\n\n- **Background color:** Red (a bright, saturated red)\n- **Border:** A thin black frame/outline around the entire square\n- **Text:** The word \"RED\" displayed in large, bold, white capital letters centered in the middle of the square\n\nThe design is simple a...[truncated]",
+            "error_code": null
+          },
+          {
+            "name": "GREEN_CIRCLE",
+            "status": 200,
+            "response_text": "<think>The user is asking me to describe an image. The image appears to show a green circle on a white background. Let me describe it briefly.</think>\n\nThe image shows a simple **green circle** on a white background. The shape is perfectly round and the color is a solid, medium-bright green.",
+            "error_code": null
+          }
+        ]
+      },
+      "audio_input": {
+        "cap": "audio_input",
+        "status": 200,
+        "response_text": "<think>\nThe user is asking about an audio file, but I don't see any audio attached to this message. There's no audio file, link, or description provided for me to analyze.\n</think>\nI don't see any audio file or attachment in your message. Could you try sharing the audio again? Once you do, I'll be happy to describe what it sounds like.",
+        "error_code": null
+      },
+      "video_input": {
+        "cap": "video_input",
+        "status": 200,
+        "response_text": "<think>\nThe user wants a brief description of the video.\n\n1.  **Analyze the frames:** I need to look at each provided frame to understand the visual content.\n2.  **Frame 0.0s:** The image is completely black.\n3.  **Frame 0.1s:** The image is completely black.\n4.  **Frame 0.2s:** The image is completely black.\n5.  **Frame 0.3s:** The image is completely black.\n6.  **Synthesize findings:** All the frames provided are entirely black. There is no visible action, objects, or text.\n7.  **Formulate description:** Since the video is just a black screen, a simple and accurate description is \"A black sc...[truncated]",
+        "error_code": null
+      },
+      "function_call": {
+        "cap": "function_call",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\":\"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "call_019f2015d5d17fb389aaf7b6",
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>The user is asking about the weather in Tokyo and explicitly requested to use the get_weather function. I should call that function with the city parameter set to \"Tokyo\".</think>\n\nI'll check the weather in Tokyo for you."
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "shots": [
+          {
+            "shot": 1,
+            "status": 200,
+            "response_text": "<think>The user is asking me to compute 13 * 17 and think step by step. This is a simple multiplication problem.\n\nLet me work through it step by step:\n\n13 * 17\n\nI can break this down using the distributive property:\n13 * 17 = 13 * (10 + 7)\n= 13 * 10 + 13 * 7\n= 130 + 91\n= 221\n\nLet me verify:\n- 13 * 10 = 130\n- 13 * 7 = 13 * 7 = 91 (since 10*7=70, 3*7=21, so 70+21=91)\n- 130 + 91 = 221\n\nAlternatively, I could do 17 * 13:\n17 * 10 = 170\n17 * 3 = 51\n170 + 51 = 221\n\nBoth methods give 221.</think>\n\n# Computing 13 × 17\n\nI'll solve this step by step using the distributive property.\n\n## Step 1: Break down...[truncated]",
+            "usage": {
+              "completion_tokens": 369,
+              "completion_tokens_details": {
+                "reasoning_tokens": 192
+              },
+              "prompt_tokens": 189,
+              "prompt_tokens_details": {
+                "cached_tokens": 128
+              },
+              "total_characters": 0,
+              "total_tokens": 558
+            }
+          },
+          {
+            "shot": 2,
+            "status": 200,
+            "response_text": "<think>The user wants me to calculate 13 * 17 and think step by step.\n\nLet me compute this:\n13 × 17\n\nI can break this down:\n- 13 × 17 = 13 × (20 - 3) = 13 × 20 - 13 × 3 = 260 - 39 = 221\n\nLet me verify:\n- 13 × 10 = 130\n- 13 × 7 = 91\n- 130 + 91 = 221\n\nYes, 221 is correct.</think>\n\n**Step-by-step calculation of 13 × 17:**\n\n**Step 1:** Break 17 into smaller parts: 17 = 10 + 7\n\n**Step 2:** Multiply 13 by each part:\n- 13 × 10 = 130\n- 13 × 7 = 91\n\n**Step 3:** Add the results together:\n- 130 + 91 = 221\n\n**Answer: 13 × 17 = 221** ✅",
+            "usage": {
+              "completion_tokens": 213,
+              "completion_tokens_details": {
+                "reasoning_tokens": 112
+              },
+              "prompt_tokens": 189,
+              "prompt_tokens_details": {
+                "cached_tokens": 128
+              },
+              "total_characters": 0,
+              "total_tokens": 402
+            }
+          },
+          {
+            "shot": 3,
+            "status": 200,
+            "response_text": "<think>The user is asking me to compute 13 * 17 and to think step by step. Let me work through this.\n\n13 * 17\n\nMethod 1: Direct multiplication\n13 * 17 = 13 * 17\n= 13 * (10 + 7)\n= 13 * 10 + 13 * 7\n= 130 + 91\n= 221\n\nMethod 2: Break it down differently\n17 * 13 = 17 * (10 + 3)\n= 170 + 51\n= 221\n\nMethod 3: Using the distributive property differently\n13 * 17 = (15 - 2)(15 + 2) = 15^2 - 2^2 = 225 - 4 = 221\n\nAll methods confirm 221.\n\nLet me verify: 13 * 17. \n13 * 10 = 130\n13 * 7 = 91\n130 + 91 = 221. Yes.\n\nOr: 17 * 13. 17*10=170, 17*3=51, 170+51=221. Yes.</think>\n\n# Computing 13 × 17\n\nI'll break this do...[truncated]",
+            "usage": {
+              "completion_tokens": 419,
+              "completion_tokens_details": {
+                "reasoning_tokens": 237
+              },
+              "prompt_tokens": 189,
+              "prompt_tokens_details": {
+                "cached_tokens": 128
+              },
+              "total_characters": 0,
+              "total_tokens": 608
+            }
+          }
+        ],
+        "n_shots": 3
+      },
+      "web_search": {
+        "cap": "web_search",
+        "status": 200,
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"query_key\": \"latest news today 2026-07-02\", \"query_tag_list\": [\"新闻\", \"财经\", \"科技\"]}",
+              "name": "plugin_web_search"
+            },
+            "id": "call_function_b9sjyl9oprjg_1",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "response_text": "<think>\nThe user is asking me to search the web for the latest news today and provide one headline. The current date is 2026-07-02, Thursday. I should use the web search function to find the latest news.\n</think>\nI'll search for the latest news for you."
+      },
+      "file_search": {
+        "cap": "file_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "computer_use": {
+        "cap": "computer_use",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "tool_search": {
+        "cap": "tool_search",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      },
+      "mcp": {
+        "cap": "mcp",
+        "status": 400,
+        "tool_calls": [],
+        "response_text": ""
+      }
+    }
+  }
+}
