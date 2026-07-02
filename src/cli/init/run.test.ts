@@ -8,7 +8,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import yaml from "js-yaml";
@@ -78,7 +78,9 @@ describe("runInit", () => {
 			expect(config.session.backend).toBe("memory");
 			expect(config.logging.level).toBe("debug");
 			expect(config.models?.aliases?.["*"]).toBe("zhipu/glm-5.2");
-			expect(statSync(configPath).mode & 0o777).toBe(0o600);
+			if (platform() !== "win32") {
+				expect(statSync(configPath).mode & 0o777).toBe(0o600);
+			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
@@ -114,7 +116,9 @@ describe("runInit", () => {
 				{},
 			);
 			expect(config.default_provider).toBe(DEEPSEEK_PROVIDER_NAME);
-			expect(statSync(configPath).mode & 0o777).toBe(0o600);
+			if (platform() !== "win32") {
+				expect(statSync(configPath).mode & 0o777).toBe(0o600);
+			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

@@ -42,7 +42,9 @@ export function restoreToolCall(
 		return toolSearchCall(call);
 	}
 	if (identity?.requestedType === "web_search") {
-		return webSearchCall(call) ?? fallbackFunctionCall(call, identity.requestedName);
+		return (
+			webSearchCall(call) ?? fallbackFunctionCall(call, identity.requestedName)
+		);
 	}
 	if (
 		identity?.requestedType === "computer_use" ||

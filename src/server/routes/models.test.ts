@@ -1,4 +1,4 @@
-﻿import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { GodeXConfig } from "../../config";
 import { ApplicationContext } from "../../context/application-context";
 import { Registrar } from "../../providers/registrar";
@@ -54,7 +54,7 @@ describe("GET /v1/models", () => {
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
-			models: {
+			data: {
 				slug: string;
 				id: string;
 				name: string;
@@ -67,8 +67,8 @@ describe("GET /v1/models", () => {
 			}[];
 		};
 
-		expect(body.models).toHaveLength(1);
-		const model = body.models[0]!; // biome: pre-checked
+		expect(body.data).toHaveLength(1);
+		const model = body.data[0]!; // biome: pre-checked
 		expect(model.slug).toBe("gpt-5");
 		expect(model.id).toBe("gpt-5");
 		expect(model.name).toBe("gpt-5");
@@ -79,7 +79,7 @@ describe("GET /v1/models", () => {
 		expect(model.supports_image_detail_original).toBe(true);
 		// gpt-5 preset has notes about max_output_tokens vs max_completion_tokens
 		expect(model.description).toContain("max_output_tokens");
-		expect(body.models.some((m) => m.slug === "*")).toBe(false);
+		expect(body.data.some((m) => m.slug === "*")).toBe(false);
 	});
 
 	test("omits aliases pointing to unregistered providers", async () => {
@@ -102,7 +102,7 @@ describe("GET /v1/models", () => {
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
-			models: {
+			data: {
 				slug: string;
 				id: string;
 				input_modalities?: string[];
@@ -111,12 +111,12 @@ describe("GET /v1/models", () => {
 			}[];
 		};
 
-		expect(body.models.some((m) => m.slug === "ghost")).toBe(false);
-		expect(body.models.some((m) => m.slug === "gpt-5")).toBe(true);
-		expect(body.models.some((m) => m.slug === "gpt-4o")).toBe(true);
+		expect(body.data.some((m) => m.slug === "ghost")).toBe(false);
+		expect(body.data.some((m) => m.slug === "gpt-5")).toBe(true);
+		expect(body.data.some((m) => m.slug === "gpt-4o")).toBe(true);
 
 		// gpt-5 has image+audio, so modalities should include both
-		const gpt5 = body.models.find((m) => m.slug === "gpt-5")!; // biome: pre-checked
+		const gpt5 = body.data.find((m) => m.slug === "gpt-5")!; // biome: pre-checked
 		expect(gpt5.input_modalities).toEqual(["text", "image", "audio"]);
 		expect(gpt5.supports_image_detail_original).toBe(true);
 	});
@@ -137,7 +137,7 @@ describe("GET /v1/models", () => {
 		const app = new ApplicationContext(cfg, registrar);
 		const res = handleModels(app);
 		const body = (await res.json()) as {
-			models: {
+			data: {
 				slug: string;
 				input_modalities?: string[];
 				supports_image_detail_original?: boolean;
@@ -145,7 +145,7 @@ describe("GET /v1/models", () => {
 			}[];
 		};
 
-		const model = body.models.find((m) => m.slug === "custom-unknown-model")!; // biome: pre-checked
+		const model = body.data.find((m) => m.slug === "custom-unknown-model")!; // biome: pre-checked
 		expect(model.input_modalities).toEqual(["text"]);
 		expect(model.supports_image_detail_original).toBe(false);
 		expect(model.description).toBeUndefined();
@@ -167,7 +167,7 @@ describe("GET /v1/models", () => {
 		const app = new ApplicationContext(cfg, registrar);
 		const res = handleModels(app);
 		const body = (await res.json()) as {
-			models: {
+			data: {
 				slug: string;
 				input_modalities?: string[];
 				supports_image_detail_original?: boolean;
@@ -175,7 +175,7 @@ describe("GET /v1/models", () => {
 		};
 
 		// deepseek-v3 preset has multimodal: {} (empty) - text only
-		const ds = body.models.find((m) => m.slug === "deepseek-v3")!; // biome: pre-checked
+		const ds = body.data.find((m) => m.slug === "deepseek-v3")!; // biome: pre-checked
 		expect(ds.input_modalities).toEqual(["text"]);
 		expect(ds.supports_image_detail_original).toBe(false);
 	});

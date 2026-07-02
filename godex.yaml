@@ -4,30 +4,34 @@ server:
 default_provider: deepseek
 models:
   enabled:
-  - provider: minnimax.chat
-    model: MiniMax-M2.7
-    context_window: 1430584
-    max_tokens: 196608
-    text: true
-    image: true
-    function: true
-    reasoning: true
-  - provider: minnimax.chat
-    model: MiniMax-M2.7-highspeed
-    context_window: 1271631
-    max_tokens: 196608
-    text: true
-    image: true
-    function: true
-    reasoning: true
-  - provider: minnimax.chat
-    model: MiniMax-M3
-    context_window: 4967702
-    max_tokens: 200000
-    text: true
-    image: true
-    function: true
-    reasoning: true
+    - provider: minnimax.chat
+      model: MiniMax-M2.7
+      context_window: 204800
+      max_tokens: 131072
+      capabilities:
+        text: true
+        image_input: true
+        tool_use: true
+        stream: true
+    - provider: minnimax.chat
+      model: MiniMax-M2.7-highspeed
+      context_window: 204800
+      max_tokens: 16384
+      capabilities:
+        text: true
+        image_input: true
+        tool_use: true
+        stream: true
+    - provider: minnimax.chat
+      model: MiniMax-M3
+      context_window: 1000000
+      max_tokens: 16384
+      capabilities:
+        text: true
+        image_input: true
+        audio_input: true
+        tool_use: true
+        stream: true
   discovered: []
 providers:
   minnimax.chat:

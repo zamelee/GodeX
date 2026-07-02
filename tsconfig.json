@@ -1,16 +1,12 @@
 {
   "compilerOptions": {
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": [
-      "bun"
-    ],
+    "types": ["bun"],
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -29,6 +25,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "backup"
+    "backup",
+    "studio-tauri/src-tauri/target"
   ]
 }

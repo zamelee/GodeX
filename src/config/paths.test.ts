@@ -24,6 +24,7 @@ describe("config paths", () => {
 
 			expect(resolveDefaultConfigPath()).toBe("godex.yaml");
 		} finally {
+			process.chdir(originalCwd);
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});

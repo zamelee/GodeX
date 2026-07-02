@@ -46,9 +46,10 @@ export function handleModels(app: ApplicationContext): Response {
 			const ctxWindow = metadata.context_window ?? 0;
 			const maxTokens = metadata.max_tokens ?? 0;
 			// Look up margin from godex.yaml models.enabled (margin defaults to 0.95)
-			const margin = (app.config.models?.enabled ?? [])
-				.find(m => m.model.toLowerCase() === entry.alias.toLowerCase())
-				?.margin ?? 0.95;
+			const margin =
+				(app.config.models?.enabled ?? []).find(
+					(m) => m.model.toLowerCase() === entry.alias.toLowerCase(),
+				)?.margin ?? 0.95;
 			const effectiveCtxWindow = Math.floor(ctxWindow * margin);
 			const effectiveMaxTokens = Math.floor(maxTokens * margin);
 			const compactLimit = Math.max(effectiveCtxWindow - effectiveMaxTokens, 0);
@@ -72,13 +73,28 @@ export function handleModels(app: ApplicationContext): Response {
 				supports_image_detail_original: supportsImageDetail,
 				input_modalities,
 				supported_reasoning_levels: [
-					{ effort: "low", description: "Fast responses with lighter reasoning" },
-					{ effort: "medium", description: "Balances speed and reasoning depth" },
-					{ effort: "high", description: "Greater reasoning depth for complex problems" },
+					{
+						effort: "low",
+						description: "Fast responses with lighter reasoning",
+					},
+					{
+						effort: "medium",
+						description: "Balances speed and reasoning depth",
+					},
+					{
+						effort: "high",
+						description: "Greater reasoning depth for complex problems",
+					},
 				],
 				supported_in_api: true,
 			};
 		});
 
-	return Response.json({ models });
+	return Response.json({
+		object: "list",
+		data: models.map((m) => ({
+			...m,
+			object: "model",
+		})),
+	});
 }

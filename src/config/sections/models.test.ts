@@ -147,7 +147,6 @@ describe("parseModelsConfig enabled[]", () => {
 		});
 	});
 
-
 	test("accepts margin on enabled items", () => {
 		const out = parseModelsConfig(
 			{
