@@ -122,6 +122,39 @@ pub fn read_providers(path: &Path) -> Vec<ProviderInfo> {
     out
 }
 
+
+/// Attach pending capabilities to a model that does not yet have them set.
+/// Returns the model with capabilities filled in if pending caps exist.
+fn attach_capabilities(model: &mut EnabledModel, pending: &mut Option<ModelCapabilities>) {
+    if model.capabilities.is_none() {
+        if let Some(caps) = pending.take() {
+            model.capabilities = Some(caps);
+        }
+    }
+}
+
+/// Start a new enabled/discovered entry with fresh `current` and `current_caps` state.
+fn start_enabled_entry(
+    current: &mut Option<EnabledModel>,
+    current_caps: &mut Option<ModelCapabilities>,
+    provider: String,
+) {
+    *current = Some(EnabledModel {
+        provider,
+        model: String::new(),
+        id: None,
+        context_window: None,
+        max_tokens: None,
+        multimodal: None,
+        capabilities: None,
+        note: None,
+        margin: None,
+        reasoning: None,
+        probe_raw: None,
+        probed_at: None,
+    });
+    *current_caps = Some(ModelCapabilities::default());
+}
 pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
     let raw = match fs::read_to_string(path) {
         Ok(s) => s,
@@ -131,6 +164,7 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
     let mut in_models = false;
     let mut in_enabled = false;
     let mut current: Option<EnabledModel> = None;
+    let mut current_caps: Option<ModelCapabilities> = None;
     for line in raw.lines() {
         let trimmed = line.trim_start();
         if line.starts_with("models:") {
@@ -145,23 +179,11 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("- provider:") {
-            if let Some(prev) = current.take() {
+            if let Some(mut prev) = current.take() {
+                attach_capabilities(&mut prev, &mut current_caps);
                 out.push(prev);
             }
-            current = Some(EnabledModel {
-                provider: rest.trim().to_string(),
-                model: String::new(),
-                id: None,
-                context_window: None,
-                max_tokens: None,
-                multimodal: None,
-                capabilities: None,
-                note: None,
-                margin: None,
-                reasoning: None,
-                probe_raw: None,
-                probed_at: None,
-            });
+            start_enabled_entry(&mut current, &mut current_caps, rest.trim().to_string());
             continue;
         }
         if let Some(p) = current.as_mut() {
@@ -184,6 +206,9 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
                 let v = rest.trim();
                 p.note = Some(v.trim_matches('"').to_string());
+            } else if line.starts_with("      capabilities:") {
+                // Entering capabilities sub-block; current_caps already initialized.
+                continue;
             } else if let Some(rest) = trimmed.strip_prefix("#") {
                 let comment = rest.trim();
                 if let Some(v) = comment.strip_prefix("probe_raw:") {
@@ -191,10 +216,30 @@ pub fn read_enabled_models(path: &Path) -> Vec<EnabledModel> {
                 } else if let Some(v) = comment.strip_prefix("probed_at:") {
                     p.probed_at = Some(v.trim().to_string());
                 }
+            } else if line.starts_with("        ") && line.len() > 8 {
+                // Capability child line (8-space indent), e.g. "        text: true"
+                if let Some(eq) = trimmed.find(':') {
+                    let key = trimmed[..eq].trim();
+                    let val = trimmed[eq+1..].trim() == "true";
+                    if let Some(c) = current_caps.as_mut() {
+                        match key {
+                            "text" => c.text = Some(val),
+                            "image_input" => c.image_input = Some(val),
+                            "audio_input" => c.audio_input = Some(val),
+                            "video_input" => c.video_input = Some(val),
+                            "image_output" => c.image_output = Some(val),
+                            "audio_output" => c.audio_output = Some(val),
+                            "tool_use" => c.tool_use = Some(val),
+                            "stream" => c.stream = Some(val),
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
     }
-    if let Some(prev) = current.take() {
+    if let Some(mut prev) = current.take() {
+        attach_capabilities(&mut prev, &mut current_caps);
         out.push(prev);
     }
     out
@@ -209,6 +254,7 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
     let mut in_models = false;
     let mut in_discovered = false;
     let mut current: Option<EnabledModel> = None;
+    let mut current_caps: Option<ModelCapabilities> = None;
     for line in raw.lines() {
         let trimmed = line.trim_start();
         if line.starts_with("models:") {
@@ -223,23 +269,11 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("- provider:") {
-            if let Some(prev) = current.take() {
+            if let Some(mut prev) = current.take() {
+                attach_capabilities(&mut prev, &mut current_caps);
                 out.push(prev);
             }
-            current = Some(EnabledModel {
-                provider: rest.trim().to_string(),
-                model: String::new(),
-                id: None,
-                context_window: None,
-                max_tokens: None,
-                multimodal: None,
-                capabilities: None,
-                note: None,
-                margin: None,
-                reasoning: None,
-                probe_raw: None,
-                probed_at: None,
-            });
+            start_enabled_entry(&mut current, &mut current_caps, rest.trim().to_string());
             continue;
         }
         if let Some(p) = current.as_mut() {
@@ -262,6 +296,9 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
             } else if let Some(rest) = trimmed.strip_prefix("note:") {
                 let v = rest.trim();
                 p.note = Some(v.trim_matches('"').to_string());
+            } else if line.starts_with("      capabilities:") {
+                // Entering capabilities sub-block; current_caps already initialized.
+                continue;
             } else if let Some(rest) = trimmed.strip_prefix("#") {
                 let comment = rest.trim();
                 if let Some(v) = comment.strip_prefix("probe_raw:") {
@@ -269,10 +306,30 @@ pub fn read_discovered_models(path: &Path) -> Vec<EnabledModel> {
                 } else if let Some(v) = comment.strip_prefix("probed_at:") {
                     p.probed_at = Some(v.trim().to_string());
                 }
+            } else if line.starts_with("        ") && line.len() > 8 {
+                // Capability child line (8-space indent), e.g. "        text: true"
+                if let Some(eq) = trimmed.find(':') {
+                    let key = trimmed[..eq].trim();
+                    let val = trimmed[eq+1..].trim() == "true";
+                    if let Some(c) = current_caps.as_mut() {
+                        match key {
+                            "text" => c.text = Some(val),
+                            "image_input" => c.image_input = Some(val),
+                            "audio_input" => c.audio_input = Some(val),
+                            "video_input" => c.video_input = Some(val),
+                            "image_output" => c.image_output = Some(val),
+                            "audio_output" => c.audio_output = Some(val),
+                            "tool_use" => c.tool_use = Some(val),
+                            "stream" => c.stream = Some(val),
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
     }
-    if let Some(prev) = current.take() {
+    if let Some(mut prev) = current.take() {
+        attach_capabilities(&mut prev, &mut current_caps);
         out.push(prev);
     }
     out
@@ -803,4 +860,81 @@ models:
         assert!(out.contains("      # probed_at: 2026-06-27T10:00:00Z"), "probed_at missing in re-emit:\n{}", out);
         let _ = std::fs::remove_file(&p);
     }
-}
+
+    /// Regression: consecutive `- provider:` entries with capabilities blocks
+    /// must all be parsed, not just the first and last. The previous bug used
+    /// `continue` after pushing a model, which skipped re-initializing
+    /// `current` and silently dropped the next entry.
+    #[test]
+    fn reads_all_consecutive_enabled_models_with_capabilities() {
+        let dir = std::env::temp_dir().join("godex_studio_read_enabled_regression");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("config.yaml");
+        let raw = "\
+server:
+  port: 5678
+default_provider: minnimax.chat
+providers:
+  minnimax.chat:
+    spec: minimax
+models:
+  enabled:
+    - provider: minnimax.chat
+      model: MiniMax-M2.7
+      context_window: 204800
+      max_tokens: 131072
+      capabilities:
+        text: true
+        image_input: true
+        tool_use: true
+        stream: true
+    - provider: minnimax.chat
+      model: MiniMax-M2.7-highspeed
+      context_window: 204800
+      max_tokens: 16384
+      capabilities:
+        text: true
+        image_input: true
+        tool_use: true
+        stream: true
+    - provider: minnimax.chat
+      model: MiniMax-M3
+      context_window: 1000000
+      max_tokens: 16384
+      capabilities:
+        text: true
+        image_input: true
+        audio_input: true
+        tool_use: true
+        stream: true
+";
+        std::fs::write(&p, raw).unwrap();
+        let models = read_enabled_models(&p);
+        assert_eq!(
+            models.len(),
+            3,
+            "expected 3 enabled models, got {} (middle model dropped): {:?}",
+            models.len(),
+            models.iter().map(|m| m.model.as_str()).collect::<Vec<_>>()
+        );
+        let by_name: std::collections::HashMap<&str, &str> =
+            models.iter().map(|m| (m.model.as_str(), m.provider.as_str())).collect();
+        assert!(by_name.contains_key("MiniMax-M2.7"), "first model missing");
+        assert!(
+            by_name.contains_key("MiniMax-M2.7-highspeed"),
+            "middle model was dropped - regression of the `- provider:` continue bug"
+        );
+        assert!(by_name.contains_key("MiniMax-M3"), "last model missing");
+
+        // Capabilities on the middle model must be present (the bug dropped the whole entry).
+        let mid = models.iter().find(|m| m.model == "MiniMax-M2.7-highspeed").unwrap();
+        let caps = mid.capabilities.as_ref().expect("middle model has no capabilities");
+        assert_eq!(caps.text, Some(true));
+        assert_eq!(caps.image_input, Some(true));
+        assert_eq!(caps.tool_use, Some(true));
+        assert_eq!(caps.stream, Some(true));
+
+        let _ = std::fs::remove_file(&p);
+    }}
+
+

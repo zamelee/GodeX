@@ -410,6 +410,22 @@ def main():
     print('Judge   :', '(self-eval)' if not args.judge_model else args.judge_model)
     print()
 
+    JUDGMENT_METHOD = {
+        # Code-level judges (no LLM call)
+        'text':          'code',
+        'function_call': 'code',
+        'web_search':    'code',
+        'file_search':   'code',
+        'computer_use':  'code',
+        'tool_search':   'code',
+        'mcp':           'code',
+        # LLM-assisted judges (3-shot reasoning or multimodal fixture interpretation)
+        'reasoning':     'llm',
+        'image_input':   'llm',
+        'audio_input':   'llm',
+        'video_input':   'llm',
+    }
+
     CAPS_DISPLAY = ['text', 'image_input', 'audio_input', 'video_input',
                     'function_call', 'reasoning',
                     'web_search', 'file_search', 'computer_use', 'tool_search', 'mcp']
@@ -502,7 +518,16 @@ def main():
             'judge_model': judge_model,
             'probe_elapsed': probe_elapsed,
             'judge_elapsed': judge_elapsed,
-            'judgments': {k: list(v) for k, v in judgments.items()},
+            'schema_version': '1.0',
+            'probe_method': 'code+llm',
+            'judgments': {
+                k: {
+                    'status': v[0],
+                    'reason': v[1],
+                    'method': JUDGMENT_METHOD.get(k, 'unknown'),
+                }
+                for k, v in judgments.items()
+            },
             'raw': raw,
         }
         print()
@@ -537,3 +562,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+

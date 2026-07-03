@@ -165,6 +165,7 @@ pub fn run() {
             commands::probe_ctx,
             commands::probe_max_tokens,
             commands::probe_caps,
+            // commands::probe_full_via_python, // TODO: re-add when source for this command is restored
             commands::probe_stop,
         ])
         .run(tauri::generate_context!());

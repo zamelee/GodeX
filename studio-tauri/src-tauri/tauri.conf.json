@@ -33,6 +33,13 @@
     "targets": ["nsis"],
     "icon": [
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../../tools/probe/upstream/probe_v4.py": "probe/probe_v4.py",
+      "../../tools/probe/upstream/_IMAGE_B64.b64": "probe/_IMAGE_B64.b64",
+      "../../tools/probe/upstream/_AUDIO_B64.b64": "probe/_AUDIO_B64.b64",
+      "../../tools/probe/upstream/_VIDEO_B64.b64": "probe/_VIDEO_B64.b64",
+      "../../tools/probe/upstream/_GREEN_B64.b64": "probe/_GREEN_B64.b64"
+    }
   }
 }

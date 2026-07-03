@@ -194,7 +194,12 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
 .probe-flex-mid > .probe-section { flex: 0 0 auto; min-height: 50px; }
 .probe-flex-mid > .probe-section.probe-log-section { flex: 1 1 0; min-height: 0; overflow: hidden; }
 .probe-flex-mid > .probe-log { flex: 1; overflow-y: auto; min-height: 0; }
-.probe-actions { flex-shrink: 0; /* SCHEME B: never compress buttons */ }
+.probe-actions { flex-shrink: 0; /* SCHEME B: never compress buttons */ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.probe-mode-group { display: inline-flex; gap: 8px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); }
+.probe-mode-opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; padding: 2px 6px; border-radius: 3px; }
+.probe-mode-opt:hover { background: var(--bg); }
+.probe-mode-opt input[type="radio"] { width: auto; margin: 0; cursor: pointer; }
+.probe-mode-desc { color: var(--text2); font-size: 10px; margin-left: 4px; }
 
   .probe-models-list {
     flex: 1;
@@ -298,7 +303,7 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
   padding-left: 17px;
   line-height: 1.3;
 }
-.probe-results-section { flex: 0 0 200px; min-height: 100px; }
+.probe-flex-mid > .probe-section.probe-results-section { flex: 0 0 200px; min-height: 100px; }
 .probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
 #probe-results-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
 #probe-results-table th, #probe-results-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -684,7 +689,11 @@ input[readonly]{background:var(--bg3)!important;color:var(--blue);font-weight:60
     </div>
   </div>
     <div class="probe-actions">
-      <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
+        <div class="probe-mode-group">
+          <label class="probe-mode-opt"><input type="radio" name="probe-mode" value="quick" checked/><span>快速</span><span class="probe-mode-desc">Rust, ~10s/模型</span></label>
+          <label class="probe-mode-opt"><input type="radio" name="probe-mode" value="full"/><span>全量</span><span class="probe-mode-desc">Python + LLM judge, ~60-150s/模型</span></label>
+        </div>
+        <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
       <button class="btn gray" id="btn-probe-stop" style="display:none" onclick="stopProbeRun()">停止</button>
       <div class="probe-actions-right">
         <button class="btn gray" id="btn-probe-save" onclick="saveProbeResults()">保存</button>
@@ -1443,8 +1452,15 @@ async function startProbeRun() {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  // Listen for live probe-progress events from the 3 probe commands
+  // Detect selected probe mode (quick vs full).
+  const modeEl = document.querySelector('input[name="probe-mode"]:checked');
+  const probeMode = modeEl ? modeEl.value : "quick";
+  log("Mode: " + (probeMode === "full" ? "全量 (Python + LLM judge)" : "快速 (Rust)"));
+  log("");
+
+  // Listen for live probe-progress events from the Rust probe commands
   let _unlistenProbe = null;
+  let _unlistenProbeFull = null;
   try {
     if (window.__TAURI__ && window.__TAURI__.event) {
       const tauri = window.__TAURI__;
@@ -1454,6 +1470,11 @@ async function startProbeRun() {
         const status = p.status || "?";
         const detail = p.detail || "";
         log("    " + stage + ":" + status + (detail ? " " + detail : ""));
+      });
+      // Listen for Python subprocess log lines (probe_full_via_python).
+      _unlistenProbeFull = await tauri.event.listen("probe-full-log", (ev) => {
+        const ln = (ev.payload && ev.payload.line) || "";
+        log("    " + ln);
       });
     }
   } catch (e) { /* no tauri yet, ignore */ }
@@ -1470,11 +1491,68 @@ async function startProbeRun() {
       const model = modelNames[i];
       log("--- " + model + " [" + (i + 1) + "/" + modelNames.length + "] ---");
       
-      // Use the 3-split probe: ctx, max_tokens, caps
-      // Each emits "probe-progress" events (handled in startProbeRun wrapper)
       const r = { model: model, success: true, error: null, context_window: null, max_tokens: null,
         text: null, image: null, video: null, audio: null, function: null, reasoning: null,
         web_search: null, file_search: null, computer_use: null, tool_search: null, mcp: null };
+
+      // Full mode: invoke Python probe_v4.py as subprocess; logs stream via probe-full-log events.
+      if (probeMode === "full") {
+        try {
+          const fullResults = await invoke("probe_full_via_python", {
+            providerName: provName, model: model, quick: false, checkBridge: false
+          });
+          const fr = (fullResults && fullResults[0]) || null;
+          if (fr) {
+            // Map judgments to the standard r.* fields used by the table.
+            const j = fr.judgments || {};
+            // Read status from either new schema ({status, reason, method})
+            // or legacy tuple ([status, reason]) - defensive fallback.
+            function statusOf(k) {
+              const v = j[k];
+              if (!v) return null;
+              if (typeof v === "object" && !Array.isArray(v)) return v.status || null;
+              if (Array.isArray(v) && v.length >= 1) return v[0];
+              return null;
+            }
+            function isTrue(k) { return statusOf(k) === "true"; }
+            r.text = isTrue("text");
+            r.image = isTrue("image_input");
+            r.audio = isTrue("audio_input");
+            r.video = isTrue("video_input");
+            r.function = isTrue("function_call");
+            // reasoning: must explicitly check status, not just key existence.
+            // Old code had r.reasoning = !!j["reasoning"] which was true even when
+            // status was "false_model" (bug: wrongly marked unsupported models).
+            r.reasoning = isTrue("reasoning");
+            r.web_search = isTrue("web_search");
+            r.file_search = isTrue("file_search");
+            r.computer_use = isTrue("computer_use");
+            r.tool_search = isTrue("tool_search");
+            r.mcp = isTrue("mcp");
+            if (fr.ctxProbe && fr.ctxProbe.max_actual) r.context_window = fr.ctxProbe.max_actual;
+            if (fr.maxTokensProbe && fr.maxTokensProbe.max_actual) r.max_tokens = fr.maxTokensProbe.max_actual;
+            if (fr.bridgeCompat && fr.bridgeCompat.raw_response) {
+              log("    bridge: " + JSON.stringify(fr.bridgeCompat).slice(0, 200));
+            }
+            log("  [python full mode] elapsed=" + (fr.elapsedSecs || 0).toFixed(1) + "s");
+          }
+          _probeResults.push(r);
+          _probeChanged = true;
+          updateProbeResultsTable();
+          continue;
+        } catch (e) {
+          log("  ERROR (full mode): " + e);
+          r.success = false;
+          r.error = String(e);
+          _probeResults.push(r);
+          _probeChanged = true;
+          updateProbeResultsTable();
+          continue;
+        }
+      }
+
+      // Quick mode: 3-split Rust probe (ctx, max_tokens, caps) emitting probe-progress events.
+      // Use the model current context_window/max_tokens as the starting claimed value.
       // Use the model current context_window/max_tokens as the starting claimed value.
       // Fallback to conservative defaults when not yet known.
       const em = enabled.find(em => em.provider === provName && em.model === model);
@@ -1534,6 +1612,7 @@ async function startProbeRun() {
     showMsg("探测失败: " + e, "err");
   } finally {
      if (_unlistenProbe) { try { _unlistenProbe(); } catch (e) {} _unlistenProbe = null; }
+      if (_unlistenProbeFull) { try { _unlistenProbeFull(); } catch (e) {} _unlistenProbeFull = null; }
     btn.disabled = false;
     btn.style.display = "";
     stopBtn.style.display = "none";
@@ -2291,4 +2370,5 @@ async function doGodexRestart() {
 </script>
 </body>
 </html>
+
 
