@@ -11,9 +11,18 @@ import type {
 	ResponseCreateRequest,
 	ResponseItem,
 } from "../../protocol/openai/responses";
+import {
+	canonicalizeFunctionArguments,
+	isValidFunctionArguments,
+} from "../../providers/shared/tool-arguments";
 import type { ToolPlan } from "../tools";
 
 export type NormalizedChatMessage = ChatCompletionMessageParam;
+
+interface NormalizedToolOutput {
+	readonly text: string;
+	readonly extras: readonly ChatCompletionContentPart[];
+}
 
 export interface InputNormalizerContext {
 	readonly provider?: string;
@@ -52,7 +61,70 @@ export function normalizeResponseItems(
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext = {},
 ): NormalizedChatMessage[] {
-	return normalizeInputItems(items, request, context);
+	return normalizeInputItems(dropUnpairedToolCalls(items), request, context);
+}
+
+function dropUnpairedToolCalls(
+	items: readonly ResponseItem[],
+): readonly ResponseItem[] {
+	return items.filter((item) => !isOrphanToolOutput(item, items));
+}
+
+function isOrphanToolOutput(
+	item: ResponseItem,
+	items: readonly ResponseItem[],
+): boolean {
+	if (!isToolOutput(item)) return false;
+	const outputId = item.call_id;
+	for (const candidate of items) {
+		if (isToolCall(candidate) && candidate.call_id === outputId) {
+			return false;
+		}
+	}
+	return true;
+}
+
+type ToolCallItem = Extract<
+	ResponseItem,
+	{
+		type:
+			| "function_call"
+			| "shell_call"
+			| "local_shell_call"
+			| "apply_patch_call"
+			| "custom_tool_call";
+	}
+>;
+type ToolOutputItem = Extract<
+	ResponseItem,
+	{
+		type:
+			| "function_call_output"
+			| "shell_call_output"
+			| "local_shell_call_output"
+			| "apply_patch_call_output"
+			| "custom_tool_call_output";
+	}
+>;
+
+function isToolCall(item: ResponseItem): item is ToolCallItem {
+	return (
+		item.type === "function_call" ||
+		item.type === "shell_call" ||
+		item.type === "local_shell_call" ||
+		item.type === "apply_patch_call" ||
+		item.type === "custom_tool_call"
+	);
+}
+
+function isToolOutput(item: ResponseItem): item is ToolOutputItem {
+	return (
+		item.type === "function_call_output" ||
+		item.type === "shell_call_output" ||
+		item.type === "local_shell_call_output" ||
+		item.type === "apply_patch_call_output" ||
+		item.type === "custom_tool_call_output"
+	);
 }
 
 function normalizeInputItems(
@@ -80,7 +152,49 @@ function normalizeInputItems(
 		}
 		messages.push(...itemMessages);
 	}
-	return messages;
+	return reorderToolMediaMessages(messages);
+}
+
+function reorderToolMediaMessages(
+	messages: readonly NormalizedChatMessage[],
+): NormalizedChatMessage[] {
+	// Move any user messages that carry tool media (inserted by tool-output
+	// splitting) out of the middle of a consecutive tool message run so that
+	// Chat Completions providers see assistant → tool → tool → ... before any
+	// user turn. Some upstreams (e.g. minimax) reject sequences where a tool
+	// result is followed by a non-tool message and then another tool result.
+	const result: NormalizedChatMessage[] = [];
+	const deferred: NormalizedChatMessage[] = [];
+	let inToolRun = false;
+	for (const msg of messages) {
+		if (msg.role === "tool") {
+			inToolRun = true;
+			result.push(msg);
+			continue;
+		}
+		if (inToolRun && isMediaUserMessage(msg)) {
+			deferred.push(msg);
+			continue;
+		}
+		if (deferred.length > 0) {
+			result.push(...deferred);
+			deferred.length = 0;
+		}
+		inToolRun = false;
+		result.push(msg);
+	}
+	if (deferred.length > 0) result.push(...deferred);
+	return result;
+}
+
+function isMediaUserMessage(msg: NormalizedChatMessage): boolean {
+	if (msg.role !== "user") return false;
+	if (typeof msg.content === "string" || !Array.isArray(msg.content)) {
+		return false;
+	}
+	const first = msg.content[0];
+	if (!isRecord(first) || typeof first.text !== "string") return false;
+	return first.text.startsWith("[Attached media from tool result");
 }
 
 function appendReasoningText(
@@ -106,33 +220,39 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "function_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "function", toolName(item)),
-				item.arguments,
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "function", toolName(item)),
+			item.arguments,
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "function_call_output") {
-		return [
-			toolOutputMessage(
-				item.call_id,
-				outputText(item.output, request, context),
-			),
+		const { text, extras } = outputText(item.output, request, context);
+		const messages: NormalizedChatMessage[] = [
+			toolOutputMessage(item.call_id, text),
 		];
+		if (extras.length > 0) {
+			messages.push(toolExtrasUserMessage(extras, item.call_id));
+		}
+		return messages;
 	}
 	if (item.type === "web_search_call") {
-		return [];
+		return webSearchCallToFunctionMessages(item, context);
+	}
+	if (item.type === "tool_search_call") {
+		return toolSearchCallToFunctionMessages(item, context);
+	}
+	if (item.type === "tool_search_output") {
+		return toolSearchOutputToFunctionMessages(item);
 	}
 	if (item.type === "shell_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "shell", "shell"),
-				JSON.stringify(item.action),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "shell", "shell"),
+			JSON.stringify(item.action),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "shell_call_output") {
 		return [
@@ -151,35 +271,33 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "local_shell_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "local_shell", "local_shell"),
-				JSON.stringify({
-					command: item.action.command,
-					env: item.action.env,
-					...(item.action.timeout_ms !== undefined
-						? { timeout_ms: item.action.timeout_ms }
-						: {}),
-					...(item.action.user !== undefined ? { user: item.action.user } : {}),
-					...(item.action.working_directory !== undefined
-						? { working_directory: item.action.working_directory }
-						: {}),
-				}),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "local_shell", "local_shell"),
+			JSON.stringify({
+				command: item.action.command,
+				env: item.action.env,
+				...(item.action.timeout_ms !== undefined
+					? { timeout_ms: item.action.timeout_ms }
+					: {}),
+				...(item.action.user !== undefined ? { user: item.action.user } : {}),
+				...(item.action.working_directory !== undefined
+					? { working_directory: item.action.working_directory }
+					: {}),
+			}),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "local_shell_call_output") {
 		return [toolOutputMessage(item.call_id, item.output)];
 	}
 	if (item.type === "apply_patch_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "apply_patch", "apply_patch"),
-				JSON.stringify({ operation: item.operation }),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "apply_patch", "apply_patch"),
+			JSON.stringify({ operation: item.operation }),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "apply_patch_call_output") {
 		return [
@@ -190,31 +308,114 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "custom_tool_call") {
-		return [
-			assistantToolCallMessage(
-				item.call_id,
-				providerToolName(context, "custom", toolName(item)),
-				JSON.stringify({ input: item.input }),
-			),
-		];
+		const call = assistantToolCallMessage(
+			item.call_id,
+			providerToolName(context, "custom", toolName(item)),
+			JSON.stringify({ input: item.input }),
+		);
+		return call ? [call] : [];
 	}
 	if (item.type === "custom_tool_call_output") {
-		return [
-			toolOutputMessage(
-				item.call_id,
-				outputText(item.output, request, context),
-			),
+		const { text, extras } = outputText(item.output, request, context);
+		const messages: NormalizedChatMessage[] = [
+			toolOutputMessage(item.call_id, text),
 		];
+		if (extras.length > 0) {
+			messages.push(toolExtrasUserMessage(extras, item.call_id));
+		}
+		return messages;
 	}
 
 	throw unsupportedInputItemError(item, request, context);
+}
+
+function webSearchCallToFunctionMessages(
+	item: {
+		id: string;
+		action:
+			| {
+					type: "search";
+					query: string;
+					sources?: { type: "url"; url: string }[];
+			  }
+			| { type: "open_page"; url?: string }
+			| { type: "find_in_page"; pattern: string; url: string };
+		status: string;
+	},
+	context: InputNormalizerContext,
+): NormalizedChatMessage[] {
+	if (!item.id) return [];
+	let args: Record<string, unknown>;
+	let output: Record<string, unknown>;
+	if (item.action.type === "search") {
+		args = { query: item.action.query };
+		output = {
+			status: item.status,
+			sources: item.action.sources ?? [],
+		};
+	} else if (item.action.type === "open_page") {
+		args = { action: "open_page", url: item.action.url ?? null };
+		output = { status: item.status };
+	} else {
+		args = {
+			action: "find_in_page",
+			pattern: item.action.pattern,
+			url: item.action.url,
+		};
+		output = { status: item.status };
+	}
+	const call = assistantToolCallMessage(
+		item.id,
+		providerToolName(context, "web_search", "web_search"),
+		canonicalizeFunctionArguments(JSON.stringify(args)),
+	);
+	if (!call) return [];
+	return [call, toolOutputMessage(item.id, JSON.stringify(output))];
+}
+
+function toolSearchCallToFunctionMessages(
+	item: {
+		id?: string;
+		call_id?: string;
+		arguments: unknown;
+	},
+	context: InputNormalizerContext,
+): NormalizedChatMessage[] {
+	const callId = item.id ?? item.call_id;
+	if (!callId) return [];
+	const call = assistantToolCallMessage(
+		callId,
+		providerToolName(context, "tool_search", "tool_search"),
+		canonicalizeFunctionArguments(JSON.stringify(item.arguments ?? {})),
+	);
+	return call ? [call] : [];
+}
+
+function toolSearchOutputToFunctionMessages(item: {
+	id?: string;
+	call_id?: string;
+	tools: unknown;
+	status?: string;
+}): NormalizedChatMessage[] {
+	const callId = item.call_id ?? item.id;
+	if (!callId) return [];
+	return [
+		toolOutputMessage(
+			callId,
+			JSON.stringify({
+				status: item.status,
+				tools: item.tools,
+			}),
+		),
+	];
 }
 
 function assistantToolCallMessage(
 	callId: string,
 	name: string,
 	argumentsValue: string,
-): NormalizedChatMessage {
+): NormalizedChatMessage | undefined {
+	if (!isValidFunctionArguments(argumentsValue)) return undefined;
 	return {
 		role: "assistant",
 		content: "",
@@ -222,7 +423,10 @@ function assistantToolCallMessage(
 			{
 				id: callId,
 				type: "function",
-				function: { name, arguments: argumentsValue },
+				function: {
+					name,
+					arguments: canonicalizeFunctionArguments(argumentsValue),
+				},
 			},
 		],
 	};
@@ -233,6 +437,19 @@ function toolOutputMessage(
 	content: string,
 ): NormalizedChatMessage {
 	return { role: "tool", tool_call_id: callId, content };
+}
+
+function toolExtrasUserMessage(
+	extras: readonly ChatCompletionContentPart[],
+	callId: string,
+): NormalizedChatMessage {
+	return {
+		role: "user",
+		content: [
+			{ type: "text", text: `[Attached media from tool result ${callId}]` },
+			...extras,
+		],
+	};
 }
 
 function normalizeMessageContent(
@@ -402,14 +619,24 @@ function outputText(
 	output: string | readonly unknown[],
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): string {
-	if (typeof output === "string") return output;
-	const normalized = normalizeMessageContent(output, request, {
-		...context,
-		supportsImageInput: false,
-		supportsVideoInput: false,
-	});
-	return normalized;
+): NormalizedToolOutput {
+	if (typeof output === "string") {
+		return { text: output, extras: [] };
+	}
+	const normalized = normalizeMessageContent(output, request, context);
+	if (typeof normalized === "string") {
+		return { text: normalized, extras: [] };
+	}
+	const textParts: string[] = [];
+	const extras: ChatCompletionContentPart[] = [];
+	for (const part of normalized) {
+		if (part.type === "text") {
+			textParts.push(part.text);
+		} else {
+			extras.push(part);
+		}
+	}
+	return { text: textParts.join(""), extras };
 }
 
 function toolName(item: { name: string; namespace?: string }): string {

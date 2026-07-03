@@ -48,5 +48,6 @@ export const SERVER_REQUEST_INVALID_JSON = "server.request.invalid_json";
 export const SERVER_REQUEST_MISSING_MODEL = "server.request.missing_model";
 export const SERVER_REQUEST_INVALID_PARAMETER =
 	"server.request.invalid_parameter";
+export const SERVER_MODEL_NOT_FOUND = "server.request.model_not_found";
 export const SERVER_PROVIDER_NOT_REGISTERED = "server.provider.not_registered";
 export const SERVER_ERROR = "server_error";

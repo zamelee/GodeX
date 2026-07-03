@@ -13,7 +13,7 @@ export interface ChatProviderClientOptions extends ChatApiOptions {
 	provider: string;
 }
 
-type StreamableRequest = { stream?: boolean };
+type StreamableRequest = { model?: string; stream?: boolean };
 
 export class ChatProviderClient<TReq extends StreamableRequest, TRes, TChunk> {
 	private readonly api: ChatApi<TReq, TRes, TChunk>;
@@ -28,7 +28,7 @@ export class ChatProviderClient<TReq extends StreamableRequest, TRes, TChunk> {
 		try {
 			return await this.api.chatCompletions(body);
 		} catch (err) {
-			throw await wrapProviderError(err, this.provider);
+			throw await wrapProviderError(err, this.provider, body.model);
 		}
 	}
 
@@ -39,7 +39,7 @@ export class ChatProviderClient<TReq extends StreamableRequest, TRes, TChunk> {
 				stream: true,
 			} as TReq);
 		} catch (err) {
-			throw await wrapProviderError(err, this.provider);
+			throw await wrapProviderError(err, this.provider, body.model);
 		}
 	}
 }
@@ -47,14 +47,16 @@ export class ChatProviderClient<TReq extends StreamableRequest, TRes, TChunk> {
 async function wrapProviderError(
 	err: unknown,
 	provider: string,
+	model: string | undefined,
 ): Promise<unknown> {
+	const modelTag = model ?? "unknown";
 	if (
 		err instanceof Error &&
 		(err.name === "FetchTimeoutError" || err.name === "TimeoutError")
 	) {
 		return new ProviderError(PROVIDER_UPSTREAM_TIMEOUT, "Request timed out", {
 			provider,
-			model: "unknown",
+			model: modelTag,
 			upstreamStatus: 408,
 		});
 	}
@@ -75,7 +77,7 @@ async function wrapProviderError(
 			message,
 			{
 				provider,
-				model: "unknown",
+				model: modelTag,
 				upstreamStatus: status,
 				upstreamBody: body,
 			},
@@ -88,7 +90,7 @@ async function wrapProviderError(
 		message || "Upstream request failed",
 		{
 			provider,
-			model: "unknown",
+			model: modelTag,
 			upstreamStatus: 502,
 		},
 		err instanceof Error ? { cause: err } : undefined,

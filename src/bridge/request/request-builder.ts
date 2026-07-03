@@ -20,6 +20,11 @@ import {
 } from "../compatibility";
 import { type OutputContractPlan, planOutputContract } from "../output";
 import {
+	applyPluginChatMessagesHooks,
+	type GodexPlugin,
+	type GodexPluginContext,
+} from "../plugins";
+import {
 	planTools,
 	renderProviderToolDeclarations,
 	type ToolPlan,
@@ -40,6 +45,7 @@ export interface BuildChatCompletionRequestInput {
 	readonly capabilities: ProviderCapabilities;
 	readonly profile: ToolPlanningProfile;
 	readonly session?: ResponseSessionSnapshot | null;
+	readonly plugins?: readonly GodexPlugin[];
 }
 
 export interface BuildChatCompletionRequestResult {
@@ -51,9 +57,9 @@ export interface BuildChatCompletionRequestResult {
 
 export { buildChatMessages, type NormalizedChatMessage, normalizeCurrentInput };
 
-export function buildChatCompletionRequest(
+export async function buildChatCompletionRequest(
 	input: BuildChatCompletionRequestInput,
-): BuildChatCompletionRequestResult {
+): Promise<BuildChatCompletionRequestResult> {
 	const compatibility = planBridgeCompatibility({
 		provider: input.provider,
 		model: input.model,
@@ -80,6 +86,17 @@ export function buildChatCompletionRequest(
 		request.response_format =
 			output.providerResponseFormat as ChatCompletionCreateRequest["response_format"];
 	}
+	const pluginCtx: GodexPluginContext = {
+		model: input.model,
+		provider: input.provider,
+	};
+	const plugins = input.plugins ?? [];
+	request.messages = await applyPluginChatMessagesHooks(
+		plugins,
+		request.messages,
+		pluginCtx,
+	);
+
 	applyRequestOptions(
 		request,
 		input.request,
@@ -87,7 +104,6 @@ export function buildChatCompletionRequest(
 		input.provider,
 		input.model,
 	);
-
 	return { request, compatibility, tools, output };
 }
 
@@ -111,7 +127,24 @@ function chatMessages(
 	if (output.jsonSchemaInstruction) {
 		appendFinalInstruction(messages, output.jsonSchemaInstruction);
 	}
-	return buildChatMessages(messages);
+	return buildChatMessages(dropOrphanToolOutputs(messages));
+}
+
+function dropOrphanToolOutputs(
+	messages: readonly NormalizedChatMessage[],
+): NormalizedChatMessage[] {
+	const knownCallIds = new Set<string>();
+	for (const message of messages) {
+		if (message.role !== "assistant") continue;
+		for (const call of message.tool_calls ?? []) {
+			if (call.id) knownCallIds.add(call.id);
+		}
+	}
+	return messages.filter((message) => {
+		if (message.role !== "tool") return true;
+		if (!message.tool_call_id) return true;
+		return knownCallIds.has(message.tool_call_id);
+	});
 }
 
 function appendFinalInstruction(

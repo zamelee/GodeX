@@ -3,11 +3,13 @@ import type { ProviderStreamDelta } from "../../bridge/stream/stream-delta";
 import { PROVIDER_UPSTREAM_ERROR, ProviderError } from "../../error";
 import type {
 	ChatCompletionCreateRequest as BridgeChatCompletionCreateRequest,
+	ChatCompletionMessageToolCall,
 	ChatCompletionThinking,
 } from "../../protocol/openai/completions";
 import type { ResponseUsage } from "../../protocol/openai/responses";
 import {
 	assertProviderChatRequest,
+	canonicalizeFunctionArguments,
 	extractChoiceReasoningContent,
 	mapCommonChatStreamDelta,
 } from "../shared";
@@ -50,6 +52,10 @@ export const MINIMAX_SPEC_CAPABILITIES: ProviderCapabilities = {
 			["apply_patch", "function"],
 			["custom", "function"],
 			["namespace", "function"],
+			["tool_search", "function"],
+			["computer_use", "function"],
+			["computer", "function"],
+			["web_search", "function"],
 		]),
 		maxTools: MINIMAX_MAX_TOOLS,
 	},
@@ -134,12 +140,43 @@ export function minimaxPatchRequest(
 		...rest
 	} = request;
 	const miniMaxThinking = normalizeMiniMaxThinking(thinking);
+	const messages = canonicalizeMessageToolArguments(request.messages);
 	return {
 		...rest,
+		messages,
 		reasoning_split: true,
 		...(miniMaxThinking ? { thinking: miniMaxThinking } : {}),
 		...(max_tokens !== undefined ? { max_completion_tokens: max_tokens } : {}),
 	} as unknown as ChatCompletionRequest;
+}
+
+function canonicalizeMessageToolArguments(
+	messages: BridgeChatCompletionCreateRequest["messages"],
+): BridgeChatCompletionCreateRequest["messages"] {
+	return messages.map((message) => {
+		if (message.role !== "assistant") return message;
+		const toolCalls = message.tool_calls;
+		if (!toolCalls || toolCalls.length === 0) return message;
+		return {
+			...message,
+			tool_calls: toolCalls.map((toolCall) =>
+				canonicalizeToolCallArguments(toolCall),
+			),
+		};
+	});
+}
+
+function canonicalizeToolCallArguments(
+	toolCall: ChatCompletionMessageToolCall,
+): ChatCompletionMessageToolCall {
+	if (toolCall.type && toolCall.type !== "function") return toolCall;
+	return {
+		...toolCall,
+		function: {
+			...toolCall.function,
+			arguments: canonicalizeFunctionArguments(toolCall.function.arguments),
+		},
+	};
 }
 
 function normalizeMiniMaxThinking(

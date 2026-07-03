@@ -20,8 +20,31 @@ export interface LegacyProviderFactoryConfig {
 	timeout_ms?: number;
 }
 
+export interface ModelCapabilities {
+	text?: boolean;
+	image_input?: boolean;
+	audio_input?: boolean;
+	video_input?: boolean;
+	image_output?: boolean;
+	audio_output?: boolean;
+	tool_use?: boolean;
+	stream?: boolean;
+}
+
+export interface EnabledModel {
+	provider: string;
+	model: string;
+	context_window?: number;
+	margin?: number;
+	max_tokens?: number;
+	multimodal?: boolean;
+	capabilities?: ModelCapabilities;
+	note?: string;
+}
+
 export interface ModelsConfig {
 	aliases?: Record<string, string>;
+	enabled?: EnabledModel[];
 }
 
 export interface SessionConfig {
@@ -59,6 +82,10 @@ export interface TraceConfig {
 	payload_max_bytes: number;
 }
 
+export interface PluginsConfig {
+	paths: string[];
+}
+
 export interface GodeXConfig {
 	server: ServerConfig;
 	default_provider: string;
@@ -67,4 +94,5 @@ export interface GodeXConfig {
 	session: SessionConfig;
 	logging: LoggingConfig;
 	trace: TraceConfig;
+	plugins?: PluginsConfig;
 }

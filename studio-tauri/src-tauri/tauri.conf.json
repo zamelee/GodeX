@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GodeX Studio",
+  "version": "0.1.0",
+  "identifier": "studio.godex.tauri",
+  "build": {
+    "frontendDist": "../src",
+    "devUrl": null,
+    "beforeDevCommand": null,
+    "beforeBuildCommand": null
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "GodeX Studio",
+        "label": "main",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../tools/probe/upstream/probe_v4.py": "probe/probe_v4.py",
+      "../../tools/probe/upstream/_IMAGE_B64.b64": "probe/_IMAGE_B64.b64",
+      "../../tools/probe/upstream/_AUDIO_B64.b64": "probe/_AUDIO_B64.b64",
+      "../../tools/probe/upstream/_VIDEO_B64.b64": "probe/_VIDEO_B64.b64",
+      "../../tools/probe/upstream/_GREEN_B64.b64": "probe/_GREEN_B64.b64"
+    }
+  }
+}

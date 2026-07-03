@@ -88,6 +88,7 @@ function createMockCtx(
 					traceEvents.push(event);
 				},
 			},
+			plugins: [],
 		},
 		logger,
 		request: { model: "mock/test", input: "hello", store, ...requestOverrides },
@@ -139,7 +140,7 @@ function createExchange(
 		): Promise<ProviderStreamExchangeResult> => ({
 			providerStream,
 			upstreamLatencyMillis,
-			built: buildChatCompletionRequest({
+			built: await buildChatCompletionRequest({
 				request: { ...ctx.request, stream: true },
 				provider: ctx.provider.name,
 				model: ctx.resolved.model,

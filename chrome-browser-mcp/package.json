@@ -1,0 +1,29 @@
+{
+  "name": "chrome-browser-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for browser control via Playwright, bypasses node_repl",
+  "type": "module",
+  "main": "dist/index_new.js",
+  "scripts": {
+    "dev": "tsx watch src/index_new.ts",
+    "build": "tsc",
+    "start": "tsx src/index_new.ts",
+    "test": "python test_mcp.py"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.22.2",
+    "playwright": "^1.61.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

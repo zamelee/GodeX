@@ -66,9 +66,9 @@
     "@ahoo-wang/godex-win32-arm64": "1.0.0"
   },
   "devDependencies": {
-    "@ahoo-wang/fetcher": "^3.16.10",
+    "@ahoo-wang/fetcher": "^3.16.8",
     "@ahoo-wang/fetcher-decorator": "^3.16.10",
-    "@ahoo-wang/fetcher-eventstream": "^3.16.10",
+    "@ahoo-wang/fetcher-eventstream": "^3.16.8",
     "@biomejs/biome": "^2.4.15",
     "@clack/prompts": "^1.4.0",
     "@types/bun": "^1.2.0",
@@ -79,8 +79,9 @@
     "typescript": "^6"
   },
   "dependencies": {
-    "@logtape/file": "^2.2.2",
-    "@logtape/logtape": "^2.2.3",
-    "@logtape/pretty": "^2.2.2"
+    "@logtape/file": "^2.1.1",
+    "@logtape/logtape": "^2.1.1",
+    "@logtape/pretty": "^2.1.1",
+    "ws": "^8.21.0"
   }
 }

@@ -54,6 +54,7 @@ function createMockCtx(
 			sessionStore,
 			traceEnabled: true,
 			traceRecorder: { record: () => {} },
+			plugins: [],
 		},
 		logger: {
 			info: () => {},

@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../bridge/plugins";
 import type { GodeXConfig } from "../config";
 import { createLogger, type Logger } from "../logger";
 import type { Registrar } from "../providers/registrar";
@@ -23,16 +24,19 @@ export interface ApplicationServices {
 export function createApplicationServices(
 	config: GodeXConfig,
 	registrar?: Registrar,
+	plugins: readonly GodexPlugin[] = [],
 ): ApplicationServices {
 	const logger = createLogger(config.logging);
 	const resolver = new ModelResolver({
 		defaultProvider: config.default_provider,
 		aliases: config.models?.aliases,
+		enabled: config.models?.enabled,
 	});
 	const configuredRegistrar = createConfiguredRegistrar(
 		config.providers,
 		logger,
 		registrar,
+		plugins,
 	);
 	const trace = createTraceServices(config.trace, logger);
 

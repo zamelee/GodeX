@@ -93,4 +93,30 @@ describe("loadConfigFromFile", () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
+
+	test("parse error message includes line/column and reason detail", () => {
+		const dir = mkdtempSync(join(tmpdir(), "godex-config-reader-"));
+		try {
+			const configPath = join(dir, "godex.yaml");
+			// Line 3: invalid - block with empty key (no space after colon)
+			writeFileSync(configPath, "server:\n  port: 5678\nbad:\n  - :\n");
+
+			let caught: Error | undefined;
+			try {
+				loadConfigFromFile(configPath);
+			} catch (e) {
+				caught = e as Error;
+			}
+			expect(caught).toBeDefined();
+			expect(caught?.message).toContain("Failed to parse config file:");
+			expect(caught?.message).toContain(configPath);
+			// js-yaml marks bad lines starting at 0; we report 1-based.
+			expect(caught?.message).toMatch(/line \d+, column \d+/);
+			expect(caught?.message.length).toBeGreaterThan(
+				"Failed to parse config file: ${configPath}".length,
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });

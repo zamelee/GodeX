@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import {
 	BEARER_AUTH,
 	CHAT_COMPLETIONS_PROTOCOL,
@@ -18,7 +18,13 @@ function listProviderFiles(provider: string): string[] {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			const abs = join(dir, entry.name);
 			if (entry.isDirectory()) walk(abs);
-			else out.push(abs.slice(process.cwd().length + 1));
+			else
+				out.push(
+					abs
+						.slice(process.cwd().length + 1)
+						.split(sep)
+						.join("/"),
+				);
 		}
 	};
 	walk(root);
@@ -62,10 +68,19 @@ describe("ProviderSpec runtime conformance", () => {
 		});
 	}
 
-	test("chat-completions provider specs do not expose OpenAI-native tool_search as a callable function", () => {
+	test("chat-completions provider specs do not expose OpenAI-native tool_search as a native tool", () => {
 		for (const spec of BUILTIN_PROVIDER_SPECS) {
 			expect(spec.capabilities.tools.supported.has("tool_search")).toBe(false);
-			expect(spec.capabilities.tools.degraded?.has("tool_search")).toBe(false);
+		}
+	});
+
+	test("chat-completions provider specs may degrade tool_search to a function so Codex Desktop can execute it client-side", () => {
+		for (const spec of BUILTIN_PROVIDER_SPECS) {
+			if (spec.capabilities.tools.degraded?.has("tool_search")) {
+				expect(spec.capabilities.tools.degraded.get("tool_search")).toBe(
+					"function",
+				);
+			}
 		}
 	});
 

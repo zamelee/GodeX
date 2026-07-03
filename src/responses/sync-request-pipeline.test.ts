@@ -77,6 +77,7 @@ function createMockCtx(
 					traceEvents.push(event);
 				},
 			},
+			plugins: [],
 		},
 		logger,
 		request: { model: "mock/test", input: "hello", store: true },
@@ -97,17 +98,19 @@ function createMockCtx(
 	} as unknown as ResponsesContext & { traceEvents: unknown[] };
 }
 
-function createExchangeResult(
+async function createExchangeResult(
 	ctx: ResponsesContext,
 	providerResponse: TestChatResponse = completedTextResponse(),
-): ProviderRequestExchangeResult {
-	const built = buildRequest(ctx);
+): Promise<ProviderRequestExchangeResult> {
+	const built = await buildRequest(ctx);
 	ctx.outputContract.set(built.output);
 	return { providerResponse, built };
 }
 
-function buildRequest(ctx: ResponsesContext): BuildChatCompletionRequestResult {
-	return buildChatCompletionRequest({
+async function buildRequest(
+	ctx: ResponsesContext,
+): Promise<BuildChatCompletionRequestResult> {
+	return await buildChatCompletionRequest({
 		request: ctx.request,
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
@@ -152,7 +155,7 @@ describe("SyncRequestPipeline", () => {
 				receivedCtx: ResponsesContext,
 			): Promise<ProviderRequestExchangeResult> => {
 				expect(receivedCtx).toBe(ctx);
-				return createExchangeResult(ctx, providerResponse);
+				return await createExchangeResult(ctx, providerResponse);
 			},
 		};
 		const saved: Array<{
@@ -228,7 +231,7 @@ describe("SyncRequestPipeline", () => {
 		});
 		const exchange = {
 			request: async (): Promise<ProviderRequestExchangeResult> => ({
-				...createExchangeResult(ctx),
+				...(await createExchangeResult(ctx)),
 			}),
 		};
 
@@ -270,7 +273,7 @@ describe("SyncRequestPipeline", () => {
 		});
 		const exchange = {
 			request: async (): Promise<ProviderRequestExchangeResult> => ({
-				...createExchangeResult(ctx),
+				...(await createExchangeResult(ctx)),
 			}),
 		};
 		const saveSession = async () => {

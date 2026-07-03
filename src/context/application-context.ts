@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../bridge/plugins";
 import type { GodeXConfig } from "../config";
 import type { Logger } from "../logger";
 import type { Registrar } from "../providers/registrar";
@@ -16,8 +17,15 @@ export class ApplicationContext {
 	readonly sessionStore: ResponseSessionStore;
 	readonly traceRecorder: TraceRecorder;
 	readonly traceEnabled: boolean;
+	readonly plugins: readonly GodexPlugin[];
+	readonly configPath?: string;
 
-	constructor(config: GodeXConfig, registrar?: Registrar) {
+	constructor(
+		config: GodeXConfig,
+		registrar?: Registrar,
+		plugins: readonly GodexPlugin[] = [],
+		configPath?: string,
+	) {
 		const services = createApplicationServices(config, registrar);
 		this.config = config;
 		this.logger = services.logger;
@@ -27,6 +35,8 @@ export class ApplicationContext {
 		this.sessionStore = services.sessionStore;
 		this.traceRecorder = services.traceRecorder;
 		this.traceEnabled = services.traceEnabled;
+		this.plugins = plugins;
+		this.configPath = configPath;
 	}
 
 	async close(): Promise<void> {

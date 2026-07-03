@@ -46,8 +46,8 @@ function request(
 }
 
 describe("buildChatCompletionRequest", () => {
-	test("builds messages and response_format while omitting envelope fields and disabled tools", () => {
-		const result = buildChatCompletionRequest({
+	test("builds messages and response_format while omitting envelope fields and disabled tools", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -82,8 +82,8 @@ describe("buildChatCompletionRequest", () => {
 		expect("tool_choice" in result.request).toBe(false);
 	});
 
-	test("renders tools as Chat Completions function declarations with planned provider tool_choice names", () => {
-		const result = buildChatCompletionRequest({
+	test("renders tools as Chat Completions function declarations with planned provider tool_choice names", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -117,8 +117,8 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
-	test("drops non-native tool_search while keeping eager function declarations for DeepSeek", () => {
-		const result = buildChatCompletionRequest({
+	test("drops non-native tool_search while keeping eager function declarations for DeepSeek", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "deepseek",
 			model: "deepseek-v4-pro",
 			capabilities: DEEPSEEK_SPEC_CAPABILITIES,
@@ -173,8 +173,8 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
-	test("plans strict degraded json_schema as json_object and appends schema instruction to the last user turn", () => {
-		const result = buildChatCompletionRequest({
+	test("plans strict degraded json_schema as json_object and appends schema instruction to the last user turn", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -219,8 +219,8 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("appends strict degraded json_schema instruction to the last user text", () => {
-		const result = buildChatCompletionRequest({
+	test("appends strict degraded json_schema instruction to the last user text", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -257,8 +257,8 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("keeps current instructions and appends schema instruction after replayed history", () => {
-		const result = buildChatCompletionRequest({
+	test("keeps current instructions and appends schema instruction after replayed history", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -317,25 +317,26 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("rejects unsupported response formats instead of forwarding them", () => {
-		const error = captureBridgeError(() =>
-			buildChatCompletionRequest({
-				provider: "acme",
-				model: "acme-chat",
-				capabilities,
-				profile: toolProfile,
-				request: request({
-					text: { format: { type: "xml" } as never },
+	test("rejects unsupported response formats instead of forwarding them", async () => {
+		const error = await captureBridgeError(
+			async () =>
+				await buildChatCompletionRequest({
+					provider: "acme",
+					model: "acme-chat",
+					capabilities,
+					profile: toolProfile,
+					request: request({
+						text: { format: { type: "xml" } as never },
+					}),
 				}),
-			}),
 		);
 
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_PARAMETER);
 		expect(error.message).toContain("text.format xml is not supported");
 	});
 
-	test("re-encodes replayed assistant tool calls with current provider names", () => {
-		const result = buildChatCompletionRequest({
+	test("re-encodes replayed assistant tool calls with current provider names", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -394,8 +395,8 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("uses local shell output call ids directly", () => {
-		const result = buildChatCompletionRequest({
+	test("uses local shell output call ids directly", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -447,8 +448,8 @@ describe("buildChatCompletionRequest", () => {
 		]);
 	});
 
-	test("groups adjacent replayed tool calls before their tool outputs", () => {
-		const result = buildChatCompletionRequest({
+	test("groups adjacent replayed tool calls before their tool outputs", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -511,8 +512,8 @@ describe("buildChatCompletionRequest", () => {
 		]);
 	});
 
-	test("keeps reasoning content on replayed tool-call assistant messages", () => {
-		const result = buildChatCompletionRequest({
+	test("keeps reasoning content on replayed tool-call assistant messages", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -582,8 +583,8 @@ describe("buildChatCompletionRequest", () => {
 		]);
 	});
 
-	test("folds replayed assistant text after tool calls into the tool-call message", () => {
-		const result = buildChatCompletionRequest({
+	test("folds replayed assistant text after tool calls into the tool-call message", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -653,8 +654,8 @@ describe("buildChatCompletionRequest", () => {
 		]);
 	});
 
-	test("does not forward ignored Responses envelope fields and records compatibility diagnostics", () => {
-		const result = buildChatCompletionRequest({
+	test("does not forward ignored Responses envelope fields and records compatibility diagnostics", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities,
@@ -688,8 +689,8 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("forwards supported chat options through the provider request", () => {
-		const result = buildChatCompletionRequest({
+	test("forwards supported chat options through the provider request", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -726,8 +727,8 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
-	test("maps boolean reasoning capabilities to provider thinking", () => {
-		const enabled = buildChatCompletionRequest({
+	test("maps boolean reasoning capabilities to provider thinking", async () => {
+		const enabled = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -738,7 +739,7 @@ describe("buildChatCompletionRequest", () => {
 			profile: toolProfile,
 			request: request({ reasoning: { effort: "medium" } }),
 		});
-		const disabled = buildChatCompletionRequest({
+		const disabled = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -760,21 +761,22 @@ describe("buildChatCompletionRequest", () => {
 		expect(disabled.request).not.toHaveProperty("reasoning_effort");
 	});
 
-	test("rejects invalid runtime reasoning effort values", () => {
-		const error = captureBridgeError(() =>
-			buildChatCompletionRequest({
-				provider: "acme",
-				model: "acme-chat",
-				capabilities: {
-					...capabilities,
-					parameters: { supported: new Set(["reasoning"]) },
-					reasoning: { effort: "boolean" },
-				},
-				profile: toolProfile,
-				request: request({
-					reasoning: { effort: "extreme" } as never,
+	test("rejects invalid runtime reasoning effort values", async () => {
+		const error = await captureBridgeError(
+			async () =>
+				await buildChatCompletionRequest({
+					provider: "acme",
+					model: "acme-chat",
+					capabilities: {
+						...capabilities,
+						parameters: { supported: new Set(["reasoning"]) },
+						reasoning: { effort: "boolean" },
+					},
+					profile: toolProfile,
+					request: request({
+						reasoning: { effort: "extreme" } as never,
+					}),
 				}),
-			}),
 		);
 
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_PARAMETER);
@@ -785,19 +787,20 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
-	test("rejects unhandled provider reasoning capability modes", () => {
-		const error = captureBridgeError(() =>
-			buildChatCompletionRequest({
-				provider: "acme",
-				model: "acme-chat",
-				capabilities: {
-					...capabilities,
-					parameters: { supported: new Set(["reasoning"]) },
-					reasoning: { effort: "future-mode" as never },
-				},
-				profile: toolProfile,
-				request: request({ reasoning: { effort: "medium" } }),
-			}),
+	test("rejects unhandled provider reasoning capability modes", async () => {
+		const error = await captureBridgeError(
+			async () =>
+				await buildChatCompletionRequest({
+					provider: "acme",
+					model: "acme-chat",
+					capabilities: {
+						...capabilities,
+						parameters: { supported: new Set(["reasoning"]) },
+						reasoning: { effort: "future-mode" as never },
+					},
+					profile: toolProfile,
+					request: request({ reasoning: { effort: "medium" } }),
+				}),
 		);
 
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_PARAMETER);
@@ -809,8 +812,8 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
-	test("maps Responses safety identifiers to provider user_id", () => {
-		const safeIdentifier = buildChatCompletionRequest({
+	test("maps Responses safety identifiers to provider user_id", async () => {
+		const safeIdentifier = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -825,7 +828,7 @@ describe("buildChatCompletionRequest", () => {
 				user: "legacy-user",
 			}),
 		});
-		const legacyUser = buildChatCompletionRequest({
+		const legacyUser = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -846,8 +849,8 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("omits stream usage options when the provider does not support them", () => {
-		const result = buildChatCompletionRequest({
+	test("omits stream usage options when the provider does not support them", async () => {
+		const result = await buildChatCompletionRequest({
 			provider: "acme",
 			model: "acme-chat",
 			capabilities: {
@@ -863,29 +866,30 @@ describe("buildChatCompletionRequest", () => {
 		expect(result.request.stream_options).toBeUndefined();
 	});
 
-	test("throws when planned provider-native tool declarations cannot be rendered", () => {
-		const error = captureBridgeError(() =>
-			buildChatCompletionRequest({
-				provider: "acme",
-				model: "acme-chat",
-				capabilities,
-				profile: {
-					...toolProfile,
-					nativeToolTypes: new Set(["custom"]),
-					degradedToolTypes: new Map(),
-					toolChoice: new Set(["custom"]),
-				},
-				request: request({
-					tools: [
-						{
-							type: "custom",
-							name: "raw_tool",
-							description: "Run raw input.",
-							format: { type: "text" },
-						},
-					],
+	test("throws when planned provider-native tool declarations cannot be rendered", async () => {
+		const error = await captureBridgeError(
+			async () =>
+				await buildChatCompletionRequest({
+					provider: "acme",
+					model: "acme-chat",
+					capabilities,
+					profile: {
+						...toolProfile,
+						nativeToolTypes: new Set(["custom"]),
+						degradedToolTypes: new Map(),
+						toolChoice: new Set(["custom"]),
+					},
+					request: request({
+						tools: [
+							{
+								type: "custom",
+								name: "raw_tool",
+								description: "Run raw input.",
+								format: { type: "text" },
+							},
+						],
+					}),
 				}),
-			}),
 		);
 
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_TOOL);
@@ -894,35 +898,36 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("throws instead of partially forwarding mixed renderable and non-renderable tools", () => {
-		const error = captureBridgeError(() =>
-			buildChatCompletionRequest({
-				provider: "acme",
-				model: "acme-chat",
-				capabilities,
-				profile: {
-					...toolProfile,
-					nativeToolTypes: new Set(["function", "custom"]),
-					degradedToolTypes: new Map(),
-					toolChoice: new Set(["function", "custom"]),
-				},
-				request: request({
-					tools: [
-						{
-							type: "function",
-							name: "lookup",
-							parameters: {},
-							strict: true,
-						},
-						{
-							type: "custom",
-							name: "raw_tool",
-							description: "Run raw input.",
-							format: { type: "text" },
-						},
-					],
+	test("throws instead of partially forwarding mixed renderable and non-renderable tools", async () => {
+		const error = await captureBridgeError(
+			async () =>
+				await buildChatCompletionRequest({
+					provider: "acme",
+					model: "acme-chat",
+					capabilities,
+					profile: {
+						...toolProfile,
+						nativeToolTypes: new Set(["function", "custom"]),
+						degradedToolTypes: new Map(),
+						toolChoice: new Set(["function", "custom"]),
+					},
+					request: request({
+						tools: [
+							{
+								type: "function",
+								name: "lookup",
+								parameters: {},
+								strict: true,
+							},
+							{
+								type: "custom",
+								name: "raw_tool",
+								description: "Run raw input.",
+								format: { type: "text" },
+							},
+						],
+					}),
 				}),
-			}),
 		);
 
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_TOOL);
@@ -931,7 +936,7 @@ describe("buildChatCompletionRequest", () => {
 		);
 	});
 
-	test("merges consecutive assistant text messages", () => {
+	test("merges consecutive assistant text messages", async () => {
 		const messages = buildChatMessages([
 			{
 				role: "assistant",
@@ -956,7 +961,7 @@ describe("buildChatCompletionRequest", () => {
 });
 
 describe("normalizeCurrentInput", () => {
-	test("normalizes simple message arrays and maps developer messages to system messages", () => {
+	test("normalizes simple message arrays and maps developer messages to system messages", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				instructions: "Global rules.",
@@ -982,7 +987,7 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("normalizes reasoning items in current input before assistant messages", () => {
+	test("normalizes reasoning items in current input before assistant messages", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1021,7 +1026,7 @@ describe("normalizeCurrentInput", () => {
 		expect(normalized[1]).toEqual({ role: "user", content: "Continue." });
 	});
 
-	test("accumulates consecutive reasoning items before assistant messages", () => {
+	test("accumulates consecutive reasoning items before assistant messages", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1060,7 +1065,7 @@ describe("normalizeCurrentInput", () => {
 		);
 	});
 
-	test("ignores web_search_call items when replaying response history", () => {
+	test("falls back web_search_call to a function call + tool output for the upstream provider", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1091,12 +1096,83 @@ describe("normalizeCurrentInput", () => {
 		);
 
 		expect(normalized).toEqual([
+			expect.objectContaining({
+				role: "assistant",
+				tool_calls: [
+					expect.objectContaining({
+						id: "ws_resp_123_0",
+						type: "function",
+						function: {
+							name: "web_search",
+							arguments: '{"query":"web search"}',
+						},
+					}),
+				],
+			}),
+			{
+				role: "tool",
+				tool_call_id: "ws_resp_123_0",
+				content: JSON.stringify({
+					status: "completed",
+					sources: [{ type: "url", url: "https://example.com/bun" }],
+				}),
+			},
 			{ role: "assistant", content: "Earlier answer." },
 			{ role: "user", content: "Continue." },
 		]);
 	});
 
-	test("normalizes supported image and video content parts", () => {
+	test("falls back tool_search_call and tool_search_output to function messages for the upstream provider", async () => {
+		const normalized = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						id: "ts_call_1",
+						type: "tool_search_call",
+						arguments: { query: "weather" },
+						status: "completed",
+					},
+					{
+						id: "ts_out_1",
+						type: "tool_search_output",
+						tools: [{ type: "function", name: "lookup_weather" }],
+						status: "completed",
+					},
+					{
+						role: "user",
+						content: [{ type: "input_text", text: "Thanks." }],
+					},
+				],
+			}),
+		);
+
+		expect(normalized).toEqual([
+			expect.objectContaining({
+				role: "assistant",
+				tool_calls: [
+					expect.objectContaining({
+						id: "ts_call_1",
+						type: "function",
+						function: {
+							name: "tool_search",
+							arguments: '{"query":"weather"}',
+						},
+					}),
+				],
+			}),
+			{
+				role: "tool",
+				tool_call_id: "ts_out_1",
+				content: JSON.stringify({
+					status: "completed",
+					tools: [{ type: "function", name: "lookup_weather" }],
+				}),
+			},
+			{ role: "user", content: "Thanks." },
+		]);
+	});
+
+	test("normalizes supported image and video content parts", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1156,7 +1232,7 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("normalizes video file data", () => {
+	test("normalizes video file data", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1191,7 +1267,7 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("normalizes extensionless video URLs", () => {
+	test("normalizes extensionless video URLs", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1226,7 +1302,7 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("normalizes video file data when file_url is not a video reference", () => {
+	test("normalizes video file data when file_url is not a video reference", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1260,8 +1336,8 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("throws BridgeError for unknown file extensions in video input", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for unknown file extensions in video input", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1295,8 +1371,8 @@ describe("normalizeCurrentInput", () => {
 		});
 	});
 
-	test("throws BridgeError for opaque file identifiers in video input", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for opaque file identifiers in video input", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1330,8 +1406,8 @@ describe("normalizeCurrentInput", () => {
 		});
 	});
 
-	test("throws BridgeError for provider-specific file reference schemes in video input", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for provider-specific file reference schemes in video input", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1365,8 +1441,8 @@ describe("normalizeCurrentInput", () => {
 		});
 	});
 
-	test("throws BridgeError for unsupported input content parts", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for unsupported input content parts", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1387,8 +1463,8 @@ describe("normalizeCurrentInput", () => {
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_INPUT_CONTENT);
 	});
 
-	test("throws BridgeError for non-video file input content parts", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for non-video file input content parts", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1422,8 +1498,8 @@ describe("normalizeCurrentInput", () => {
 		});
 	});
 
-	test("throws BridgeError for unsupported non-array input content", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for unsupported non-array input content", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1442,8 +1518,8 @@ describe("normalizeCurrentInput", () => {
 		);
 	});
 
-	test("throws BridgeError for unsupported input items", () => {
-		const error = captureBridgeError(() =>
+	test("throws BridgeError for unsupported input items", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					input: [
@@ -1463,7 +1539,7 @@ describe("normalizeCurrentInput", () => {
 		expect(error.code).toBe(BRIDGE_REQUEST_UNSUPPORTED_INPUT_ITEM);
 	});
 
-	test("normalizes assistant output_text content for session replay", () => {
+	test("normalizes assistant output_text content for session replay", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1483,7 +1559,7 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("normalizes Responses tool history items into provider-neutral chat messages", () => {
+	test("normalizes Responses tool history items into provider-neutral chat messages", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1649,8 +1725,8 @@ describe("normalizeCurrentInput", () => {
 		]);
 	});
 
-	test("reports provider, model, and message fallback for unsupported input objects", () => {
-		const error = captureBridgeError(() =>
+	test("reports provider, model, and message fallback for unsupported input objects", async () => {
+		const error = await captureBridgeError(async () =>
 			normalizeCurrentInput(
 				request({
 					model: "fallback-model",
@@ -1672,12 +1748,79 @@ describe("normalizeCurrentInput", () => {
 	});
 });
 
-function captureBridgeError(action: () => unknown): BridgeError {
+async function captureBridgeError(
+	action: () => unknown | Promise<unknown>,
+): Promise<BridgeError> {
 	try {
-		action();
+		await action();
 	} catch (error) {
 		if (error instanceof BridgeError) return error;
 		throw error;
 	}
 	throw new Error("Expected BridgeError.");
 }
+
+describe("buildChatCompletionRequest - orphan tool outputs", () => {
+	test("drops role:tool messages whose tool_call_id is not in any assistant tool_calls", async () => {
+		const result = await buildChatCompletionRequest({
+			provider: "minimax",
+			model: "MiniMax-M3",
+			capabilities,
+			profile: toolProfile,
+			request: request({
+				input: [
+					{
+						type: "message",
+						role: "assistant",
+						content: "thinking...",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_orphan",
+						output: "ignored",
+					} as never,
+					{ type: "message", role: "user", content: "continue" },
+				],
+			}),
+		});
+
+		const toolMessages = result.request.messages.filter(
+			(m) => m.role === "tool",
+		);
+		expect(toolMessages).toEqual([]);
+	});
+
+	test("keeps role:tool messages whose tool_call_id matches an assistant tool_call", async () => {
+		const result = await buildChatCompletionRequest({
+			provider: "minimax",
+			model: "MiniMax-M3",
+			capabilities,
+			profile: toolProfile,
+			request: request({
+				input: [
+					{
+						type: "function_call",
+						call_id: "call_real",
+						name: "lookup",
+						arguments: "{}",
+					} as never,
+					{
+						type: "function_call_output",
+						call_id: "call_real",
+						output: "Sunny.",
+					} as never,
+				],
+			}),
+		});
+
+		const toolMessages = result.request.messages.filter(
+			(m) => m.role === "tool",
+		);
+		expect(toolMessages).toHaveLength(1);
+		expect(toolMessages[0]).toMatchObject({
+			role: "tool",
+			tool_call_id: "call_real",
+			content: "Sunny.",
+		});
+	});
+});

@@ -1,3 +1,4 @@
+import type { GodexPlugin } from "../../bridge/plugins";
 import type { ProviderRuntimeConfig } from "../../bridge/provider-spec";
 import { createProviderEdge } from "../../bridge/provider-spec";
 import { ChatProviderClient } from "../shared/chat-provider-client";
@@ -8,7 +9,10 @@ import type {
 } from "./protocol";
 import { ZHIPU_PROVIDER_SPEC } from "./spec";
 
-export function createZhipuProviderEdge(config: ProviderRuntimeConfig) {
+export function createZhipuProviderEdge(
+	config: ProviderRuntimeConfig,
+	plugins?: readonly GodexPlugin[],
+) {
 	const client = new ChatProviderClient<
 		ChatCompletionCreateRequest,
 		ChatCompletionResponse,
@@ -24,6 +28,7 @@ export function createZhipuProviderEdge(config: ProviderRuntimeConfig) {
 	return createProviderEdge({
 		spec: ZHIPU_PROVIDER_SPEC,
 		config,
+		plugins,
 		request: client.request.bind(client),
 		stream: client.stream.bind(client),
 	});

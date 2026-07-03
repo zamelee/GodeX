@@ -1,5 +1,11 @@
 import type { JsonServerSentEvent } from "@ahoo-wang/fetcher-eventstream";
+import {
+	applyPluginPatchRequestHooks,
+	type GodexPlugin,
+	type GodexPluginContext,
+} from "../../bridge/plugins";
 import { PROVIDER_UPSTREAM_ERROR, ProviderError } from "../../error";
+import type { ChatCompletionCreateRequest } from "../../protocol/openai/completions";
 import type {
 	ProviderEdge,
 	ProviderRuntimeConfig,
@@ -29,6 +35,8 @@ export interface CreateProviderEdgeOptions<
 	readonly config: ProviderRuntimeConfig;
 	readonly request?: ProviderRequestImplementation<TProviderRequest, TResponse>;
 	readonly stream?: ProviderStreamImplementation<TProviderRequest, TChunk>;
+	readonly plugins?: readonly GodexPlugin[];
+	readonly pluginContext?: GodexPluginContext;
 }
 
 export function createProviderEdge<
@@ -47,13 +55,32 @@ export function createProviderEdge<
 	const { spec } = input;
 	const endpointBaseURL =
 		input.config.endpoint?.base_url ?? spec.endpoint.defaultBaseURL;
+	const plugins = input.plugins ?? [];
+	const pluginCtx: GodexPluginContext = input.pluginContext ?? {
+		model: "unknown",
+		provider: spec.name,
+	};
+	const applyPluginPatch =
+		plugins.length === 0
+			? null
+			: async (body: TProviderRequest): Promise<TProviderRequest> => {
+					const patched = await applyPluginPatchRequestHooks(
+						plugins,
+						body as unknown as ChatCompletionCreateRequest,
+						pluginCtx,
+					);
+					return patched as unknown as TProviderRequest;
+				};
 	return {
 		name: spec.name,
 		spec,
 		request: async (body, options) => {
-			const patched =
+			const specPatched =
 				spec.hooks?.patchRequest?.(body) ??
 				(body as unknown as TProviderRequest);
+			const patched = applyPluginPatch
+				? await applyPluginPatch(specPatched)
+				: specPatched;
 			options?.onPatchedRequest?.(patched);
 			if (!input.request) {
 				throw notConfiguredError({
@@ -69,9 +96,12 @@ export function createProviderEdge<
 			return spec.hooks?.normalizeResponse?.(response) ?? response;
 		},
 		stream: async (body, options) => {
-			const patched =
+			const specPatched =
 				spec.hooks?.patchRequest?.(body) ??
 				(body as unknown as TProviderRequest);
+			const patched = applyPluginPatch
+				? await applyPluginPatch(specPatched)
+				: specPatched;
 			options?.onPatchedRequest?.(patched);
 			if (!input.stream) {
 				throw notConfiguredError({
