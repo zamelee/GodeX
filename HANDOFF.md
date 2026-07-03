@@ -169,3 +169,51 @@ function isTrue(v) { return statusOf(v) === "true"; }
 ### 推送记录
 - Commit: (待生成)
 - Push: fork (zamelee/GodeX) only
+
+---
+
+## [2026-07-03] Web Search tool 修复 (open_page / find_in_page)
+
+### 问题
+Codex 客户端的 `web_search` 工具支持 3 种 actions:
+- `search` (with `query`)
+- `open_page` (with `url`)
+- `find_in_page` (with `url` + `pattern`)
+
+之前 godex 的 `webSearchDeclaration` 渲染时只声明 `enable` 和 `search_engine`, 没有提供参数描述告诉模型三种 action 怎么用。模型只看到 `query` 参数,所以:
+- 用户说 "Open URL X" → 模型回答 "我没有 URL 打开功能" → 返回 `{"query": "X"}`
+- godex 还原成 `web_search_call action=search` (错的) 而不是 `open_page`
+- Codex 收到错误的 action → 行为错乱
+
+### 修复
+1. **`webSearchDeclaration`** 现在接受 `providerType` 参数:
+   - 当 `providerType === "web_search"` (Zhipu/DeepSeek 等原生支持) → 走原生格式
+   - 当 `providerType === "function"` (minimax 等降级场景) → 渲染成 function,描述里说清楚全部 3 种 action 和对应参数
+2. **`webSearchCall`** 根据参数形状还原 action:
+   - `{query}` → search
+   - `{url}` → open_page
+   - `{url, pattern}` → find_in_page
+3. **测试**: 替换原来错误的"无 query 字段回退到 function_call"测试为正确的 3 种 action 测试
+
+### 修改文件
+- `src/bridge/tools/declaration-renderer.ts` — webSearchDeclaration 接受 providerType
+- `src/bridge/tools/call-restorer.ts` — webSearchCall 识别 3 种 action
+- `src/bridge/tools/call-restorer.test.ts` — 测试更新
+
+### 端到端验证
+| 测试 | 模型返回 | 预期 action | 实际 |
+|------|---------|------------|------|
+| Open URL | `{"url": "..."}` | open_page | ✅ |
+| Find "login" on page | `{"url": "...", "pattern": "login"}` | find_in_page | ✅ |
+| Search news | `{"query": "AI ..."}` | search | ✅ |
+
+### MCP 测试结果
+CodeX 端发起的 MCP 请求 (通过 godex) minimax 可以正确处理:
+- 发送 `type: "namespace"` 工具 (CodeX 实际格式) → minimax 正常调用 `mcp__server__tool({a:2,b:3})`
+- 发送 `function_call` + `function_call_output` → minimax 正确返回最终答案
+- **MCP 工具调用链路完全工作**,不需要 bridge 特殊处理
+
+### 部署
+- 编译: `bun run build` (700ms)
+- 部署: `bin/godex.exe` (新二进制 14:04:47 部署, 旧版备份到 `bin/godex.exe.bak.20260703_140454`)
+- 用户已重启 godex 服务验证

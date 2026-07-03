@@ -481,7 +481,7 @@ describe("restoreToolCall", () => {
 		});
 	});
 
-	test("falls back to function_call for web_search without query field", () => {
+	test("restores web_search open_page from url argument", () => {
 		const identities = new ToolIdentityMap();
 		identities.add({
 			requestedName: "web_search",
@@ -492,7 +492,7 @@ describe("restoreToolCall", () => {
 
 		const item = restoreToolCall(
 			{
-				callId: "call_web_bad",
+				callId: "call_web_open",
 				name: "web_search",
 				arguments: JSON.stringify({ url: "https://example.com" }),
 			},
@@ -500,10 +500,69 @@ describe("restoreToolCall", () => {
 		);
 
 		expect(item).toEqual({
+			id: "call_web_open",
+			type: "web_search_call",
+			action: { type: "open_page", url: "https://example.com" },
+			status: "in_progress",
+		});
+	});
+
+	test("restores web_search find_in_page from url+pattern arguments", () => {
+		const identities = new ToolIdentityMap();
+		identities.add({
+			requestedName: "web_search",
+			providerName: "web_search",
+			requestedType: "web_search",
+			providerType: "function",
+		});
+
+		const item = restoreToolCall(
+			{
+				callId: "call_web_find",
+				name: "web_search",
+				arguments: JSON.stringify({
+					url: "https://example.com",
+					pattern: "login",
+				}),
+			},
+			identities,
+		);
+
+		expect(item).toEqual({
+			id: "call_web_find",
+			type: "web_search_call",
+			action: {
+				type: "find_in_page",
+				url: "https://example.com",
+				pattern: "login",
+			},
+			status: "in_progress",
+		});
+	});
+
+	test("falls back to function_call for web_search with no recognized action", () => {
+		const identities = new ToolIdentityMap();
+		identities.add({
+			requestedName: "web_search",
+			providerName: "web_search",
+			requestedType: "web_search",
+			providerType: "function",
+		});
+
+		const item = restoreToolCall(
+			{
+				callId: "call_web_empty",
+				name: "web_search",
+				arguments: JSON.stringify({}),
+			},
+			identities,
+		);
+
+		expect(item).toEqual({
 			type: "function_call",
-			call_id: "call_web_bad",
+			call_id: "call_web_empty",
 			name: "web_search",
-			arguments: JSON.stringify({ url: "https://example.com" }),
+			arguments: JSON.stringify({}),
 		});
 	});
 

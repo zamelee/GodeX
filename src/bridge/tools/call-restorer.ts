@@ -147,14 +147,39 @@ function toolSearchCall(call: ProviderFunctionCall): ToolSearchCall {
 function webSearchCall(call: ProviderFunctionCall): WebSearchCall | null {
 	const parsed = parsedRecord(call.arguments);
 	if (!parsed) return null;
+	// Detect the web_search action from the argument shape.
+	// The upstream model picks an action by populating one of three fields:
+	//   - query          -> search
+	//   - url only       -> open_page
+	//   - url + pattern  -> find_in_page
 	const query = optionalString(parsed.query);
-	if (query === undefined) return null;
-	return {
-		id: call.callId,
-		type: "web_search_call",
-		action: { type: "search", query },
-		status: "in_progress",
-	};
+	const url = optionalString(parsed.url);
+	const pattern = optionalString(parsed.pattern);
+	if (url !== undefined && pattern !== undefined) {
+		return {
+			id: call.callId,
+			type: "web_search_call",
+			action: { type: "find_in_page", url, pattern },
+			status: "in_progress",
+		};
+	}
+	if (url !== undefined) {
+		return {
+			id: call.callId,
+			type: "web_search_call",
+			action: { type: "open_page", url },
+			status: "in_progress",
+		};
+	}
+	if (query !== undefined) {
+		return {
+			id: call.callId,
+			type: "web_search_call",
+			action: { type: "search", query },
+			status: "in_progress",
+		};
+	}
+	return null;
 }
 
 function computerCall(call: ProviderFunctionCall): ComputerCall | null {
