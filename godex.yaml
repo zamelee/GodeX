@@ -37,7 +37,7 @@ providers:
   minnimax.chat:
     spec: minimax
     credentials:
-      api_key: ${YOUR_API_KEY}
+      api_key: ${MINIMAX_API_KEY}
     endpoint:
       base_url: https://minnimax.chat/v1
     timeout_ms: 120000
@@ -62,7 +62,7 @@ providers:
   minimax:
     spec: minimax
     credentials:
-      api_key: ${YOUR_API_KEY}
+      api_key: ${MINIMAX_API_KEY}
     endpoint:
       base_url: https://api.minimaxi.com/v1
     timeout_ms: 120000

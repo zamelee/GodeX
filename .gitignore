@@ -1,4 +1,4 @@
-﻿# dependencies (bun install)
+# dependencies (bun install)
 node_modules
 
 # output
@@ -62,3 +62,7 @@ studio-tauri/__build.ps1
 studio-tauri/src-tauri/target/
 
 __pycache__/
+
+
+# Probe key
+tools/.probe_key.txt
