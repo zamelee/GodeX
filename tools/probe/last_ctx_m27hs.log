@@ -1,0 +1,17 @@
+=== test_probe ===
+BASE: https://minnimax.chat/v1
+WHAT: ctx
+MODELS: ["MiniMax-M2.7-highspeed"]
+
+--- MiniMax-M2.7-highspeed ---
+  [ctx] start claimed=100000
+  [ctx] ok test=100000 status=200
+  [ctx] ok test=200000 status=200
+  [ctx] ok test=400000 status=200
+  [ctx] ok test=800000 status=200
+  [ctx] ok test=1600000 status=200
+  [ctx] ok test=3200000 status=200
+  [ctx] ok test=6400000 status=200
+  [ctx] ceiling hit ceiling=10000000
+  [ctx] done ctx=6400000
+  -> ctx = Some(6400000)

@@ -1,0 +1,19 @@
+127.0.0.1 - - [01/Jul/2026 21:08:11] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] code 404, message File not found
+127.0.0.1 - - [01/Jul/2026 21:08:11] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] "HEAD /_echotest.txt HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] "HEAD /b64_test.exe HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] "HEAD /lib_addition.txt HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] "HEAD /prefix.txt HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:11] "HEAD /video_b64_2s.txt HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:12] "GET /probe_real_clean.html HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:28] "GET /probe_real_clean.html HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:55] "GET /probe_real_clean.html HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:08:55] code 404, message File not found
+127.0.0.1 - - [01/Jul/2026 21:08:55] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [01/Jul/2026 21:54:03] "GET /probe_real_clean.html HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:54:11] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:56:27] "GET /probe_real_clean.html HTTP/1.1" 200 -
+127.0.0.1 - - [01/Jul/2026 21:58:17] "GET /probe_real_clean.html HTTP/1.1" 304 -
+127.0.0.1 - - [01/Jul/2026 21:59:38] "GET /probe_real_clean.html HTTP/1.1" 304 -
+127.0.0.1 - - [01/Jul/2026 22:00:19] "GET /probe_real_clean.html HTTP/1.1" 304 -

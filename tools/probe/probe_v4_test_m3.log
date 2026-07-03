@@ -1,0 +1,42 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M3']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M3  |  JUDGE = MiniMax-M3
+======================================================================
+  probe phase: 31.4s
+  judge phase: 4.8s
+  [+] text            status 200, response 113 chars
+  [+] image_input     The RED_PNG fixture returned status=200 with a detailed description of the image (red background, black border, white 'R
+  [-M] audio_input     Status=200 but the response is a clear refusal: 'I don't see any audio attached to your message.' The model did not proc
+  [+] video_input     Status=200 with a substantive description: 'the video consists of nothing but a black screen. There is no movement, no c
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       usage.completion_tokens_details.reasoning_tokens = 171
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400 (upstream does not accept this tool type)
+  [-U] computer_use    status 400 (upstream does not accept this tool type)
+  [-U] tool_search     status 400 (upstream does not accept this tool type)
+  [-U] mcp             status 400 (upstream does not accept this tool type)
+
+======================================================================
+  SUMMARY (v4 hybrid)
+======================================================================
+cap             | MiniMax-M3              
+------------------------------------------
+text            | +                        | 
+image_input     | +                        | 
+audio_input     | -M                       | 
+video_input     | +                        | 
+function_call   | +                        | 
+reasoning       | +                        | 
+web_search      | +                        | 
+file_search     | -U                       | 
+computer_use    | -U                       | 
+tool_search     | -U                       | 
+mcp             | -U                       | 
+
+legend: + true | -M false_model (refused) | -U false_upstream (rejected)
+        -X false_other | ? inconclusive
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v4_result.json

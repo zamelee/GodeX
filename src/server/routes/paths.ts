@@ -28,6 +28,6 @@ export function handlePaths(app: ApplicationContext): Response {
 		trace_db_path: app.config.trace.path,
 		server_port: app.config.server.port,
 		server_host: app.config.server.host,
-		env: app.configPath && app.configPath.includes("/src/") ? "dev" : "prod",
+		env: app.configPath?.includes("/src/") ? "dev" : "prod",
 	});
 }

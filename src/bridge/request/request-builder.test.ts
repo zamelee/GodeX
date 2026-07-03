@@ -1065,7 +1065,7 @@ describe("normalizeCurrentInput", () => {
 		);
 	});
 
-	test("ignores web_search_call items when replaying response history", async () => {
+	test("falls back web_search_call to a function call + tool output for the upstream provider", async () => {
 		const normalized = normalizeCurrentInput(
 			request({
 				input: [
@@ -1096,8 +1096,79 @@ describe("normalizeCurrentInput", () => {
 		);
 
 		expect(normalized).toEqual([
+			expect.objectContaining({
+				role: "assistant",
+				tool_calls: [
+					expect.objectContaining({
+						id: "ws_resp_123_0",
+						type: "function",
+						function: {
+							name: "web_search",
+							arguments: '{"query":"web search"}',
+						},
+					}),
+				],
+			}),
+			{
+				role: "tool",
+				tool_call_id: "ws_resp_123_0",
+				content: JSON.stringify({
+					status: "completed",
+					sources: [{ type: "url", url: "https://example.com/bun" }],
+				}),
+			},
 			{ role: "assistant", content: "Earlier answer." },
 			{ role: "user", content: "Continue." },
+		]);
+	});
+
+	test("falls back tool_search_call and tool_search_output to function messages for the upstream provider", async () => {
+		const normalized = normalizeCurrentInput(
+			request({
+				input: [
+					{
+						id: "ts_call_1",
+						type: "tool_search_call",
+						arguments: { query: "weather" },
+						status: "completed",
+					},
+					{
+						id: "ts_out_1",
+						type: "tool_search_output",
+						tools: [{ type: "function", name: "lookup_weather" }],
+						status: "completed",
+					},
+					{
+						role: "user",
+						content: [{ type: "input_text", text: "Thanks." }],
+					},
+				],
+			}),
+		);
+
+		expect(normalized).toEqual([
+			expect.objectContaining({
+				role: "assistant",
+				tool_calls: [
+					expect.objectContaining({
+						id: "ts_call_1",
+						type: "function",
+						function: {
+							name: "tool_search",
+							arguments: '{"query":"weather"}',
+						},
+					}),
+				],
+			}),
+			{
+				role: "tool",
+				tool_call_id: "ts_out_1",
+				content: JSON.stringify({
+					status: "completed",
+					tools: [{ type: "function", name: "lookup_weather" }],
+				}),
+			},
+			{ role: "user", content: "Thanks." },
 		]);
 	});
 

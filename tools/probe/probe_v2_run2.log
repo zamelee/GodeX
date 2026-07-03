@@ -1,0 +1,95 @@
+Base URL: https://minnimax.chat/v1
+Models  : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']
+
+======================================================================
+  MiniMax-M2.7
+======================================================================
+  [+->+] text            status=200 
+         reply: <think>
+the user asks: "say hi in 3 words." this is a straightforward request. the answer should be 
+  [-->+] image           status=200  (CHANGED)
+  [-->-] audio           status=400 
+  [-->-] video           status=200 
+         reply: <think>
+the user asks: "describe this video briefly." but the user hasn't provided any video. there'
+  [+->+] function        status=200 
+         reply: <think>
+The user is asking me to get the weather in Tokyo using the get_weather tool. I have the too
+  [-->-] reasoning       status=200 
+  [+->-] web_search      status=200  tool_calls=1 has_target=False (CHANGED)
+         reply: <think>
+the user is asking for the latest news today. according to the current time (2026-07-02), i 
+  [-->-] file_search     status=400  tool_calls=0 has_target=False
+  [-->-] computer_use    status=400  tool_calls=0 has_target=False
+  [-->-] tool_search     status=400  tool_calls=0 has_target=False
+  [-->-] mcp             status=400  tool_calls=0 has_target=False
+
+======================================================================
+  MiniMax-M2.7-highspeed
+======================================================================
+  [+->+] text            status=200 
+         reply: <think>
+the user says: "say hi in 3 words."
+
+we just need to respond with a greeting in three words.
+  [-->+] image           status=200  (CHANGED)
+  [-->-] audio           status=400 
+  [+->+] video           status=200 
+         reply: <think>
+the user is asking "describe this video briefly." but no video or link has been provided. po
+  [+->+] function        status=200 
+         reply: <think>
+The user wants to know the weather in Tokyo. I should use the get_weather function with Toky
+  [-->-] reasoning       status=200 
+  [+->-] web_search      status=200  tool_calls=1 has_target=False (CHANGED)
+         reply: <think>
+the user is asking for the latest news today (2026-07-02). according to my instructions, que
+  [-->-] file_search     status=400  tool_calls=0 has_target=False
+  [-->-] computer_use    status=400  tool_calls=0 has_target=False
+  [-->-] tool_search     status=400  tool_calls=0 has_target=False
+  [-->-] mcp             status=400  tool_calls=0 has_target=False
+
+======================================================================
+  MiniMax-M3
+======================================================================
+  [+->+] text            status=200 
+         reply: <think>the user wants me to say hi in 3 words. a simple greeting in 3 words would be something like 
+  [+->+] image           status=400 
+  [-->-] audio           status=529 
+  [+->+] video           status=200 
+         reply: <think>
+the user wants me to describe the video briefly.
+
+1.  **analyze the video:** i will watch th
+  [+->+] function        status=200 
+         reply: <think>The user wants the weather in Tokyo. I'll call the get_weather tool.</think>
+
+
+  [-->-] reasoning       status=200 
+  [-->-] web_search      status=529  tool_calls=0 has_target=False
+  [-->-] file_search     status=400  tool_calls=0 has_target=False
+  [-->-] computer_use    status=400  tool_calls=0 has_target=False
+  [-->-] tool_search     status=400  tool_calls=0 has_target=False
+  [-->-] mcp             status=400  tool_calls=0 has_target=False
+
+======================================================================
+  SUMMARY (旧 vs 新)
+======================================================================
+cap            | MiniMax-M2.7         | MiniMax-M2.7-highspe | MiniMax-M3          
+-----------------------------------------------------------------------------------
+text           | +/+                  | +/+                  | +/+                  | 
+image          | -/+                  | -/+                  | +/+                  | 
+audio          | -/-                  | -/-                  | -/-                  | 
+video          | -/-                  | +/+                  | +/+                  | 
+function       | +/+                  | +/+                  | +/+                  | 
+reasoning      | -/-                  | -/-                  | -/-                  | 
+web_search     | +/-                  | +/-                  | -/-                  | 
+file_search    | -/-                  | -/-                  | -/-                  | 
+computer_use   | -/-                  | -/-                  | -/-                  | 
+tool_search    | -/-                  | -/-                  | -/-                  | 
+mcp            | -/-                  | -/-                  | -/-                  | 
+
+legend: + = pass, - = fail
+      each cell shows old/new pass
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v2_result.json

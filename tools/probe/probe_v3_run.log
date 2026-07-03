@@ -1,0 +1,85 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 31.5s, 11 caps done
+  judge phase: 17.5s
+  [+] text            status=200
+  [-] image_input     status=?
+  [-] audio_input     status=400
+  [-] video_input     status=200
+  [+] function_call   status=200
+  [-] reasoning       status=200
+  [?] web_search      status=200
+  [-] file_search     status=400
+  [-] computer_use    status=400
+  [-] tool_search     status=400
+  [-] mcp             status=400
+       why: Response contains substantive text 'Hello there friend' which is a valid 3-word greeting. Status 200 and non-empty respo...
+       why: Both fixtures (RED_PNG and B_LETTER) show the model refusing to process images, stating 'I cannot see any image' and 'I ...
+       why: Status 400 with empty response_text indicates no audio processing occurred.
+       why: Model refused to process video, stating there is no video attached. This is a refusal, not actual video description.
+       why: Response.tool_calls contains a valid function call to get_weather with city parameter Tokyo. Status 200 and non-empty to...
+       why: usage.reasoning_tokens is 0 despite the response showing a thinking block. The internal thinking block does not count as...
+       why: Response.tool_calls contains a call to plugin_web_search but the type is 'function', not 'web_search'. The request speci...
+       why: Status 400 with empty response_text and no tool_calls indicates the file search was not executed.
+       why: Status 400 with empty response_text and no tool_calls indicates computer use was not executed.
+       why: Status 400 with empty response_text and no tool_calls indicates tool search was not executed.
+       why: Status 400 with empty response_text and no tool_calls indicates MCP tool use was not executed.
+
+======================================================================
+  TARGET = MiniMax-M2.7-highspeed  |  JUDGE = MiniMax-M2.7-highspeed
+======================================================================
+  probe phase: 30.9s, 11 caps done
+  judge phase: 12.4s
+  JUDGE FAILED: JSON parse failed
+
+======================================================================
+  TARGET = MiniMax-M3  |  JUDGE = MiniMax-M3
+======================================================================
+  probe phase: 28.9s, 11 caps done
+  judge phase: 7.8s
+  [+] text            status=200
+  [+] image_input     status=?
+  [-] audio_input     status=200
+  [+] video_input     status=200
+  [+] function_call   status=200
+  [+] reasoning       status=200
+  [?] web_search      status=200
+  [-] file_search     status=400
+  [-] computer_use    status=400
+  [-] tool_search     status=400
+  [-] mcp             status=400
+       why: Status 200 with a substantive reply 'Hey there, friend!' �� clearly a non-refusal text response.
+       why: The RED_PNG fixture returned status 200 with a detailed visual description (red background, black border, white 'RED' te...
+       why: The model responded with a refusal: 'It looks like no audio was attached to your message.' This is a clear non-processin...
+       why: The model analyzed video frames and produced a description ('A black screen.'). While the video content was minimal, the...
+       why: tool_calls contains a non-empty function call to get_weather with city=Tokyo, satisfying the requirement.
+       why: usage.completion_tokens_details.reasoning_tokens = 127, which is > 0, confirming billable reasoning tokens were used.
+       why: The tool_calls entry has type 'function' (not 'web_search'), even though the function name is 'plugin_web_search'. Per r...
+       why: Status 400 with empty tool_calls �� the model did not perform file search.
+       why: Status 400 with empty tool_calls �� the model did not perform computer use.
+       why: Status 400 with empty tool_calls �� the model did not perform tool search.
+       why: Status 400 with empty tool_calls �� the model did not invoke any MCP tools.
+
+======================================================================
+  SUMMARY (LLM-as-judge)
+======================================================================
+cap             | MiniMax-M2.7             | MiniMax-M2.7-highspeed   | MiniMax-M3              
+------------------------------------------------------------------------------------------------
+text            | +                        | ?                        | +                        | 
+image_input     | -                        | ?                        | +                        | 
+audio_input     | -                        | ?                        | -                        | 
+video_input     | -                        | ?                        | +                        | 
+function_call   | +                        | ?                        | +                        | 
+reasoning       | -                        | ?                        | +                        | 
+web_search      | ?                        | ?                        | ?                        | 
+file_search     | -                        | ?                        | -                        | 
+computer_use    | -                        | ?                        | -                        | 
+tool_search     | -                        | ?                        | -                        | 
+mcp             | -                        | ?                        | -                        | 
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v3_result.json

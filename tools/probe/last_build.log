@@ -1,0 +1,15 @@
+   Compiling godex-studio v0.1.0 (D:\Documents\VibeCoding\GodeX\studio-tauri\src-tauri)
+warning: field `studio_log` is never read
+   --> src\state.rs:188:9
+    |
+183 | pub struct Paths {
+    |            ----- field in this struct
+...
+188 |     pub studio_log: Option<PathBuf>,
+    |         ^^^^^^^^^^
+    |
+    = note: `Paths` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `godex-studio` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 2m 25s

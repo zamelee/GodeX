@@ -31,6 +31,12 @@ export function providerErrorToHttp(err: ProviderError): HttpError {
 			error: { code: "request_timeout", message: err.message },
 		};
 	}
+	if (upstreamStatus === 400 && /context window/i.test(err.message)) {
+		return {
+			status: 400,
+			error: { code: "context_window_exceeded", message: err.message },
+		};
+	}
 	if (upstreamStatus >= 500) {
 		return {
 			status: 502,

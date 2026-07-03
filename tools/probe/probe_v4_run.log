@@ -1,0 +1,76 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 36.5s
+  judge phase: 8.8s
+  [+] text            status 200, response 138 chars
+  [-M] image_input     Both fixtures (RED_PNG and B_LETTER) returned status 200 but the model's responses explicitly state that no image was pr
+  [-U] audio_input     The request returned status 400 with error_code 'bad_request_error' and an empty response body, indicating the upstream/
+  [-M] video_input     Status 200 was returned but the model explicitly states 'no video is provided' and asks the user to clarify or provide t
+  [+] function_call   tool_calls = ["get_weather"]
+  [-M] reasoning       usage.reasoning_tokens = 0 (response may have a thinking block but no billable reasoning tokens)
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400 (upstream does not accept this tool type)
+  [-U] computer_use    status 400 (upstream does not accept this tool type)
+  [-U] tool_search     status 400 (upstream does not accept this tool type)
+  [-U] mcp             status 400 (upstream does not accept this tool type)
+
+======================================================================
+  TARGET = MiniMax-M2.7-highspeed  |  JUDGE = MiniMax-M2.7-highspeed
+======================================================================
+  probe phase: 31.2s
+  judge phase: 14.9s
+  [+] text            status 200, response 150 chars
+  [-M] image_input     ...
+  [-U] audio_input     ...
+  [-M] video_input     ...
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       usage.completion_tokens_details.reasoning_tokens = 93
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400 (upstream does not accept this tool type)
+  [-U] computer_use    status 400 (upstream does not accept this tool type)
+  [-U] tool_search     status 400 (upstream does not accept this tool type)
+  [-U] mcp             status 400 (upstream does not accept this tool type)
+
+======================================================================
+  TARGET = MiniMax-M3  |  JUDGE = MiniMax-M3
+======================================================================
+  probe phase: 84.8s
+  judge phase: 5.7s
+  [+] text            status 200, response 120 chars
+  [-U] image_input     The B_LETTER fixture returned status=400 with bad_request_error, indicating upstream rejection. The RED_PNG fixture retu
+  [-M] audio_input     Status=200 but the model refused to process, saying 'no audio file was included in your message. Could you try attaching
+  [+] video_input     Status=200 and the model analyzed 5 frames spanning 0.0�C0.4 seconds, describing each frame's content (all black). The mo
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       usage.completion_tokens_details.reasoning_tokens = 186
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400 (upstream does not accept this tool type)
+  [-U] computer_use    status 400 (upstream does not accept this tool type)
+  [-U] tool_search     status 400 (upstream does not accept this tool type)
+  [-U] mcp             status 400 (upstream does not accept this tool type)
+
+======================================================================
+  SUMMARY (v4 hybrid)
+======================================================================
+cap             | MiniMax-M2.7             | MiniMax-M2.7-highspeed   | MiniMax-M3              
+------------------------------------------------------------------------------------------------
+text            | +                        | +                        | +                        | 
+image_input     | -M                       | -M                       | -U                       | 
+audio_input     | -U                       | -U                       | -M                       | 
+video_input     | -M                       | -M                       | +                        | 
+function_call   | +                        | +                        | +                        | 
+reasoning       | -M                       | +                        | +                        | 
+web_search      | +                        | +                        | +                        | 
+file_search     | -U                       | -U                       | -U                       | 
+computer_use    | -U                       | -U                       | -U                       | 
+tool_search     | -U                       | -U                       | -U                       | 
+mcp             | -U                       | -U                       | -U                       | 
+
+legend: + true | -M false_model (refused) | -U false_upstream (rejected)
+        -X false_other | ? inconclusive
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v4_result.json

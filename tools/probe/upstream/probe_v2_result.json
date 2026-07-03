@@ -1,0 +1,335 @@
+{
+  "MiniMax-M2.7": {
+    "text": {
+      "cap": "text",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "reply": "<think>the user says \"say hi in 3 words.\" so we need to produce a greeting in exactly three words. typically \"hello ther"
+    },
+    "image": {
+      "cap": "image",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": true,
+      "fixtures": [
+        {
+          "fixture": "RED_PNG",
+          "status": 200,
+          "reply": "<think>\nthe user says: \"describe this image. what color and any text?\" however, we have not been given an image. the user likely expects us to describe a given image but we have not received any image data. we need to respond accordingly. the user asks \"describe this image. what color and any text?\" so we must ask for the image or clarify that we need it. the user didn't include any link or attachment. possibly they expect the assistant to be able to view the image, but we need to ask for it. according to policy: if the user asks for something that requires the image, we can request them to provide it. the user says \"describe this image. what color and any text?\" so we need to ask them to upload the image. we can say we can't see it. so ask them to provide it.\n\nwe must be brief. possibly also mention we can accept image format. we'll comply.\n\nthus: \"i don't have the image. could you please upload it?\" or similar. we'll comply with policy.\n</think>\n\ni’m sorry, but i don’t have access to the image you’d like me to describe. could you please upload or share the image so i can tell you about its colors and any text it contains",
+          "old_pass": false,
+          "new_pass": true,
+          "trigger_hit": true,
+          "substantive": true
+        },
+        {
+          "fixture": "B_LETTER",
+          "status": 200,
+          "reply": "<think>\nwe need to understand the context: \"what single letter is shown in this image? reply with just that letter.\" there's presumably an attached image that the user is asking about. however, no image is shown directly in the prompt; maybe the image is given as a file. the user didn't attach any image. in these \"explain images\" tasks, we need to infer the letter.\n\nbut since we can't see the image, we need to deduce the correct answer based on prior knowledge or common patterns. maybe the question is about a known image that the model has seen? or perhaps the user expects us to read a captcha-like image? but no image is provided. could it be that the image is a common puzzle: a single letter hidden in some pattern? or maybe it's a picture of a letter in a particular font, like a stylized \"x\"? without the image we can't determine.\n\nwe need to handle this: ask for more information? but the instruction says: \"reply with just that letter.\" the user expects a single letter answer. perhaps the system expects the assistant to deduce from context if the user omitted the image? usually in such tasks, we have to assume the image is provided in the conversation; if not, we cannot guess.\n\nwe can ask for\n</think>\n",
+          "old_pass": false,
+          "new_pass": true,
+          "trigger_hit": true,
+          "substantive": true
+        }
+      ]
+    },
+    "audio": {
+      "cap": "audio",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "reply": "",
+      "substantive": false
+    },
+    "video": {
+      "cap": "video",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "reply": "<think>\nthe user asks: \"describe this video briefly.\"\n\nbut no video is attached. likely the user meant to include a video but didn't. according to policy, we need to respond that we cannot describe the video because none was provided. however, we could ask them to provide a video or description. there's no disallowed content.\n\nthus we respond asking for more information.\n</think>\n\ni’m sorry, but i don’t see a video attached to your message. could you please share the video (or a link to it) so i can give you a brief description? alternatively, if you can tell me what the video contains or provide a few details about it, i’ll be happy to help!",
+      "substantive": true
+    },
+    "function": {
+      "cap": "function",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "tool_calls": 1,
+      "reply": "<think>The user is asking about the weather in Tokyo and explicitly asked me to use the get_weather function. I'll call "
+    },
+    "reasoning": {
+      "cap": "reasoning",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": false,
+      "reasoning_tokens": 0
+    },
+    "web_search": {
+      "cap": "web_search",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": false,
+      "tool_calls": 1,
+      "has_target": false,
+      "reply": "<think>\nthe user wants me to search for the latest news today and provide a headline. this is a request that requires searching for current news, so i should use the plugin_web_search function.\n\ni'll search for today's latest news with an appropriate query tag.\n</think>\n\n\n"
+    },
+    "file_search": {
+      "cap": "file_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "computer_use": {
+      "cap": "computer_use",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "tool_search": {
+      "cap": "tool_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "mcp": {
+      "cap": "mcp",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    }
+  },
+  "MiniMax-M2.7-highspeed": {
+    "text": {
+      "cap": "text",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "reply": "<think>\nthe user asks: \"say hi in 3 words.\" it's a simple request. the assistant can respond with a greeting in three wo"
+    },
+    "image": {
+      "cap": "image",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": true,
+      "fixtures": [
+        {
+          "fixture": "RED_PNG",
+          "status": 200,
+          "reply": "<think>\nthe user asks: \"describe this image. what color and any text?\" we need to process the request. however, the user has not provided an image. according to policy, we need to ask for clarification or say we cannot view the image. the user says \"describe this image.\" possibly they intend to attach an image but it's missing. we should respond asking them to provide the image or link. also note that we need to follow the policy: if no image is attached, we cannot describe it. so we ask them to provide the image. there's no disallowed content. so answer accordingly.\n\nwe can also ask if they have any additional context. provide an apology.\n\nwe should comply.\n</think>\n\ni’m sorry, but i don’t see an image attached to your message. could you please upload or provide a link to the image you’d like me to describe? once i can view it, i’ll be happy to tell you about the colors, any visible text, and other details.",
+          "old_pass": false,
+          "new_pass": true,
+          "trigger_hit": true,
+          "substantive": true
+        },
+        {
+          "fixture": "B_LETTER",
+          "status": 200,
+          "reply": "<think>\nthe user asks: \"what single letter is shown in this image? reply with just that letter.\" so they presumably want me to identify a letter that appears in an attached image. however, the user hasn't provided any image in this text. they just ask the question. i need to respond appropriately. according to policy, if there's no image attached (the chat includes no image), i can't see any image; i cannot answer. however, they request to \"reply with just that letter.\" this is a request that i cannot fulfill because there is no image. i need to ask for clarification or state that i cannot see any image. possibly they think the image is attached but maybe it's omitted. the appropriate response is: \"i’m sorry, but i don’t see any image attached to your message.\" i could also ask if they can provide the image. that is the correct approach. also note that user wants a single letter output, but i cannot comply without image. so i need to explain that i can't see image. the user wants a single letter. i cannot guess. so i must politely ask for the image.\n\nthus my answer: i cannot see any image. so i'd respond: \"i’m sorry, i don’t see any image attached. could\n</think>\n",
+          "old_pass": false,
+          "new_pass": false,
+          "trigger_hit": true,
+          "substantive": false
+        }
+      ]
+    },
+    "audio": {
+      "cap": "audio",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "reply": "",
+      "substantive": false
+    },
+    "video": {
+      "cap": "video",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": false,
+      "reply": "<think>\nthe user asks: \"describe this video briefly.\" there is no video attached, no link or context. likely the user expects me to describe a video that was supposed to be attached, but there is none. according to policy, if a user requests description of a video but no video is provided, i must respond that i cannot see the video and request clarification or ask them to provide it. or maybe they forgot to attach. so i should ask them to provide the video or more context.\n\nthus: politely respond: \"i don't see any video attached. could you provide a link or description?\" also note the limitation: i can't see images/video. so ask them to provide text. that's the appropriate answer.\n</think>\n\ni’m sorry, but i don’t see any video attached to your message. if you can provide a link to the video (or upload it, if the platform allows), i’ll be happy to give you a brief description. alternatively, if you can tell me the title, source, or a few details about what’s in it, i can try to help with that information.",
+      "substantive": false
+    },
+    "function": {
+      "cap": "function",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "tool_calls": 1,
+      "reply": "<think>\nThe user is asking me to get the weather in Tokyo. I should use the get_weather function with the city parameter"
+    },
+    "reasoning": {
+      "cap": "reasoning",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": false,
+      "reasoning_tokens": 0
+    },
+    "web_search": {
+      "cap": "web_search",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": false,
+      "tool_calls": 1,
+      "has_target": false,
+      "reply": "<think>\nthe user wants me to search for the latest news today (july 2, 2026) and provide one headline. this is a request for current news, so i should use the web search function.\n</think>\n\n\n"
+    },
+    "file_search": {
+      "cap": "file_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "computer_use": {
+      "cap": "computer_use",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "tool_search": {
+      "cap": "tool_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "mcp": {
+      "cap": "mcp",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    }
+  },
+  "MiniMax-M3": {
+    "text": {
+      "cap": "text",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "reply": "<think>the user wants me to say hi in 3 words. simple request.</think>\n\nhey there, friend!"
+    },
+    "image": {
+      "cap": "image",
+      "status": 400,
+      "old_pass": true,
+      "new_pass": true,
+      "fixtures": [
+        {
+          "fixture": "RED_PNG",
+          "status": 200,
+          "reply": "<think>the user wants me to describe the image, focusing on its color and any text present.\n\nthe image shows a square with a red background bordered by a black outline. in the center, the word \"red\" is written in white, bold, uppercase letters.</think>\n\nthe image displays a square-shaped graphic with the following features:\n\n- **background color:** bright red\n- **border:** a black outline around the square\n- **text:** the word **\"red\"** is centered in the square, written in bold, white, uppercase letters\n\nthe design is simple and minimalist, with the white text standing out prominently against the vivid red background.",
+          "old_pass": true,
+          "new_pass": true,
+          "trigger_hit": true,
+          "substantive": true
+        },
+        {
+          "fixture": "B_LETTER",
+          "status": 400,
+          "reply": "",
+          "old_pass": false,
+          "new_pass": false,
+          "trigger_hit": false,
+          "substantive": false
+        }
+      ]
+    },
+    "audio": {
+      "cap": "audio",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": false,
+      "reply": "<think>\nthe user is asking what the audio sounds like, but i don't actually see any audio attached to this message. there's no audio file, no link, no description of audio content. i should let the user know that i don't see any audio in their message and ask them to provide it.\n</think>\ni don't see any audio attached to your message. could you please share the audio file or provide more context about what you'd like me to analyze? if you're trying to upload an audio clip, you may need to try attaching it again.",
+      "substantive": false
+    },
+    "video": {
+      "cap": "video",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "reply": "<think>\nthe user wants a brief description of the video.\n\n1.  **analyze the video content:** i will look at the provided frames.\n2.  **examine each frame:**\n    *   frame at 0.0 seconds: the entire frame is a solid, dark red color.\n    *   frame at 0.1 seconds: the entire frame is a solid, dark red color.\n3.  **synthesize findings:** across all provided frames, the video displays a uniform, dark red color. there is no movement, no change in color, and no discernible objects or shapes.\n4.  **formulate a description:** based on the observation, the video is simply a solid dark red screen. \"a dark red screen\" or \"solid dark red color\" would be an accurate and brief description. let's go with \"a dark red screen\".\n</think>\nthe video features a dark red screen.",
+      "substantive": true
+    },
+    "function": {
+      "cap": "function",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": true,
+      "tool_calls": 1,
+      "reply": "<think>The user is asking about the weather in Tokyo and wants me to use the get_weather function.</think>\n\n"
+    },
+    "reasoning": {
+      "cap": "reasoning",
+      "status": 200,
+      "old_pass": false,
+      "new_pass": false,
+      "reasoning_tokens": 0
+    },
+    "web_search": {
+      "cap": "web_search",
+      "status": 200,
+      "old_pass": true,
+      "new_pass": false,
+      "tool_calls": 1,
+      "has_target": false,
+      "reply": "<think>\nthe user is asking for the latest news today (2026-07-02). i should search for it.\n</think>\n"
+    },
+    "file_search": {
+      "cap": "file_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "computer_use": {
+      "cap": "computer_use",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "tool_search": {
+      "cap": "tool_search",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    },
+    "mcp": {
+      "cap": "mcp",
+      "status": 400,
+      "old_pass": false,
+      "new_pass": false,
+      "tool_calls": 0,
+      "has_target": false,
+      "reply": ""
+    }
+  }
+}

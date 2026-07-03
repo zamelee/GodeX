@@ -35,6 +35,7 @@ export interface EnabledModel {
 	provider: string;
 	model: string;
 	context_window?: number;
+	margin?: number;
 	max_tokens?: number;
 	multimodal?: boolean;
 	capabilities?: ModelCapabilities;

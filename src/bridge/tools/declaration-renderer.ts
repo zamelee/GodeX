@@ -49,7 +49,7 @@ function providerToolDeclaration(
 		case "function":
 			return functionDeclaration(plan.tool, plan.providerName);
 		case "web_search":
-			return webSearchDeclaration(plan.tool);
+			return webSearchDeclaration(plan.tool, plan.providerType);
 		case "retrieval":
 			return retrievalDeclaration(plan.tool);
 		case "mcp":
@@ -106,14 +106,56 @@ function functionDeclaration(
 
 function webSearchDeclaration(
 	tool: ResponseTool,
+	providerType: string,
 ): ProviderToolDeclaration | undefined {
 	if (!isWebSearchTool(tool)) return undefined;
+	// Native rendering: Zhipu, DeepSeek, etc. have a dedicated web_search tool
+	// type in their API. Pass the standard fields through unchanged.
+	if (providerType === "web_search") {
+		return {
+			type: "web_search",
+			web_search: {
+				enable: true,
+				search_engine: "search_std",
+				content_size: tool.search_context_size === "high" ? "high" : "medium",
+			},
+		};
+	}
+	// Degraded rendering (providerType === "function"): minimax and similar
+	// providers do not have a native web_search tool, so we render the tool as
+	// a generic function. We include the full parameter schema for all three
+	// Codex web_search actions (search / open_page / find_in_page) so the
+	// model knows how to invoke each. The call-restorer detects the action
+	// from the argument shape and reconstructs the original web_search_call.
 	return {
-		type: "web_search",
-		web_search: {
-			enable: true,
-			search_engine: "search_std",
-			content_size: tool.search_context_size === "high" ? "high" : "medium",
+		type: "function",
+		function: {
+			name: "web_search",
+			description:
+				"Search the web or open a specific URL.\n" +
+				'- To search the web: pass {"query": "<search terms>"}.\n' +
+				'- To open a URL: pass {"url": "<https://...>"}.\n' +
+				'- To find text on a page: pass {"url": "<https://...>", "pattern": "<text>"}.\n',
+			parameters: {
+				type: "object",
+				properties: {
+					query: {
+						type: "string",
+						description: "Search query (for the search action)",
+					},
+					url: {
+						type: "string",
+						description:
+							"URL to open (for the open_page or find_in_page action)",
+					},
+					pattern: {
+						type: "string",
+						description:
+							"Text pattern to find on the page (for the find_in_page action)",
+					},
+				},
+				required: [],
+			},
 		},
 	};
 }

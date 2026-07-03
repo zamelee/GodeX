@@ -1,0 +1,88 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 48.2s
+  judge phase: 32.0s
+  [+] text            status 200, response 147 chars
+  [-M] image_input     LLM inconclusive -> code-fallback: false_model:RED_PNG: refusal phrase in 200 response / false_model:GREEN_CIRCLE: refus
+  [-U] audio_input     all fixtures 4xx
+  [+] video_input     LLM inconclusive -> code-fallback: true:video_input_single: substantive description (status=200)
+  [+] function_call   tool_calls = ["get_weather"]
+  [-M] reasoning       0/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=0, shot2:st=200,rt=0, shot3:st=200,rt=0]
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  TARGET = MiniMax-M2.7-highspeed  |  JUDGE = MiniMax-M2.7-highspeed
+======================================================================
+  probe phase: 44.7s
+  judge phase: 25.3s
+  judge FAILED: JSON parse failed
+  [+] text            status 200, response 139 chars
+  [-M] image_input     LLM parse-failed -> code-fallback: false_model:RED_PNG: refusal phrase in 200 response / false_model:GREEN_CIRCLE: refus
+  [-U] audio_input     all fixtures 4xx (fallback)
+  [-M] video_input     LLM parse-failed -> code-fallback: false_model:video_input_single: refusal phrase in 200 response
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=165, shot2:st=200,rt=80, shot3:st=200,rt=255]
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  TARGET = MiniMax-M3  |  JUDGE = MiniMax-M3
+======================================================================
+  probe phase: 78.2s
+  judge phase: 6.7s
+  per_fixture image_input:
+    RED_PNG status=200 verdict=true
+    GREEN_CIRCLE status=200 verdict=true
+  per_fixture audio_input:
+    AUDIO_WAV status=200 verdict=false_model
+  per_fixture video_input:
+    VIDEO_MP4 status=200 verdict=true
+  [+] text            status 200, response 143 chars
+  [+] image_input     RED_PNG (status=200): Response gives a substantive description �� 'red square with a thin black border' with 'RED' in whi
+  [-M] audio_input     AUDIO_WAV (status=200): Response is a refusal �� 'I don't have access to any audio in our conversation. It appears no aud
+  [+] video_input     VIDEO_MP4 (status=200): Response describes the actual video content �� 'All frames are solid black. There is no visual in
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       2/2 shots had reasoning_tokens > 0: [shot1:st=200,rt=159, shot2:st=200,rt=101, shot3:st=0,rt=0]
+  [-X] web_search      status 0
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  SUMMARY (v4 hybrid, multi-fixture)
+======================================================================
+cap             | MiniMax-M2.7             | MiniMax-M2.7-highspeed   | MiniMax-M3              
+------------------------------------------------------------------------------------------------
+text            | +                        | +                        | +                        | 
+image_input     | -M                       | -M                       | +                        | 
+audio_input     | -U                       | -U                       | -M                       | 
+video_input     | +                        | -M                       | +                        | 
+function_call   | +                        | +                        | +                        | 
+reasoning       | -M                       | +                        | +                        | 
+web_search      | +                        | +                        | -X                       | 
+file_search     | -U                       | -U                       | -U                       | 
+computer_use    | -U                       | -U                       | -U                       | 
+tool_search     | -U                       | -U                       | -U                       | 
+mcp             | -U                       | -U                       | -U                       | 
+
+Legend:
+  +  true  -- model genuinely processed input / invoked tool
+  -M false_model  -- API accepted (status=200) but model refused (refusal pattern)
+  -U false_upstream  -- API rejected (status>=400); PROVIDER-specific boundary
+  -X false_other  -- network/parse/other error
+  ?  inconclusive  -- insufficient data to judge
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v4_result.json

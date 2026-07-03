@@ -238,7 +238,13 @@ function normalizeInputItem(
 		return messages;
 	}
 	if (item.type === "web_search_call") {
-		return [];
+		return webSearchCallToFunctionMessages(item, context);
+	}
+	if (item.type === "tool_search_call") {
+		return toolSearchCallToFunctionMessages(item, context);
+	}
+	if (item.type === "tool_search_output") {
+		return toolSearchOutputToFunctionMessages(item);
 	}
 	if (item.type === "shell_call") {
 		const call = assistantToolCallMessage(
@@ -321,6 +327,87 @@ function normalizeInputItem(
 	}
 
 	throw unsupportedInputItemError(item, request, context);
+}
+
+function webSearchCallToFunctionMessages(
+	item: {
+		id: string;
+		action:
+			| {
+					type: "search";
+					query: string;
+					sources?: { type: "url"; url: string }[];
+			  }
+			| { type: "open_page"; url?: string }
+			| { type: "find_in_page"; pattern: string; url: string };
+		status: string;
+	},
+	context: InputNormalizerContext,
+): NormalizedChatMessage[] {
+	if (!item.id) return [];
+	let args: Record<string, unknown>;
+	let output: Record<string, unknown>;
+	if (item.action.type === "search") {
+		args = { query: item.action.query };
+		output = {
+			status: item.status,
+			sources: item.action.sources ?? [],
+		};
+	} else if (item.action.type === "open_page") {
+		args = { action: "open_page", url: item.action.url ?? null };
+		output = { status: item.status };
+	} else {
+		args = {
+			action: "find_in_page",
+			pattern: item.action.pattern,
+			url: item.action.url,
+		};
+		output = { status: item.status };
+	}
+	const call = assistantToolCallMessage(
+		item.id,
+		providerToolName(context, "web_search", "web_search"),
+		canonicalizeFunctionArguments(JSON.stringify(args)),
+	);
+	if (!call) return [];
+	return [call, toolOutputMessage(item.id, JSON.stringify(output))];
+}
+
+function toolSearchCallToFunctionMessages(
+	item: {
+		id?: string;
+		call_id?: string;
+		arguments: unknown;
+	},
+	context: InputNormalizerContext,
+): NormalizedChatMessage[] {
+	const callId = item.id ?? item.call_id;
+	if (!callId) return [];
+	const call = assistantToolCallMessage(
+		callId,
+		providerToolName(context, "tool_search", "tool_search"),
+		canonicalizeFunctionArguments(JSON.stringify(item.arguments ?? {})),
+	);
+	return call ? [call] : [];
+}
+
+function toolSearchOutputToFunctionMessages(item: {
+	id?: string;
+	call_id?: string;
+	tools: unknown;
+	status?: string;
+}): NormalizedChatMessage[] {
+	const callId = item.call_id ?? item.id;
+	if (!callId) return [];
+	return [
+		toolOutputMessage(
+			callId,
+			JSON.stringify({
+				status: item.status,
+				tools: item.tools,
+			}),
+		),
+	];
 }
 
 function assistantToolCallMessage(

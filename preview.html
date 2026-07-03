@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Probe Modal Preview - Full UI</title>
+<style>
+:root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #1f2937;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text2: #8b949e;
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+}
+body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", "PingFang SC", sans-serif; font-size: 13px; }
+.modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+h3 { margin: 0 0 12px 0; font-size: 15px; }
+.preview-header { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; margin: 12px; }
+.preview-header h1 { margin: 0 0 4px 0; font-size: 14px; color: var(--blue); }
+.preview-header p { margin: 0; color: var(--text2); font-size: 11px; }
+.fix-tag { display: inline-block; background: var(--green); color: var(--bg); font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+button:hover { background: var(--border); }
+button.primary { background: var(--blue); color: var(--bg); border-color: var(--blue); font-weight: bold; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.probe-modal-box { min-width: 850px; max-width: 95vw; height: 92vh; max-height: 95vh; display: flex; flex-direction: column; padding: 16px; overflow: hidden; }
+.probe-section { margin-bottom: 8px; }
+.probe-label { color: var(--text2); font-size: 11px; margin-bottom: 4px; font-weight: 500; }
+.probe-section > label { display: inline-block; min-width: 80px; color: var(--text2); margin-right: 8px; font-size: 12px; }
+.probe-section select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; min-width: 200px; }
+.probe-mode-group { display: inline-flex; gap: 8px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg3); }
+.probe-mode-opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.probe-mode-desc { color: var(--text2); font-size: 11px; }
+
+/* Models list - pill style */
+.probe-models-list { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.probe-model-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; background: var(--bg3);
+    border: 1px solid var(--border); border-radius: 12px;
+    font-size: 11px; cursor: pointer;
+    transition: background 0.12s;
+}
+.probe-model-item:hover { background: var(--bg2); border-color: var(--blue); }
+.probe-model-item input { margin: 0; cursor: pointer; flex-shrink: 0; }
+.probe-model-item .ctx-badge { font-size: 9px; color: var(--blue); padding-left: 3px; }
+.probe-model-item.custom { border-color: var(--blue); background: rgba(79, 195, 247, 0.08); }
+.probe-model-item.custom .model-name::before { content: "\271A"; font-size: 9px; color: var(--blue); margin-right: 3px; }
+.probe-model-item.add-pill { background: transparent; border: 1px dashed var(--border); }
+.probe-model-item.add-pill input { border: none; background: transparent; padding: 0; outline: none; }
+.probe-model-item.add-pill input::placeholder { color: var(--text2); }
+.probe-model-item.add-pill:focus-within { border-color: var(--blue); }
+
+/* Caps grid - checkbox grid */
+.probe-caps-grid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.cap-item {
+    display: inline-flex; flex-direction: column; gap: 1px;
+    padding: 4px 8px; background: var(--bg3);
+    border: 1px solid var(--border); border-radius: 4px;
+    cursor: pointer; transition: background 0.12s;
+}
+.cap-item:hover { background: var(--bg2); border-color: var(--blue); }
+.cap-item.checked { background: rgba(88, 166, 255, 0.1); border-color: var(--blue); }
+.cap-top { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.cap-top input { width: auto; margin: 0; cursor: pointer; }
+.cap-zh { font-size: 10px; color: var(--text2); }
+
+/* Results + Log area (with CSS fix) */
+.probe-flex-mid { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+.probe-flex-mid > .probe-section { flex: 0 0 auto; min-height: 50px; }
+.probe-flex-mid > .probe-section.probe-log-section { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* === CSS 修复: 提升特异性让 results section 占 200px 而非 50px === */
+.probe-flex-mid > .probe-section.probe-results-section { flex: 0 0 200px; min-height: 100px; display: flex; flex-direction: column; }
+.probe-sash { height: 4px; background: transparent; cursor: ns-resize; margin: 2px 0; border-top: 1px dashed var(--border); }
+.probe-sash:hover { background: var(--border); }
+
+.probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+#probe-results-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+#probe-results-table th, #probe-results-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#probe-results-table th { background: var(--bg3); color: var(--text2); font-weight: 500; position: sticky; top: 0; }
+.sticky-col { position: sticky; left: 0; background: var(--bg3); z-index: 2; text-align: left !important; }
+#probe-results-table tr:hover .sticky-col { background: var(--bg); }
+#probe-results-table tr:hover { background: var(--bg2); }
+.empty-msg { color: var(--text2); font-size: 11px; padding: 12px; text-align: center; }
+.probe-log { flex: 1; min-height: 120px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; color: #7ee787; white-space: pre-wrap; }
+
+.probe-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; gap: 8px; flex-shrink: 0; }
+
+.preview-actions { position: fixed; top: 10px; right: 10px; background: var(--bg2); border: 1px solid var(--blue); border-radius: 6px; padding: 8px 12px; z-index: 1000; }
+.preview-actions button { margin-left: 4px; }
+.ok { color: var(--green); font-weight: bold; }
+.no { color: var(--red); font-weight: bold; }
+.na { color: var(--text2); }
+.toast { position: fixed; top: 80px; right: 20px; background: var(--bg3); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; z-index: 1000; font-size: 12px; max-width: 400px; }
+.toast.ok { border-color: var(--green); }
+.toast.warn { border-color: var(--yellow); }
+.toast.err { border-color: var(--red); }
+.fix-demo { background: var(--bg2); border: 1px solid var(--green); border-radius: 6px; padding: 8px 12px; margin: 0 12px 12px 12px; font-size: 11px; color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="preview-actions">
+    <button onclick="resetProbe()">&#x21BB; 重置</button>
+    <button onclick="openProbeModal()" id="btn-open" class="primary">&#x1F4C2; 显示完整模态框</button>
+</div>
+
+<div class="preview-header">
+    <h1>GodeX Studio - 模型能力探测子窗口 <span class="fix-tag">修复后预览</span></h1>
+    <p>完整模拟：Provider选择 → 模型选择 → 能力勾选 → 全量探测 → 结果增量显示</p>
+</div>
+
+<div class="fix-demo">
+    ✅ 已修复: (1) CSS 特异性 → 结果栏从 50px 变 200px (2) reasoning 字段不再误标 (3) statusOf 兼容新旧 schema (4) 每完成一个模型就显示一行
+</div>
+
+<div id="probe-modal" class="modal" style="display:flex">
+    <div class="modal-box probe-modal-box">
+        <h3>模型探测</h3>
+
+        <!-- 1. Provider 选择 -->
+        <div class="probe-section">
+            <label>Provider</label>
+            <select id="probe-provider">
+                <option value="">-- 选择 Provider --</option>
+                <option value="minnimax.chat" selected>minnimax.chat</option>
+                <option value="deepseek">deepseek</option>
+                <option value="zhipu">zhipu</option>
+            </select>
+            <span style="color:var(--text2); margin-left:12px; font-size:11px;">选择 Provider 后下方显示已启用模型</span>
+        </div>
+
+        <div class="probe-sash"></div>
+
+        <!-- 2. 模型选择 (复选框 pills) -->
+        <div class="probe-section">
+            <div class="probe-label">选择模型 (勾选要探测的)</div>
+            <div id="probe-models-list" class="probe-models-list"></div>
+        </div>
+
+        <div class="probe-sash"></div>
+
+        <!-- 3. 模式 + 能力勾选 -->
+        <div class="probe-section">
+            <div style="display:flex; gap:16px; align-items:flex-start;">
+                <div>
+                    <div class="probe-label">探测模式</div>
+                    <span class="probe-mode-group">
+                        <label class="probe-mode-opt">
+                            <input type="radio" name="probe-mode" value="quick"/>
+                            <span>快速</span>
+                            <span class="probe-mode-desc">Rust, ~10s/模型</span>
+                        </label>
+                        <label class="probe-mode-opt">
+                            <input type="radio" name="probe-mode" value="full" checked/>
+                            <span>全量</span>
+                            <span class="probe-mode-desc">Python + LLM judge, ~60-150s/模型</span>
+                        </label>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="probe-section">
+            <div class="probe-label">能力探测 (全量模式下自动探测这些)</div>
+            <div class="probe-caps-grid" id="probe-caps-grid"></div>
+        </div>
+
+        <!-- 4. 结果 + 日志 -->
+        <div class="probe-flex-mid">
+            <div class="probe-section probe-results-section">
+                <div class="probe-label">结果 (每完成一个模型就显示一行)</div>
+                <div class="probe-table-wrap">
+                    <table id="probe-results-table">
+                        <thead>
+                            <tr>
+                                <th class="sticky-col">Model</th>
+                                <th>Ctx</th><th>MaxOut</th>
+                                <th>Text</th><th>Image</th><th>Audio</th><th>Video</th>
+                                <th>Func</th><th>Reason</th><th>CompUse</th><th>ToolSrch</th>
+                                <th>WebSrch</th><th>FileSrch</th><th>MCP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="probe-results-body">
+                            <tr><td colspan="14" class="empty-msg">等待探测...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="probe-section probe-log-section">
+                <div class="probe-label">日志</div>
+                <div id="probe-log" class="probe-log"></div>
+            </div>
+        </div>
+
+        <!-- 5. 操作按钮 -->
+        <div class="probe-actions">
+            <div>
+                <button id="btn-probe-start" onclick="startMockProbe()">▶ 开始探测</button>
+                <button id="btn-probe-stop" onclick="stopMockProbe()" style="display:none">停止</button>
+            </div>
+            <div>
+                <button onclick="saveMockResults()">保存</button>
+                <button onclick="closeProbeModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// === Mock data: providers, enabled models, capabilities ===
+
+const MOCK_PROVIDERS = [
+    { name: "minnimax.chat", spec: "minimax", base_url: "https://minnimax.chat/v1", api_key: "gw-ced0***" },
+    { name: "deepseek", spec: "deepseek", base_url: "https://api.deepseek.com", api_key: "sk-***" },
+    { name: "zhipu", spec: "zhipu", base_url: "https://open.bigmodel.cn/api/coding/paas/v4", api_key: "***" },
+];
+
+const MOCK_ENABLED_MODELS = [
+    { provider: "minnimax.chat", model: "MiniMax-M2.7", context_window: 204800, max_tokens: 131072 },
+    { provider: "minnimax.chat", model: "MiniMax-M2.7-highspeed", context_window: 204800, max_tokens: 16384 },
+    { provider: "minnimax.chat", model: "MiniMax-M3", context_window: 1000000, max_tokens: 16384 },
+    { provider: "deepseek", model: "deepseek-chat", context_window: 64000, max_tokens: 8192 },
+    { provider: "zhipu", model: "glm-5.2", context_window: 128000, max_tokens: 8192 },
+];
+
+const CAPS = [
+    { id: "ctx", name: "Context", zh: "上下文窗口大小", checked: true, hardcoded: true },
+    { id: "max", name: "MaxTokens", zh: "单次输出 token 上限", checked: true, hardcoded: true },
+    { id: "text", name: "Text", zh: "文本", checked: true },
+    { id: "image", name: "Image", zh: "图片", checked: true },
+    { id: "video", name: "Video", zh: "视频", checked: false },
+    { id: "audio", name: "Audio", zh: "音频 / 音乐", checked: false },
+    { id: "func", name: "Func", zh: "函数调用", checked: true },
+    { id: "reason", name: "Reason", zh: "推理 / 思维链", checked: true },
+    { id: "computer", name: "Computer", zh: "计算机操作", checked: false },
+    { id: "toolsearch", name: "ToolSearch", zh: "工具搜索", checked: false },
+    { id: "websearch", name: "WebSearch", zh: "网页搜索", checked: true },
+    { id: "filesearch", name: "FileSearch", zh: "文件搜索", checked: false },
+    { id: "mcp", name: "MCP", zh: "MCP 服务器", checked: false },
+];
+
+// === JS: 真实修复后的核心逻辑 ===
+
+let _probeResults = [];
+let _probeChanged = false;
+let _mockProbeRunning = false;
+
+function statusOf(v) {
+    if (!v) return null;
+    if (typeof v === "object" && !Array.isArray(v)) return v.status || null;
+    if (Array.isArray(v) && v.length >= 1) return v[0];
+    return null;
+}
+function isTrue(v) { return statusOf(v) === "true"; }
+function okMark(v) {
+    const s = statusOf(v);
+    if (s === "true") return '<span class="ok">YES</span>';
+    if (s && s.indexOf("false_") === 0) return '<span class="no">NO</span>';
+    return '<span class="na">-</span>';
+}
+function num(v) { return v ? Math.round(v / 1000) + "K" : "-"; }
+
+function updateProbeResultsTable() {
+    const tbody = document.getElementById("probe-results-body");
+    if (_probeResults.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" class="empty-msg">等待探测...</td></tr>';
+        return;
+    }
+    tbody.innerHTML = "";
+    for (const r of _probeResults) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+            '<td class="sticky-col">' + r.model + '</td>' +
+            '<td>' + num(r.context_window) + '</td>' +
+            '<td>' + num(r.max_tokens) + '</td>' +
+            '<td>' + okMark(r.text) + '</td>' +
+            '<td>' + okMark(r.image) + '</td>' +
+            '<td>' + okMark(r.audio) + '</td>' +
+            '<td>' + okMark(r.video) + '</td>' +
+            '<td>' + okMark(r.function) + '</td>' +
+            '<td>' + okMark(r.reasoning) + '</td>' +
+            '<td>' + okMark(r.computer_use) + '</td>' +
+            '<td>' + okMark(r.tool_search) + '</td>' +
+            '<td>' + okMark(r.web_search) + '</td>' +
+            '<td>' + okMark(r.file_search) + '</td>' +
+            '<td>' + okMark(r.mcp) + '</td>';
+        tbody.appendChild(tr);
+    }
+}
+
+function logLine(msg) {
+    const el = document.getElementById("probe-log");
+    const ts = new Date().toLocaleTimeString();
+    el.innerHTML += "[" + ts + "] " + msg + "\n";
+    el.scrollTop = el.scrollHeight;
+}
+
+function showToast(msg, type) {
+    const c = document.getElementById("toast-container");
+    const t = document.createElement("div");
+    t.className = "toast " + (type || "");
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 4500);
+}
+
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+// === 1. Provider 切换 → 加载模型 ===
+function onProbeProviderChange() {
+    const provName = document.getElementById("probe-provider").value;
+    const container = document.getElementById("probe-models-list");
+    container.innerHTML = "";
+    if (!provName) {
+        container.innerHTML = '<div style="color:var(--text2);font-size:11px">先选择 Provider</div>';
+        return;
+    }
+    const models = MOCK_ENABLED_MODELS.filter(function(m) { return m.provider === provName; });
+    if (models.length === 0) {
+        container.innerHTML = '<div style="color:var(--text2);font-size:11px">该 Provider 没有已启用模型</div>';
+        return;
+    }
+    models.forEach(function(m) {
+        appendModelPill(container, m.model, m.context_window, false);
+    });
+}
+
+function appendModelPill(container, name, ctx, isCustom) {
+    const label = document.createElement("label");
+    label.className = "probe-model-item" + (isCustom ? " custom" : "");
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.className = "probe-model-check";
+    chk.value = name;
+    chk.checked = true;
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "model-name";
+    nameSpan.textContent = name;
+    label.appendChild(chk);
+    label.appendChild(nameSpan);
+    if (ctx > 0) {
+        const badge = document.createElement("span");
+        badge.className = "ctx-badge";
+        badge.textContent = Math.round(ctx / 1000) + "K";
+        label.appendChild(badge);
+    }
+    container.appendChild(label);
+}
+
+// === 2. 渲染能力勾选 ===
+function renderCapsGrid() {
+    const grid = document.getElementById("probe-caps-grid");
+    grid.innerHTML = "";
+    CAPS.forEach(function(cap) {
+        const lbl = document.createElement("label");
+        lbl.className = "cap-item" + (cap.checked ? " checked" : "");
+        lbl.dataset.cap = cap.id;
+        const top = document.createElement("span");
+        top.className = "cap-top";
+        const chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.id = "cap-" + cap.id;
+        chk.checked = cap.checked;
+        if (cap.hardcoded) chk.disabled = true;
+        chk.addEventListener("change", function() {
+            cap.checked = chk.checked;
+            lbl.classList.toggle("checked", cap.checked);
+        });
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = cap.name;
+        top.appendChild(chk);
+        top.appendChild(nameSpan);
+        const zhSpan = document.createElement("span");
+        zhSpan.className = "cap-zh";
+        zhSpan.textContent = cap.zh;
+        lbl.appendChild(top);
+        lbl.appendChild(zhSpan);
+        grid.appendChild(lbl);
+    });
+}
+
+function openProbeModal() {
+    document.getElementById("probe-modal").style.display = "flex";
+    _probeResults = [];
+    _probeChanged = false;
+    document.getElementById("probe-log").innerHTML = "";
+    updateProbeResultsTable();
+    onProbeProviderChange();
+}
+
+function closeProbeModal() {
+    if (_probeChanged) {
+        if (!confirm("有未保存的探测结果，确定关闭？")) return;
+    }
+    document.getElementById("probe-modal").style.display = "none";
+}
+
+function saveMockResults() {
+    if (_probeResults.length === 0) {
+        showToast("没有可保存的结果", "warn");
+        return;
+    }
+    const successful = _probeResults.filter(function(r) { return r.success !== false; });
+    showToast("预览: 已保存 " + successful.length + " 个模型到 enabled[]（实际不写 config.yaml）", "ok");
+    _probeChanged = false;
+}
+
+// === 3. Mock probe data (3 models) ===
+const MOCK_PROBE_DATA = [
+    {
+        model: "MiniMax-M2.7",
+        elapsed: 48.6,
+        judgments: {
+            text:          { status: "true", reason: "status 200, response 137 chars", method: "code" },
+            function_call: { status: "true", reason: "tool_calls present", method: "code" },
+            reasoning:     { status: "false_model", reason: "0/3 shots", method: "llm" },
+            web_search:    { status: "true", reason: "tool_calls has web_search", method: "code" },
+            file_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            computer_use:  { status: "false_upstream", reason: "status 400", method: "code" },
+            tool_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            mcp:           { status: "false_upstream", reason: "status 400", method: "code" },
+            image_input:   { status: "false_model", reason: "model refused", method: "llm" },
+            audio_input:   { status: "false_upstream", reason: "status 400", method: "code" },
+            video_input:   { status: "false_model", reason: "model refused", method: "llm" },
+        },
+        ctxProbe: { max_actual: 204800 },
+        maxTokensProbe: { max_actual: 131072 },
+    },
+    {
+        model: "MiniMax-M2.7-highspeed",
+        elapsed: 32.1,
+        judgments: {
+            text:          { status: "true", reason: "status 200", method: "code" },
+            function_call: { status: "true", reason: "tool_calls present", method: "code" },
+            reasoning:     { status: "false_model", reason: "0/3 shots", method: "llm" },
+            web_search:    { status: "true", reason: "tool_calls has web_search", method: "code" },
+            file_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            computer_use:  { status: "false_upstream", reason: "status 400", method: "code" },
+            tool_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            mcp:           { status: "false_upstream", reason: "status 400", method: "code" },
+            image_input:   { status: "false_model", reason: "model refused", method: "llm" },
+            audio_input:   { status: "false_upstream", reason: "status 400", method: "code" },
+            video_input:   { status: "false_model", reason: "model refused", method: "llm" },
+        },
+        ctxProbe: { max_actual: 204800 },
+        maxTokensProbe: { max_actual: 16384 },
+    },
+    {
+        model: "MiniMax-M3",
+        elapsed: 75.2,
+        judgments: {
+            text:          { status: "true", reason: "status 200, response 89 chars", method: "code" },
+            function_call: { status: "true", reason: "tool_calls present", method: "code" },
+            reasoning:     { status: "true", reason: "3/3 shots had reasoning_tokens > 0", method: "llm" },
+            web_search:    { status: "true", reason: "tool_calls has web_search", method: "code" },
+            file_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            computer_use:  { status: "false_upstream", reason: "status 400", method: "code" },
+            tool_search:   { status: "false_upstream", reason: "status 400", method: "code" },
+            mcp:           { status: "false_upstream", reason: "status 400", method: "code" },
+            image_input:   { status: "true", reason: "model described image correctly", method: "llm" },
+            audio_input:   { status: "true", reason: "model described audio correctly", method: "code" },
+            video_input:   { status: "false_model", reason: "model refused video", method: "llm" },
+        },
+        ctxProbe: { max_actual: 1000000 },
+        maxTokensProbe: { max_actual: 16384 },
+    },
+];
+
+async function startMockProbe() {
+    if (_mockProbeRunning) return;
+    const provName = document.getElementById("probe-provider").value;
+    if (!provName) { showToast("请选择 Provider", "err"); return; }
+    const checks = document.querySelectorAll(".probe-model-check:checked");
+    if (checks.length === 0) { showToast("请勾选要探测的模型", "err"); return; }
+    const modelNames = Array.from(checks).map(function(c) { return c.value; });
+
+    _probeResults = [];
+    _probeChanged = false;
+    document.getElementById("probe-log").innerHTML = "";
+    updateProbeResultsTable();
+    _mockProbeRunning = true;
+    document.getElementById("btn-probe-start").disabled = true;
+
+    logLine("Provider: " + provName);
+    logLine("模式: 全量 (Python + LLM judge)");
+    logLine("模型: " + modelNames.join(", "));
+    logLine("");
+
+    for (let i = 0; i < modelNames.length; i++) {
+        const name = modelNames[i];
+        const probe = MOCK_PROBE_DATA.find(function(p) { return p.model === name; });
+        if (!probe) continue;
+        logLine("--- " + probe.model + " [" + (i + 1) + "/" + modelNames.length + "] ---");
+        await sleep(1200);
+        logLine("  [python full mode] elapsed=" + probe.elapsed.toFixed(1) + "s");
+
+        const j = probe.judgments;
+        const r = {
+            model: probe.model, success: true, error: null,
+            context_window: probe.ctxProbe ? probe.ctxProbe.max_actual : null,
+            max_tokens: probe.maxTokensProbe ? probe.maxTokensProbe.max_actual : null,
+            text: null, image: null, video: null, audio: null,
+            function: null, reasoning: null,
+            web_search: null, file_search: null,
+            computer_use: null, tool_search: null, mcp: null
+        };
+        r.text = isTrue(j.text);
+        r.image = isTrue(j.image_input);
+        r.audio = isTrue(j.audio_input);
+        r.video = isTrue(j.video_input);
+        r.function = isTrue(j.function_call);
+        r.reasoning = isTrue(j.reasoning);
+        r.web_search = isTrue(j.web_search);
+        r.file_search = isTrue(j.file_search);
+        r.computer_use = isTrue(j.computer_use);
+        r.tool_search = isTrue(j.tool_search);
+        r.mcp = isTrue(j.mcp);
+
+        _probeResults.push(r);
+        _probeChanged = true;
+        updateProbeResultsTable();
+        logLine("");
+        await sleep(200);
+    }
+
+    logLine("探测完成!");
+    _mockProbeRunning = false;
+    document.getElementById("btn-probe-start").disabled = false;
+    showToast("探测完成！点保存将结果写入 enabled[]", "ok");
+}
+
+function stopMockProbe() {
+    _mockProbeRunning = false;
+    document.getElementById("btn-probe-start").disabled = false;
+    showToast("已停止（预览）", "warn");
+}
+
+function resetProbe() {
+    _probeResults = [];
+    _probeChanged = false;
+    document.getElementById("probe-log").innerHTML = "";
+    updateProbeResultsTable();
+    onProbeProviderChange();
+    showToast("已重置", "ok");
+}
+
+// === 初始化 ===
+document.getElementById("probe-provider").addEventListener("change", onProbeProviderChange);
+renderCapsGrid();
+onProbeProviderChange();
+</script>
+
+</body>
+</html>

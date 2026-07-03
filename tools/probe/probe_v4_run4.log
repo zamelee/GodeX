@@ -1,0 +1,95 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 38.0s
+  judge phase: 28.4s
+  judge FAILED: JSON parse failed
+  [+] text            status 200, response 148 chars
+  [?] image_input     judge failed
+  [-U] audio_input     all fixtures status>=400 (fallback)
+  [?] video_input     judge failed
+  [+] function_call   tool_calls = ["get_weather"]
+  [-M] reasoning       0/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=0, shot2:st=200,rt=0, shot3:st=200,rt=0]
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  TARGET = MiniMax-M2.7-highspeed  |  JUDGE = MiniMax-M2.7-highspeed
+======================================================================
+  probe phase: 48.7s
+  judge phase: 18.0s
+  per_fixture image_input:
+    RED_PNG status=200 verdict=false_model
+    GREEN_CIRCLE status=200 verdict=false_model
+  per_fixture audio_input:
+    AUDIO_WAV status=400 verdict=false_upstream
+  per_fixture video_input:
+    VIDEO_MP4 status=200 verdict=false_model
+  [+] text            status 200, response 145 chars
+  [-M] image_input     Both fixtures (RED_PNG and GREEN_CIRCLE) returned status 200 but the model responded with refusals stating it cannot see
+  [-U] audio_input     The audio_input fixture returned status 400 with error_code 'bad_request_error'. This indicates the upstream/gateway rej
+  [-M] video_input     The video_input fixture returned status 200 but the model responded with a refusal stating 'There's no video attached' a
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=108, shot2:st=200,rt=176, shot3:st=200,rt=164]
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  TARGET = MiniMax-M3  |  JUDGE = MiniMax-M3
+======================================================================
+  probe phase: 37.6s
+  judge phase: 8.1s
+  per_fixture image_input:
+    RED_PNG status=200 verdict=true
+    GREEN_CIRCLE status=200 verdict=true
+  per_fixture audio_input:
+    AUDIO_WAV status=529 verdict=false_other
+  per_fixture video_input:
+    VIDEO_MP4 status=200 verdict=true
+  [+] text            status 200, response 76 chars
+  [+] image_input     RED_PNG: status=200, response gives a detailed description of the red background and the white 'RED' text -- substantive
+  [-X] audio_input     Status=529 with error_code='overloaded_error'. This is a server-side capacity/overload failure (HTTP 529), not a 4xx for
+  [+] video_input     Status=200. The model examined the provided video frames and described their content (solid black screen across all time
+  [+] function_call   tool_calls = ["get_weather"]
+  [+] reasoning       3/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=132, shot2:st=200,rt=157, shot3:st=200,rt=158]
+  [-U] web_search      status 529
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  SUMMARY (v4 hybrid, multi-fixture)
+======================================================================
+cap             | MiniMax-M2.7             | MiniMax-M2.7-highspeed   | MiniMax-M3              
+------------------------------------------------------------------------------------------------
+text            | +                        | +                        | +                        | 
+image_input     | ?                        | -M                       | +                        | 
+audio_input     | -U                       | -U                       | -X                       | 
+video_input     | ?                        | -M                       | +                        | 
+function_call   | +                        | +                        | +                        | 
+reasoning       | -M                       | +                        | +                        | 
+web_search      | +                        | +                        | -U                       | 
+file_search     | -U                       | -U                       | -U                       | 
+computer_use    | -U                       | -U                       | -U                       | 
+tool_search     | -U                       | -U                       | -U                       | 
+mcp             | -U                       | -U                       | -U                       | 
+
+Legend:
+  +  true  -- model genuinely processed input / invoked tool
+  -M false_model  -- API accepted (status=200) but model refused (refusal pattern)
+  -U false_upstream  -- API rejected (status>=400); PROVIDER-specific boundary
+  -X false_other  -- network/parse/other error
+  ?  inconclusive  -- insufficient data to judge
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v4_result.json

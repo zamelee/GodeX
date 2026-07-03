@@ -1,0 +1,50 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 32.2s, 11 caps done
+  judge phase: 11.6s
+  [+] text            status=200
+  [-] image_input     status=?
+  [-] audio_input     status=400
+  [-] video_input     status=200
+  [+] function_call   status=200
+  [-] reasoning       status=200
+  [+] web_search      status=200
+  [-] file_search     status=400
+  [-] computer_use    status=400
+  [-] tool_search     status=400
+  [-] mcp             status=400
+       why: The response 'Hey there, friend!' is a substantive non-refusal text reply to the user's request.
+       why: Both test cases (RED_PNG and B_LETTER) show the model refusing to process images, stating it cannot see the images provi...
+       why: Status 400 with empty response_text indicates the audio input request failed and no audio processing occurred.
+       why: The model responded with a refusal message stating it cannot view video and requested more information, which is not act...
+       why: The tool_calls array contains a valid function call to get_weather with city 'Tokyo', demonstrating genuine function cal...
+       why: The usage data shows reasoning_tokens: 0, indicating no billable reasoning tokens were used despite a thinking block in ...
+       why: The tool_calls contains a call to plugin_web_search with a query, demonstrating genuine web search capability.
+       why: Status 400 with empty response_text and empty tool_calls indicates no file search was performed.
+       why: Status 400 with empty response_text and empty tool_calls indicates no computer use action was performed.
+       why: Status 400 with empty response_text and empty tool_calls indicates no tool search was performed.
+       why: Status 400 with empty response_text and empty tool_calls indicates no MCP server tool was invoked.
+
+======================================================================
+  SUMMARY (LLM-as-judge)
+======================================================================
+cap             | MiniMax-M2.7            
+------------------------------------------
+text            | +                        | 
+image_input     | -                        | 
+audio_input     | -                        | 
+video_input     | -                        | 
+function_call   | +                        | 
+reasoning       | -                        | 
+web_search      | +                        | 
+file_search     | -                        | 
+computer_use    | -                        | 
+tool_search     | -                        | 
+mcp             | -                        | 
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v3_result.json

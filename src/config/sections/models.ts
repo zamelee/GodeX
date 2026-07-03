@@ -23,10 +23,12 @@ export function parseModelsConfig(
 		? validateModelAliases(rawAliases, providerNames)
 		: {};
 
-	const enabled = rawEnabled ? parseEnabledModels(rawEnabled, providerNames) : undefined;
+	const enabled = rawEnabled
+		? parseEnabledModels(rawEnabled, providerNames)
+		: undefined;
 	if (enabled && enabled.length > 0) {
 		for (const item of enabled) {
-			const alias = item.provider + "/" + item.model;
+			const alias = `${item.provider}/${item.model}`;
 			// explicit user aliases win
 			if (!(alias in userAliases)) {
 				userAliases[alias] = alias;
@@ -45,29 +47,35 @@ function parseEnabledModels(
 	for (let i = 0; i < raw.length; i++) {
 		const item = raw[i];
 		if (typeof item !== "object" || item === null) {
-			throw new Error("models.enabled[" + i + "] must be an object");
+			throw new Error(`models.enabled[${i}] must be an object`);
 		}
 		const obj = item as Record<string, unknown>;
 		const provider = typeof obj.provider === "string" ? obj.provider : "";
 		const model = typeof obj.model === "string" ? obj.model : "";
 		if (!provider || !model) {
 			throw new Error(
-				"models.enabled[" + i + "] must have string provider and model",
+				`models.enabled[${i}] must have string provider and model`,
 			);
 		}
 		if (!providerNames.has(provider)) {
 			throw new Error(
-				"models.enabled[" + i + "]: provider \"" + provider + "\" is not configured",
+				"models.enabled[" +
+					i +
+					']: provider "' +
+					provider +
+					'" is not configured',
 			);
 		}
 		const contextWindow = numberOrUndefined(obj.context_window);
 		const maxTokens = numberOrUndefined(obj.max_tokens);
+		const margin = numberOrUndefined(obj.margin);
 		const multimodal = boolOrUndefined(obj.multimodal);
 		const capabilities = parseCapabilities(obj.capabilities);
 		const note = typeof obj.note === "string" ? obj.note : undefined;
 		const entry: EnabledModel = { provider, model };
 		if (contextWindow !== undefined) entry.context_window = contextWindow;
 		if (maxTokens !== undefined) entry.max_tokens = maxTokens;
+		if (margin !== undefined) entry.margin = margin;
 		if (multimodal !== undefined) entry.multimodal = multimodal;
 		if (capabilities) entry.capabilities = capabilities;
 		if (note !== undefined) entry.note = note;

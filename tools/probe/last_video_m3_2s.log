@@ -1,0 +1,18 @@
+=== test_probe ===
+BASE: https://minnimax.chat/v1
+WHAT: video
+MODELS: ["MiniMax-M3"]
+
+--- MiniMax-M3 ---
+  [text] ok hit=Some("hi")
+  [image] ok hit=Some("red")
+  [audio] ok hit=Some("audio")
+  [video] fail red=None echo=Some("video")
+  [function] ok tool_calls=true
+  [reasoning] ok reason_tokens=115
+  [web_search] ok status=200
+  [file_search] fail status=400
+  [computer_use] fail status=400
+  [tool_search] fail status=400
+  [mcp] fail status=400
+  -> video = Some(false)

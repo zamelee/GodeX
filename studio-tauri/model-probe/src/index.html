@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>模型能力探测</title>
+<style>
+:root {
+  --bg: #0f0f23;
+  --bg2: #1a1a3e;
+  --bg3: #252550;
+  --text: #e0e0ff;
+  --text2: #8888aa;
+  --accent: #7c3aed;
+  --accent2: #a78bfa;
+  --success: #10b981;
+  --fail: #ef4444;
+  --warn: #f59e0b;
+  --info: #3b82f6;
+  --border: rgba(124,58,237,0.3);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 13px; min-height: 100vh; display: flex; flex-direction: column; }
+.hdr { background: var(--accent); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.hdr h1 { font-size: 16px; font-weight: 600; }
+.hdr .hint { font-size: 11px; color: #c4b5fd; }
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px 16px; gap: 10px; }
+.row { display: flex; gap: 10px; align-items: flex-start; flex-shrink: 0; }
+.label { color: var(--text2); font-size: 11px; min-width: 70px; padding-top: 4px; }
+select, input[type=text], input[type=number] { background: var(--bg2); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+select { min-width: 160px; }
+input[type=range] { accent-color: var(--accent); }
+.section { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.section-title { font-size: 12px; font-weight: 600; color: var(--accent2); margin-bottom: 8px; }
+.check-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.check-item { display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--bg3); padding: 3px 8px; border-radius: 4px; cursor: pointer; user-select: none; }
+.check-item:hover { background: rgba(124,58,237,0.3); }
+.check-item.checked { background: rgba(16,185,129,0.2); color: var(--success); }
+.check-item.checked.fail { background: rgba(239,68,68,0.2); color: var(--fail); }
+.check-item input { display: none; }
+.btn-row { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.btn:hover { opacity: 0.85; }
+.btn.gray { background: var(--bg3); }
+.btn.gray:hover { background: #333366; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.table-wrap { flex: 1; overflow: auto; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th { position: sticky; top: 0; background: var(--bg3); padding: 6px 10px; text-align: left; font-weight: 600; color: var(--accent2); white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+tr:hover td { background: rgba(255,255,255,0.02); }
+td.yes { color: var(--success); font-weight: 600; }
+td.no { color: var(--fail); }
+td.pending { color: var(--text2); }
+td.running { color: var(--warn); }
+td.error { color: var(--fail); font-size: 10px; }
+.probe-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.probe-indicator.yes { background: var(--success); }
+.probe-indicator.no { background: var(--fail); }
+.probe-indicator.pending { background: var(--text2); }
+.probe-indicator.running { background: var(--warn); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.model-cell { font-weight: 600; }
+.ctx-cell { color: var(--info); font-size: 10px; }
+.progress-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.log-area { height: 120px; overflow-y: auto; background: #000; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 10px; color: #aaa; white-space: pre-wrap; }
+.log-entry { margin-bottom: 2px; }
+.log-ok { color: var(--success); }
+.log-fail { color: var(--fail); }
+.log-warn { color: var(--warn); }
+.status { font-size: 11px; color: var(--text2); }
+.status .ok { color: var(--success); }
+.status .err { color: var(--fail); }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>模型能力探测</h1>
+  <div class="hint">Chat Completions 探测 · 不会改动配置（仅保存时写入）</div>
+</div>
+
+<div class="main">
+  <!-- Config path -->
+  <div class="row">
+    <span class="label">Config:</span>
+    <input id="cfg-path" type="text" placeholder="godex.yaml 路径" style="flex:1"/>
+    <button class="btn gray" onclick="openConfigPicker()">加载配置</button>
+    <span id="cfg-status" class="status"></span>
+  </div>
+
+  <!-- Provider & Models -->
+  <div class="row">
+    <div class="section" style="flex:1">
+      <div class="section-title">Provider / Models</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="label">Provider:</span>
+        <select id="sel-provider" onchange="onProviderChange()">
+          <option value="">— 选择 Provider —</option>
+        </select>
+        <button class="btn gray" onclick="selectAllModels()">全选</button>
+        <button class="btn gray" onclick="clearAllModels()">清空</button>
+      </div>
+      <div id="model-checks" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+  </div>
+
+  <!-- Probe options -->
+  <div class="row">
+    <div class="section" style="flex:1">
+      <div class="section-title">探测内容</div>
+      <div class="check-grid">
+        <label class="check-item" id="chk-ctx"><input type="checkbox" checked onchange="renderTable()"/>上下文</label>
+        <label class="check-item" id="chk-maxout"><input type="checkbox" checked onchange="renderTable()"/>最大输出</label>
+        <label class="check-item" id="chk-text"><input type="checkbox" checked onchange="renderTable()"/>文本</label>
+        <label class="check-item" id="chk-image"><input type="checkbox" checked onchange="renderTable()"/>图片</label>
+        <label class="check-item" id="chk-video"><input type="checkbox" checked onchange="renderTable()"/>视频</label>
+        <label class="check-item" id="chk-audio"><input type="checkbox" onchange="renderTable()"/>音频</label>
+      </div>
+      <div class="check-grid" style="margin-top:6px">
+        <label class="check-item" id="chk-function"><input type="checkbox" checked onchange="renderTable()"/>function</label>
+        <label class="check-item" id="chk-websearch"><input type="checkbox" onchange="renderTable()"/>web_search</label>
+        <label class="check-item" id="chk-filesearch"><input type="checkbox" onchange="renderTable()"/>file_search</label>
+        <label class="check-item" id="chk-mcp"><input type="checkbox" onchange="renderTable()"/>mcp</label>
+        <label class="check-item" id="chk-computer"><input type="checkbox" onchange="renderTable()"/>computer_use</label>
+        <label class="check-item" id="chk-toolsearch"><input type="checkbox" onchange="renderTable()"/>tool_search</label>
+      </div>
+      <div class="check-grid" style="margin-top:6px">
+        <label class="check-item" id="chk-reasoning"><input type="checkbox" onchange="renderTable()"/>推理模式</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <span class="label">API:</span>
+        <select id="api-format">
+          <option value="chat_completions">Chat Completions (默认)</option>
+          <option value="responses_api">Responses API</option>
+        </select>
+        <span class="label" style="margin-left:20px;color:var(--text2)" title="余量在 Studio 主界面模型列表中调整；探测窗口只测真实能力，不再覆盖">探测 → 余量: Studio 设置</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div class="table-wrap">
+    <table id="probe-table">
+      <thead id="table-head"></thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Progress & Log -->
+  <div class="row">
+    <div style="flex:1">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div id="progress-text" class="status" style="margin-top:4px"></div>
+    </div>
+  </div>
+  <div class="log-area" id="log-area"></div>
+
+  <!-- Actions -->
+  <div class="btn-row">
+    <button class="btn" id="btn-start" onclick="startProbe()">开始探测</button>
+    <button class="btn" id="btn-stop" onclick="stopProbe()" style="display:none;background:var(--fail)">停止</button>
+    <button class="btn gray" id="btn-save" onclick="saveResults()" disabled>保存到 godex.yaml</button>
+    <button class="btn gray" onclick="exportJson()">导出 JSON</button>
+  </div>
+</div>
+
+<script>
+// === State ===
+let API_BASE = "http://localhost:5678";
+let allModels = [];
+let providers = [];
+let selectedModels = new Set();
+let results = {};
+let probing = false;
+let stopFlag = false;
+let progressTotal = 0;
+let progressDone = 0;
+
+// === Init ===
+
+async function openConfigPicker() {
+  try {
+    const path = await window.__TAURI__.core.invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        directory: false,
+        filters: [{ name: "YAML", extensions: ["yaml", "yml"] }],
+        title: "选择 GodeX 配置文件"
+      }
+    });
+    if (path) {
+      document.getElementById("cfg-path").value = path;
+      await loadConfig();
+    }
+  } catch (e) {
+    console.warn("[probe] dialog open failed:", e);
+    // Fallback: just call loadConfig which uses the current text value
+    await loadConfig();
+  }
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    API_BASE = await window.__TAURI__.core.invoke("get_godex_url");
+    console.log("[probe] using API base:", API_BASE);
+  } catch (e) {
+    console.warn("[probe] get_godex_url failed:", e);
+  }
+  
+  // Resolve config path with the same priority the Rust side uses:
+  //   1. URL query (?config=...) — for manual launches
+  //   2. CLI --config=... — set by Studio's launch_model_probe
+  //   3. Default USERPROFILE/.godex/config.yaml, then cwd/godex.yaml
+  const params = new URLSearchParams(window.location.search);
+  const cfgFromUrl = params.get("config");
+  let cfgToUse = cfgFromUrl;
+  if (!cfgToUse) {
+    try {
+      cfgToUse = await window.__TAURI__.core.invoke("get_initial_config_path");
+    } catch (e) {
+      console.warn("[probe] get_initial_config_path failed:", e);
+    }
+  }
+  if (cfgToUse) {
+    document.getElementById("cfg-path").value = cfgToUse;
+    await loadConfig();
+  } else {
+    // Try default paths (cwd/godex.yaml, hardcoded repo path)
+    await tryDefaultPaths();
+  }
+});
+
+async function tryDefaultPaths() {
+  const paths = [
+    "godex.yaml",
+    "D:/Documents/VibeCoding/GodeX/godex.yaml",
+  ];
+  for (const p of paths) {
+    document.getElementById("cfg-path").value = p;
+    if (await loadConfig()) return;
+  }
+  log("未找到 godex.yaml，请在上方手动填写路径后点击加载配置", "warn");
+}
+
+async function loadConfig() {
+  const path = document.getElementById("cfg-path").value.trim();
+  if (!path) return false;
+  try {
+    await window.__TAURI__.core.invoke("set_config_path", { path });
+    const [models, provs] = await window.__TAURI__.core.invoke("get_config"); alert("get_config returned: " + JSON.stringify({models: models.length, provs: provs.length}));
+    console.log("[probe] get_config returned:", JSON.stringify({models, providers}));
+    allModels = models || [];
+    providers = provs || [];
+    populateProviders();
+    document.getElementById("cfg-status").innerHTML = `<span class="ok">加载成功 (${allModels.length} 模型, ${providers.length} Provider)</span>`;
+    return true;
+  } catch(e) {
+    document.getElementById("cfg-status").innerHTML = `<span class="err">加载失败: ${e}</span>`;
+    return false;
+  }
+}
+
+function populateProviders() {
+  const sel = document.getElementById("sel-provider");
+  sel.innerHTML = '<option value="">— 选择 Provider —</option>';
+  for (const p of providers) {
+    sel.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+  }
+}
+
+function onProviderChange() {
+  const prov = document.getElementById("sel-provider").value;
+  const modelChecks = document.getElementById("model-checks");
+  const models = allModels.filter(m => m.provider === prov);
+  
+  if (!prov) {
+    modelChecks.innerHTML = "";
+    return;
+  }
+  
+  modelChecks.innerHTML = models.map(m => `
+    <label class="check-item ${selectedModels.has(m.model) ? 'checked' : ''}">
+      <input type="checkbox" ${selectedModels.has(m.model) ? 'checked' : ''}
+             onchange="toggleModel('${m.model}')"/>
+      ${m.model}
+    </label>
+  `).join("");
+}
+
+function toggleModel(name) {
+  if (selectedModels.has(name)) selectedModels.delete(name);
+  else selectedModels.add(name);
+  onProviderChange();
+  renderTable();
+}
+
+function selectAllModels() {
+  const prov = document.getElementById("sel-provider").value;
+  allModels.filter(m => m.provider === prov).forEach(m => selectedModels.add(m.model));
+  onProviderChange();
+  renderTable();
+}
+
+function clearAllModels() {
+  const prov = document.getElementById("sel-provider").value;
+  allModels.filter(m => m.provider === prov).forEach(m => selectedModels.delete(m.model));
+  onProviderChange();
+  renderTable();
+}
+
+// === Probe Columns ===
+function getCols() {
+  const cols = [{key:"model", label:"Model", sticky:true}];
+  if (checked("chk-ctx")) cols.push({key:"ctx", label:"上下文"});
+  if (checked("chk-maxout")) cols.push({key:"max_output", label:"最大输出"});
+  if (checked("chk-text")) cols.push({key:"text", label:"文本"});
+  if (checked("chk-image")) cols.push({key:"image", label:"图片"});
+  if (checked("chk-video")) cols.push({key:"video", label:"视频"});
+  if (checked("chk-audio")) cols.push({key:"audio", label:"音频"});
+  if (checked("chk-function")) cols.push({key:"function", label:"function"});
+  if (checked("chk-websearch")) cols.push({key:"web_search", label:"web_search"});
+  if (checked("chk-filesearch")) cols.push({key:"file_search", label:"file_search"});
+  if (checked("chk-mcp")) cols.push({key:"mcp", label:"mcp"});
+  if (checked("chk-computer")) cols.push({key:"computer_use", label:"computer_use"});
+  if (checked("chk-toolsearch")) cols.push({key:"tool_search", label:"tool_search"});
+  if (checked("chk-reasoning")) cols.push({key:"reasoning", label:"推理"});
+  return cols;
+}
+
+function checked(id) { return document.getElementById(id).querySelector("input").checked; }
+
+// === Table ===
+function renderTable() {
+  const cols = getCols();
+  const models = Array.from(selectedModels);
+  
+  // Header
+  document.getElementById("table-head").innerHTML = "<tr>" + cols.map(c => 
+    `<th>${c.label}</th>`
+  ).join("") + "</tr>";
+  
+  // Body
+  document.getElementById("table-body").innerHTML = models.map(name => {
+    const r = results[name] || {};
+    return `<tr>${cols.map(col => {
+      if (col.sticky) return `<td class="model-cell">${name}</td>`;
+      const v = r[col.key];
+      const cls = v === true ? "yes" : v === false ? "no" : v === "running" ? "running" : v ? "error" : "pending";
+      const icon = v === true ? "●" : v === false ? "○" : v === "running" ? "◐" : "—";
+      const display = col.key === "ctx" ? (v ? (v >= 1000000 ? (v/1000000).toFixed(1)+"M" : (v/1000).toFixed(0)+"K") : "—") : col.key === "max_output" ? (v ? (v >= 1000 ? (v/1000).toFixed(0)+"K" : v) : "—") : (v === true ? "✓" : v === false ? "✗" : v === "running" ? "…" : "—");
+      return `<td class="${cls}">${col.key === "reasoning" && v ? v : display}</td>`;
+    }).join("")}</tr>`;
+  }).join("");
+}
+
+// === Probe Logic ===
+// Call Rust probe_model command
+async function probeModelRust(baseUrl, apiKey, model, claimedCtx, claimedMaxTokens) {
+  log(`  [Rust] probing ${model}...`);
+  try {
+    const result = await window.__TAURI__.core.invoke("probe_model", {
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      model: model,
+      claimedCtx: claimedCtx,
+      claimedMaxTokens: claimedMaxTokens
+    });
+    log(`  [Rust] done: ctx=${result.max_input}, max_tokens=${result.max_output}`);
+    return result;
+  } catch (e) {
+    log(`  [Rust] error: ${e}`, "error");
+    return null;
+  }
+}
+
+async function startProbe() {
+  if (selectedModels.size === 0) { alert("请先选择模型"); return; }
+  
+  const prov = providers.find(p => p.name === document.getElementById("sel-provider").value);
+  if (!prov) { alert("请先选择 Provider"); return; }
+  
+  const apiKey = prov.api_key;
+  if (!apiKey || apiKey.startsWith("${")) {
+    alert("该 Provider 未配置 API Key，请先在 godex.yaml 中配置");
+    return;
+  }
+  
+  probing = true;
+  stopFlag = false;
+  document.getElementById("btn-start").style.display = "none";
+  document.getElementById("btn-stop").style.display = "inline-block";
+  document.getElementById("btn-save").disabled = true;
+  
+  const baseUrl = prov.base_url || `${API_BASE}/v1`;
+  const models = Array.from(selectedModels);
+  
+  progressTotal = models.length;
+  progressDone = 0;
+  
+  log(`开始探测 ${models.length} 个模型...`);
+  
+  for (const model of models) {
+    if (stopFlag) { log("探测已停止", "warn"); break; }
+    
+    const mcfg = allModels.find(m => m.model === model);
+    const ctxClaimed = mcfg?.context_window || 100000;
+    const outClaimed = mcfg?.max_tokens || 131072;
+    
+    results[model] = { 
+      model, 
+      ctx: "running", 
+      max_output: null,
+      text: "running", 
+      image: null, 
+      video: null, 
+      audio: null,
+      function: "running", 
+      computer_use: null,
+      tool_search: null,
+      web_search: null,
+      file_search: null,
+      mcp: null,
+      reasoning: "running" 
+    };
+    renderTable();
+    
+    // Call Rust probe_model command
+    const probeResult = await probeModelRust(baseUrl, apiKey, model, ctxClaimed, outClaimed);
+    
+    if (stopFlag) break;
+    
+    if (probeResult) {
+      results[model].ctx = probeResult.max_input;
+      results[model].max_input_raw = probeResult.max_input;
+      results[model].max_output = probeResult.max_output;
+      results[model].text = probeResult.text;
+      results[model].image = probeResult.image;
+      results[model].video = probeResult.video;
+      results[model].audio = probeResult.audio;
+      results[model].function = probeResult.function;
+      results[model].computer_use = probeResult.computer_use;
+      results[model].tool_search = probeResult.tool_search;
+      results[model].web_search = probeResult.web_search;
+      results[model].file_search = probeResult.file_search;
+      results[model].mcp = probeResult.mcp;
+      results[model].reasoning = probeResult.reasoning;
+    } else {
+      log(`  探测失败`, "error");
+    }
+    
+    progressDone++;
+    renderTable();
+  }
+  
+  probing = false;
+  document.getElementById("btn-start").style.display = "inline-block";
+  document.getElementById("btn-stop").style.display = "none";
+  document.getElementById("btn-save").disabled = false;
+  log("探测完成！", "ok");
+}
+
+function stopProbe() {
+  stopFlag = true;
+  log("正在停止...");
+}
+
+async function probeContext(baseUrl, apiKey, model, ctxClaimed, outClaimed, apiFormat) {
+  log(`  [ctx] ${model}: claimed=${ctxClaimed}`);
+  // Binary search for max input
+  let lo = Math.floor(ctxClaimed * 0.5);
+  let hi = ctxClaimed * 2;
+  
+  for (let i = 0; i < 8 && lo + 10000 < hi; i++) {
+    if (stopFlag) break;
+    const mid = Math.floor((lo + hi) / 2);
+    const ok = await testTokens(baseUrl, apiKey, model, mid, outClaimed, apiFormat);
+    if (ok) {
+      lo = mid;
+      log(`    ${mid} OK`);
+    } else {
+      hi = mid;
+      log(`    ${mid} FAIL`);
+    }
+    renderTable();
+  }
+  return lo;
+}
+
+async function testTokens(baseUrl, apiKey, model, tokens, maxTokens, apiFormat) {
+  const content = "A".repeat(Math.floor(tokens * 0.75));
+  try {
+    if (apiFormat === "chat_completions") {
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{role:"user",content}], max_tokens: Math.min(maxTokens, 32) }),
+      });
+      return r.ok;
+    } else {
+      const r = await fetch(`${baseUrl}/responses`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, input: [{role:"user",content:[{type:"input_text",text:content}]}], max_output_tokens: Math.min(maxTokens, 32) }),
+      });
+      return r.ok;
+    }
+  } catch { return false; }
+}
+
+async function probeText(baseUrl, apiKey, model, apiFormat) {
+  try {
+    if (apiFormat === "chat_completions") {
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{role:"user",content:"hi"}], max_tokens: 8 }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        // Store completion_tokens for max_output estimation
+        const compTokens = data.usage?.completion_tokens;
+        if (compTokens !== undefined) {
+          window.__lastCompletionTokens = compTokens;
+        }
+      }
+      return r.ok;
+    } else {
+      const r = await fetch(`${baseUrl}/responses`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, input: [{role:"user",content:[{type:"input_text",text:"hi"}]}], max_output_tokens: 8 }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        const compTokens = data.usage?.completion_tokens;
+        if (compTokens !== undefined) {
+          window.__lastCompletionTokens = compTokens;
+        }
+      }
+      return r.ok;
+    }
+  } catch { return false; }
+}
+
+// Probe max_output_tokens using binary search (silent mode)
+async function probeMaxOutputTokens(baseUrl, apiKey, model, apiFormat) {
+  const maxTokens = [262144, 196608, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32];
+  for (const mt of maxTokens) {
+    if (stopFlag) return null;
+    try {
+      if (apiFormat === "chat_completions") {
+        const r = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, messages: [{role:"user",content:"say ok"}], max_tokens: mt }),
+        });
+        if (r.ok) {
+          const data = await r.json().catch(()=>({}));
+          const compTokens = data.usage?.completion_tokens;
+          return { requested: mt, actual: compTokens || mt };
+        }
+      } else {
+        const r = await fetch(`${baseUrl}/responses`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, input: [{role:"user",content:[{type:"input_text",text:"say ok"}]}], max_output_tokens: mt }),
+        });
+        if (r.ok) {
+          const data = await r.json().catch(()=>({}));
+          const compTokens = data.usage?.completion_tokens;
+          return { requested: mt, actual: compTokens || mt };
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function probeImage(baseUrl, apiKey, model, apiFormat) {
+  // 1x1 red PNG (tiny)
+  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+  try {
+    if (apiFormat === "chat_completions") {
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{role:"user",content:[{type:"image_url",image_url:{url:`data:image/png;base64,${tinyPng}`}}]}],
+          max_tokens: 8,
+        }),
+      });
+      return r.ok;
+    }
+    return false;
+  } catch { return false; }
+}
+
+async function probeTool(baseUrl, apiKey, model, toolType, apiFormat) {
+  const schemas = {
+    function: {type:"function",function:{name:"test",description:"test",parameters:{type:"object",properties:{a:{type:"string"}},required:["a"]}}},
+    computer_use: {type:"computer_use",computer_use:{action:"screenshot"}},
+    tool_search: {type:"tool_search",tool_search:{query:"test"}},
+  };
+  const schema = schemas[toolType];
+  if (!schema) return null;
+  try {
+    if (apiFormat === "chat_completions") {
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages:[{role:"user",content:"test"}], tools:[schema], max_tokens:32 }),
+      });
+      return r.ok;
+    } else {
+      const r = await fetch(`${baseUrl}/responses`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, input:[{role:"user",content:[{type:"input_text",text:"test"}]}], tools:[schema], max_output_tokens:32 }),
+      });
+      return r.ok;
+    }
+  } catch { return false; }
+}
+
+const REASONING_PARAMS = [
+  {reasoning_effort:"low"}, {reasoning_effort:"medium"}, {reasoning_effort:"high"},
+  {thinking:{type:"enabled"}}, {thinking:{type:"enabled",budget_tokens:8192}},
+  {thinking_mode:1}, {thought:true}, {enable_thinking:true}, {reasoning:true},
+];
+
+async function probeReasoning(baseUrl, apiKey, model, apiFormat) {
+  const prompt = "What is 17 * 23? Think step by step.";
+  for (const params of REASONING_PARAMS) {
+    if (stopFlag) break;
+    try {
+      let body;
+      if (apiFormat === "chat_completions") {
+        body = { model, messages:[{role:"user",content:prompt}], max_tokens:128, ...params };
+      } else {
+        body = { model, input:[{role:"user",content:[{type:"input_text",text:prompt}]}], max_output_tokens:128, ...params };
+      }
+      const r = await fetch(`${baseUrl}/${apiFormat === "chat_completions" ? "chat/completions" : "responses"}`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        const text = apiFormat === "chat_completions"
+          ? data.choices?.[0]?.message?.content || ""
+          : JSON.stringify(data.output?.[0] || "");
+        if (text.includes("reasoning") || text.includes("think") || text.length > 20) {
+          log(`  [reasoning] ${model}: ${Object.keys(params)[0]}=${JSON.stringify(Object.values(params)[0])} OK`);
+          return Object.keys(params)[0] + "=" + JSON.stringify(Object.values(params)[0]);
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// === Save & Export ===
+async function saveResults() {
+  const resultsList = Object.values(results).map(r => ({
+    model: r.model,
+    max_input: r.max_input_raw,
+    max_output: r.max_output || null,
+    text: r.text === true,
+    image: r.image === true,
+    function: r.function === true,
+    computer_use: r.computer_use === true,
+    tool_search: r.tool_search === true,
+  }));
+  try {
+    await window.__TAURI__.core.invoke("save_probe_results", { results: resultsList });
+    log("已保存到 godex.yaml", "ok");
+    // Notify studio that probe results were saved
+    try {
+      const { emit } = window.__TAURI__.event;
+      await emit("probe-saved", { models: resultsList.map(r => r.model) });
+    } catch(e) {
+      console.warn("[probe] emit probe-saved failed:", e);
+    }
+  } catch(e) { log("保存失败: " + e, "fail"); }
+}
+
+function exportJson() {
+  const json = JSON.stringify(results, null, 2);
+  const blob = new Blob([json], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "model-probe-results.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// === Log ===
+function log(msg, type="") {
+  const el = document.getElementById("log-area");
+  const div = document.createElement("div");
+  div.className = "log-entry" + (type ? " log-" + type : "");
+  div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+</script>
+</body>
+</html>

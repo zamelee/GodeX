@@ -1,0 +1,233 @@
+{
+  "MiniMax-M2.7": {
+    "judge_model": "MiniMax-M2.7",
+    "probe_elapsed": 58.38856554031372,
+    "judge_elapsed": 14.864405632019043,
+    "judgment": {
+      "text": true,
+      "image_input": false,
+      "audio_input": false,
+      "video_input": false,
+      "function_call": true,
+      "reasoning": true,
+      "web_search": true,
+      "file_search": false,
+      "computer_use": false,
+      "tool_search": false,
+      "mcp": false,
+      "reasoning_per_capability": {
+        "text": "The model produced a substantive text response 'Hello there, friend' type greeting in 3 words. Status 200 with non-empty response_text confirms text capability.",
+        "image_input": "Both fixtures show the model refusing to process images, stating 'I cannot see images' and asking for clarification. These are refusals, not actual visual processing, so image_input is false.",
+        "audio_input": "Status 400 with empty response_text indicates the audio input request failed entirely. No audio processing occurred, so false.",
+        "video_input": "The model responded with 'I don't see a video attached' and asked for clarification. This is a refusal, not actual video processing, so false.",
+        "function_call": "The model correctly called the get_weather function with city 'Tokyo' in response to the weather request. tool_calls is non-empty with a proper function call, so true.",
+        "reasoning": "usage.reasoning_tokens = 67, which is greater than 0. The model demonstrated reasoning capability, so true.",
+        "web_search": "The model called plugin_web_search with a query for news headlines. tool_calls contains a web_search type call, so true.",
+        "file_search": "Status 400 with empty tool_calls indicates the file search request failed. No actual file search occurred, so false.",
+        "computer_use": "Status 400 with empty tool_calls indicates the computer use request failed. No screenshot or desktop description occurred, so false.",
+        "tool_search": "Status 400 with empty tool_calls indicates the tool search request failed. No tool search occurred, so false.",
+        "mcp": "Status 400 with empty tool_calls indicates the MCP request failed. No MCP tool call occurred, so false."
+      }
+    },
+    "raw": {
+      "text": {
+        "cap": "text",
+        "request": {
+          "model": "MiniMax-M2.7",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hi in 3 words."
+            }
+          ],
+          "max_tokens": 32
+        },
+        "status": 200,
+        "response_text": "<think>The user wants: \"Say hi in 3 words.\" Likely they want a greeting in three words. Could be \"Hello there, friend\", \"Hey there</think>\n\n",
+        "tool_calls": [],
+        "usage": {
+          "completion_tokens": 32,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 50,
+          "prompt_tokens_details": {
+            "cached_tokens": 14
+          },
+          "total_characters": 0,
+          "total_tokens": 82
+        }
+      },
+      "image_input": {
+        "cap": "image_input",
+        "fixtures": [
+          {
+            "name": "RED_PNG",
+            "status": 200,
+            "response_text": "<think>The user asks: \"Describe this image. What color and any text?\" They are likely referring to an image they have uploaded, but I don't see any image in the conversation. So the user is asking to describe an image that presumably is attached or referenced, but we don't have it. As a language model, I cannot see images unless provided. I must respond accordingly. Since the conversation hasn't included an image, I should ask for clarification or mention that no image is attached, or ask the user to provide the image.\n\nBut maybe they uploaded an image that got lost. Could be a bug. I must ask...[truncated]",
+            "request_had_image": true
+          },
+          {
+            "name": "B_LETTER",
+            "status": 200,
+            "response_text": "<think>\nThe user asks: \"What single letter is shown in this image? Reply with just that letter.\" The user presumably has uploaded an image of a single letter. However, we cannot see the image because we don't have direct access. According to policy, we can't assume content from an image unless we have textual description or the user provides a description. So we need to ask for clarification or request that the user describe the image. However, the user is explicitly asking for a single letter that is shown. Possibly we need to parse the image if we can but we can't see images.\n\nWe need to see...[truncated]",
+            "request_had_image": true
+          }
+        ]
+      },
+      "audio_input": {
+        "cap": "audio_input",
+        "request": {
+          "content": "input_audio (16KB WAV) + text prompt"
+        },
+        "status": 400,
+        "response_text": ""
+      },
+      "video_input": {
+        "cap": "video_input",
+        "request": {
+          "content": "video_url (3KB MP4) + text prompt"
+        },
+        "status": 200,
+        "response_text": "<think>\nThe user says: \"Describe this video briefly.\" There's no video attached in the conversation. The user might expect a description of a video that is not given. Possibly the user omitted the video or thought it would be automatically seen. There's no file attached. The correct approach is to ask for clarification: \"I don't see a video. Could you provide a link or description?\" Or \"I don't see any video attached. Please provide the video or more context.\"\n\nWe need to comply with policy. The request is normal. There's no disallowed content. We must ask for the video or details. According t...[truncated]"
+      },
+      "function_call": {
+        "cap": "function_call",
+        "request": {
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "description": "Get current weather for a city",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "city"
+                  ]
+                }
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "status": 200,
+        "response_text": "<think>\nThe user is asking about the weather in Tokyo and explicitly wants me to use the get_weather function. I should call the function with \"Tokyo\" as the city parameter.\n</think>\n\n\n",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\": \"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "call_function_an4pucqsk32i_1",
+            "index": 0,
+            "type": "function"
+          }
+        ]
+      },
+      "reasoning": {
+        "cap": "reasoning",
+        "request": {
+          "reasoning_effort": "medium"
+        },
+        "status": 200,
+        "response_text": "<think>\nThe user asks: \"What is 13 * 17? Think step by step.\" Straightforward multiplication. Provide answer with step by step reasoning.\n\nWe should ensure no policy violation. It's a simple math question.\n\nThus answer: 13*17 = 221. Provide step by step.\n\nWill answer accordingly.\n</think>\n\nTo multiply \\(13\\) by \\(17\\), you can break it down into easier pieces:\n\n1. **Multiply 13 by 10**  \n   \\(13 \\times 10 = 130\\)\n\n2. **Multiply 13 by 7**  \n   \\(13 \\times 7 = (10 \\times 7) + (3 \\times 7) = 70 + 21 = 91\\)\n\n3. **Add the two partial results**  \n   \\(130 + 91 = 221\\)\n\nSo, \\(13 \\times 17 = 221\\).",
+        "usage": {
+          "completion_tokens": 186,
+          "completion_tokens_details": {
+            "reasoning_tokens": 67
+          },
+          "prompt_tokens": 54,
+          "total_characters": 0,
+          "total_tokens": 240
+        }
+      },
+      "web_search": {
+        "cap": "web_search",
+        "request": {
+          "tools": [
+            {
+              "type": "web_search"
+            }
+          ],
+          "prompt": "Search the web for the latest news today and tell me one headline."
+        },
+        "status": 200,
+        "response_text": "<think>\nThe user is asking me to search for the latest news today and provide a headline. Since this is a request for current/recent news, I should use the search function to find the latest news.\n\nCurrent date is July 2, 2026 (Thursday), so I should search for today's news.\n\nI'll search for general/latest news.\n</think>\n\n\n",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"query_key\": \"今日新闻 头条\", \"query_tag_list\": [\"娱乐\", \"科技\", \"体育\", \"文化\", \"健康\", \"教育\", \"生活\", \"汽车\", \"房产\", \"财经\"]}",
+              "name": "plugin_web_search"
+            },
+            "id": "call_function_lqm4lvdxv9t3_1",
+            "index": 0,
+            "type": "function"
+          }
+        ]
+      },
+      "file_search": {
+        "cap": "file_search",
+        "request": {
+          "tools": [
+            {
+              "type": "file_search"
+            }
+          ],
+          "prompt": "Search my local files for budget and list matching filenames."
+        },
+        "status": 400,
+        "response_text": "",
+        "tool_calls": []
+      },
+      "computer_use": {
+        "cap": "computer_use",
+        "request": {
+          "tools": [
+            {
+              "type": "computer_use",
+              "provider": "windows"
+            }
+          ],
+          "prompt": "Take a screenshot of my desktop and describe what windows are open."
+        },
+        "status": 400,
+        "response_text": "",
+        "tool_calls": []
+      },
+      "tool_search": {
+        "cap": "tool_search",
+        "request": {
+          "tools": [
+            {
+              "type": "tool_search"
+            }
+          ],
+          "prompt": "Find a tool that can convert PDF to plain text."
+        },
+        "status": 400,
+        "response_text": "",
+        "tool_calls": []
+      },
+      "mcp": {
+        "cap": "mcp",
+        "request": {
+          "tools": [
+            {
+              "type": "mcp"
+            }
+          ],
+          "prompt": "Use any MCP server tool you have access to."
+        },
+        "status": 400,
+        "response_text": "",
+        "tool_calls": []
+      }
+    }
+  }
+}

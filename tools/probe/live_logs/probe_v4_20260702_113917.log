@@ -1,0 +1,53 @@
+Base URL: https://minnimax.chat/v1
+Targets : ['MiniMax-M2.7']
+Judge   : (self-eval)
+
+======================================================================
+  TARGET = MiniMax-M2.7  |  JUDGE = MiniMax-M2.7
+======================================================================
+  probe phase: 112.3s
+  judge phase: 12.2s
+  per_fixture image_input:
+    RED_PNG status=200 verdict=false_model
+    GREEN_CIRCLE status=200 verdict=false_model
+  per_fixture audio_input:
+    AUDIO_WAV status=400 verdict=false_upstream
+  per_fixture video_input:
+    VIDEO_MP4 status=0 verdict=false_other
+  [+] text            status 200, response 144 chars
+  [-M] image_input     RED_PNG (status=200): Model refused by stating it cannot see the image and asked for clarification - refusal pattern. GR
+  [-U] audio_input     Status=400 with error_code='bad_request_error'. The upstream API rejected the audio request, indicating the provider doe
+  [-X] video_input     Status=0 with empty response and null error_code. This indicates a connection or network failure rather than a refusal o
+  [+] function_call   tool_calls = ["get_weather"]
+  [-M] reasoning       1/3 shots had reasoning_tokens > 0: [shot1:st=200,rt=0, shot2:st=200,rt=0, shot3:st=200,rt=223]
+  [+] web_search      tool_calls has function name containing web_search
+  [-U] file_search     status 400
+  [-U] computer_use    status 400
+  [-U] tool_search     status 400
+  [-U] mcp             status 400
+
+======================================================================
+  SUMMARY (v4 hybrid, multi-fixture)
+======================================================================
+cap             | MiniMax-M2.7            
+------------------------------------------
+text            | +                        | 
+image_input     | -M                       | 
+audio_input     | -U                       | 
+video_input     | -X                       | 
+function_call   | +                        | 
+reasoning       | -M                       | 
+web_search      | +                        | 
+file_search     | -U                       | 
+computer_use    | -U                       | 
+tool_search     | -U                       | 
+mcp             | -U                       | 
+
+Legend:
+  +  true  -- model genuinely processed input / invoked tool
+  -M false_model  -- API accepted (status=200) but model refused (refusal pattern)
+  -U false_upstream  -- API rejected (status>=400); PROVIDER-specific boundary
+  -X false_other  -- network/parse/other error
+  ?  inconclusive  -- insufficient data to judge
+
+JSON: D:\Documents\VibeCoding\GodeX\tools\probe\upstream\probe_v4_result.json

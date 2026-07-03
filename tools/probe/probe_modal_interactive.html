@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Probe Modal Interactive</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #1e1e1e; --bg2: #252526; --bg3: #2d2d30;
+  --border: #3e3e42; --text: #e0e0e0; --text2: #969696;
+  --blue: #007acc; --green: #4ec9b0; --yellow: #dcdcaa;
+}
+body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+h3 { margin: 0 0 8px 0; color: var(--blue); font-size: 14px; }
+select { background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 3px; }
+.btn { background: var(--blue); color: white; border: none; padding: 6px 14px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.btn.gray { background: var(--bg3); color: var(--text); }
+
+/* OVERRIDE .modal so it fills vpBox */
+.modal { position: absolute !important; inset: 0 !important; background: transparent !important; display: flex !important; flex-direction: column !important; z-index: 1 !important; }
+.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; min-width: unset !important; max-width: 100% !important; max-height: 100% !important; width: 100% !important; height: 100% !important; overflow: hidden !important; display: flex; flex-direction: column; }
+
+.probe-modal-box {
+  min-width: 800px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden; /* SCHEME B: prevent inner content overflow pushing buttons out */
+}
+.probe-section {
+  flex: 0 0 auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.probe-label {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.probe-sash {
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  margin: 4px 0;
+}
+.probe-sash:hover { background: var(--blue); }
+.probe-flex-mid {
+  flex: 1 1 0;
+  min-height: 0; /* critical: allow flex children to shrink */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed rgba(78, 201, 176, 0.3); /* debug tint; safe to keep */
+}
+.probe-flex-mid > .probe-section { flex: 0 0 auto; min-height: 50px; }
+.probe-flex-mid > .probe-section.probe-log-section { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.probe-flex-mid > .probe-log { flex: 1; overflow-y: auto; min-height: 0; }
+.probe-actions { flex-shrink: 0; /* SCHEME B: never compress buttons */ }
+.probe-models-list {
+    flex: 1;
+    min-height: 60px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px 6px;
+  }
+.probe-model-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s;
+  }
+.probe-model-item:hover { background: var(--bg3); }
+.probe-model-item input { margin: 0; cursor: pointer; }
+.probe-model-item .ctx-badge {
+    font-size: 9px;
+    color: var(--blue);
+    padding-left: 3px;
+  }
+.probe-model-item.custom {
+    border-color: var(--blue);
+    background: rgba(79, 195, 247, 0.08);
+  }
+.probe-model-item.custom .model-name::before {
+    content: "\271A";
+    font-size: 9px;
+    color: var(--blue);
+    margin-right: 3px;
+  }
+.probe-model-item.add-pill {
+    background: transparent;
+    border: 1px dashed var(--border);
+    padding: 3px 8px;
+  }
+.probe-model-item.add-pill input {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 11px;
+    outline: none;
+    width: 110px;
+    padding: 0;
+  }
+.probe-model-item.add-pill input::placeholder { color: var(--text2); }
+.probe-model-item.add-pill:focus-within { border-color: var(--blue); }
+.probe-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.probe-model-item:hover { background: var(--bg3); }
+.probe-model-item input { width: auto; margin: 0; flex-shrink: 0; }
+.probe-model-name { flex: 1; font-size: 12px; }
+.probe-model-ctx { font-size: 10px; color: var(--blue); min-width: 50px; text-align: right; }
+.probe-caps-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.probe-caps-grid label { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.probe-caps-grid input { width: auto; margin: 0; }
+.probe-results-section { flex: 0 0 200px; min-height: 100px; }
+.probe-table-wrap { flex: 1; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
+.probe-log-section { flex: 1; min-height: 150px; }
+.probe-log { flex: 1; min-height: 150px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; color: #7ee787; white-space: pre-wrap; }
+.probe-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; }
+.probe-actions-right { display: flex; gap: 8px; }
+
+/* test page chrome */
+.controls { position: fixed; top: 0; left: 0; right: 0; background: var(--bg2); border-bottom: 2px solid var(--blue); padding: 10px 16px; z-index: 200; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.controls label { color: var(--text2); }
+.controls input[type=range] { vertical-align: middle; width: 160px; }
+.controls .value { color: var(--green); font-weight: bold; margin: 0 4px; }
+.controls button { background: var(--blue); color: white; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+.spacer { flex: 1; }
+.info { background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 3px; }
+.ok { color: var(--green); font-weight: bold; }
+.bad { color: #f48771; font-weight: bold; }
+.viewport-sim { margin-top: 50px; height: calc(100vh - 50px); width: 100%; overflow: auto; padding: 16px; }
+.viewport-box { border: 2px dashed var(--blue); background: var(--bg); margin: 0 auto; position: relative; overflow: hidden; }
+.viewport-hint { position: absolute; top: 4px; right: 8px; background: rgba(0,0,0,0.7); color: var(--blue); padding: 2px 6px; border-radius: 3px; font-size: 11px; z-index: 300; }
+.probe-sash { user-select: none; }
+.probe-sash.dragging { background: var(--blue) !important; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <label>W: <input type="range" id="ctrlW" min="500" max="1200" value="900"><span class="value" id="vw">900</span>px</label>
+  <label>H: <input type="range" id="ctrlH" min="400" max="900" value="700"><span class="value" id="vh">700</span>px</label>
+  <button id="resetBtn">Reset Sash</button>
+  <div class="spacer"></div>
+  <span class="info" id="statusInfo">ready</span>
+</div>
+
+<div class="viewport-sim">
+  <div class="viewport-box" id="vpBox" style="width:900px;height:700px">
+    <div class="viewport-hint" id="vpHint">vp = 900 x 700</div>
+    <div id="modalHost"></div>
+  </div>
+</div>
+
+<script>
+const REAL_MODAL_HTML = `<div id="probe-modal" class="modal" >
+  <div class="modal-box probe-modal-box">
+    <h3>模型探测</h3>
+    <div class="probe-section">
+      <label class="probe-label">Provider</label>
+      <select id="probe-provider" onchange="onProbeProviderChange()">
+        <option value="">-- 选择 Provider --</option>
+      </select>
+    </div>
+    <div class="probe-sash" id="probe-sash-models"></div>
+    <div class="probe-section" id="probe-models-section">
+      <div class="probe-label">选择模型</div>
+      <div id="probe-models-list" class="probe-models-list"></div>
+    </div>
+    <div class="probe-sash" id="probe-sash-caps"></div>
+    <div class="probe-section" id="probe-caps-section">
+      <div class="probe-label">能力探测</div>
+            <div class="probe-caps-grid">
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-ctx" checked/><span>Context</span></span>
+          <span class="cap-zh">上下文窗口大小</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-max" checked/><span>MaxTokens</span></span>
+          <span class="cap-zh">单次输出 token 上限</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-text" checked/><span>Text</span></span>
+          <span class="cap-zh">文本</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-image" checked/><span>Image</span></span>
+          <span class="cap-zh">图片</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-video"/><span>Video</span></span>
+          <span class="cap-zh">视频</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-audio"/><span>Audio</span></span>
+          <span class="cap-zh">音频 / 音乐</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-func" checked/><span>Func</span></span>
+          <span class="cap-zh">函数调用</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-reason" checked/><span>Reason</span></span>
+          <span class="cap-zh">推理 / 思维链</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-computer"/><span>Computer</span></span>
+          <span class="cap-zh">计算机操作</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-toolsearch"/><span>ToolSearch</span></span>
+          <span class="cap-zh">工具搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-websearch"/><span>WebSearch</span></span>
+          <span class="cap-zh">网页搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-filesearch"/><span>FileSearch</span></span>
+          <span class="cap-zh">文件搜索</span>
+        </label>
+        <label class="cap-item">
+          <span class="cap-top"><input type="checkbox" id="cap-mcp"/><span>MCP</span></span>
+          <span class="cap-zh">MCP 服务器</span>
+        </label>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-results"></div>
+    <div class="probe-flex-mid">
+    <div class="probe-section probe-results-section" id="probe-results-section">
+      <div class="probe-label">结果</div>
+      <div class="probe-table-wrap">
+        <table id="probe-results-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">Model</th>
+              <th>Context</th>
+              <th>MaxOut</th>
+              <th>Text</th>
+              <th>Image</th>
+              <th>Video</th>
+              <th>Audio</th>
+              <th>Func</th>
+              <th>Reason</th>
+              <th>Computer</th>
+              <th>ToolSearch</th>
+              <th>WebSearch</th>
+              <th>FileSearch</th>
+              <th>MCP</th>
+            </tr>
+          </thead>
+          <tbody id="probe-results-body">
+            <tr><td colspan="14" class="empty-msg">等待探测...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="probe-sash" id="probe-sash-log"></div>
+    <div class="probe-section probe-log-section" id="probe-log-section">
+      <div class="probe-label">日志</div>
+      <div id="probe-log" class="probe-log"></div>
+    </div>
+  </div>
+    <div class="probe-actions">
+      <button class="btn" id="btn-probe-start" onclick="startProbeRun()">开始探测</button>
+      <div class="probe-actions-right">
+        <button class="btn gray" id="btn-probe-save" onclick="saveProbeResults()">保存</button>
+        <button class="btn gray" onclick="closeProbeModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+document.getElementById('modalHost').innerHTML = REAL_MODAL_HTML;
+
+class MiniSash {
+  constructor(sashEl, beforeEl, afterEl, minPx) {
+    this.sash = sashEl; this.before = beforeEl; this.after = afterEl;
+    this.container = sashEl.parentElement;
+    this.minPx = minPx || 50;
+    this.dragging = false;
+    this._down = (e) => {
+      e.preventDefault(); this.dragging = true;
+      this.sash.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      window.addEventListener('mousemove', this._move);
+      window.addEventListener('mouseup', this._up);
+    };
+    this._move = (e) => {
+      if (!this.dragging) return;
+      const r = this.container.getBoundingClientRect();
+      const pos = e.clientY - r.top;
+      let ratio = Math.max(0.05, Math.min(0.95, pos / r.height));
+      const minR = this.minPx / r.height;
+      const maxR = 1 - (this.minPx / r.height);
+      ratio = Math.max(minR, Math.min(maxR, ratio));
+      this.before.style.flex = '0 0 ' + (ratio * 100).toFixed(2) + '%';
+      this.after.style.flex = '1 1 0';
+      updateStatus();
+    };
+    this._up = () => {
+      this.dragging = false; this.sash.classList.remove('dragging');
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', this._move);
+      window.removeEventListener('mouseup', this._up);
+      updateStatus();
+    };
+    this.sash.addEventListener('mousedown', this._down);
+  }
+}
+
+const sashes = [];
+function initSashes() {
+  const ids = ['probe-sash-models', 'probe-sash-caps', 'probe-sash-results', 'probe-sash-log'];
+  ids.forEach(id => {
+    const s = document.getElementById(id);
+    if (!s) return;
+    const b = s.previousElementSibling;
+    const a = s.nextElementSibling;
+    if (b && a) sashes.push(new MiniSash(s, b, a, 50));
+  });
+}
+
+function resetSash() {
+  document.querySelectorAll('.modal-box > .probe-section, .probe-flex-mid > .probe-section').forEach(el => {
+    el.style.flex = '';
+  });
+  const logSec = document.querySelector('.probe-flex-mid > .probe-section.probe-log-section');
+  if (logSec) logSec.style.flex = '1 1 0';
+  updateStatus();
+}
+
+const vpBox = document.getElementById('vpBox');
+const ctrlW = document.getElementById('ctrlW');
+const ctrlH = document.getElementById('ctrlH');
+const vw = document.getElementById('vw');
+const vh = document.getElementById('vh');
+const vpHint = document.getElementById('vpHint');
+const statusInfo = document.getElementById('statusInfo');
+
+function updateViewport() {
+  vpBox.style.width = ctrlW.value + 'px';
+  vpBox.style.height = ctrlH.value + 'px';
+  vw.textContent = ctrlW.value;
+  vh.textContent = ctrlH.value;
+  vpHint.textContent = 'vp = ' + ctrlW.value + ' x ' + ctrlH.value;
+  updateStatus();
+}
+
+function updateStatus() {
+  const a = document.querySelector('.probe-actions');
+  if (!a) return;
+  const aRect = a.getBoundingClientRect();
+  const vpRect = vpBox.getBoundingClientRect();
+  const fullyVisible = aRect.top >= vpRect.top && aRect.bottom <= vpRect.bottom;
+  statusInfo.innerHTML = 'actions [' + Math.round(aRect.top) + '-' + Math.round(aRect.bottom) + '] vp.bottom=' + Math.round(vpRect.bottom) + ' visible=<span class="' + (fullyVisible ? 'ok' : 'bad') + '">' + (fullyVisible ? 'YES' : 'NO') + '</span>';
+}
+
+ctrlW.addEventListener('input', updateViewport);
+ctrlH.addEventListener('input', updateViewport);
+document.getElementById('resetBtn').addEventListener('click', resetSash);
+window.addEventListener('resize', updateStatus);
+
+setTimeout(() => { initSashes(); updateViewport(); }, 50);
+</script>
+
+</body>
+</html>
