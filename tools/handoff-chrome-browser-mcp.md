@@ -20,19 +20,39 @@ Codex ←→ MCP 协议 ←→ chrome-browser-mcp (子进程)
 ## 启动方式
 
 ### 默认：Codex++ 配置页面注入
-- 用户在 Codex++ 的工具与插件页面手动配置
-- 配置项：`mcpServers.browser_control.url`
+在 Codex++ 的工具与插件页面添加 MCP 配置：
+```toml
+[mcp_servers.browser_control]
+enabled = true
+command = "node"
+args = ["D:/Documents/VibeCoding/GodeX/chrome-browser-mcp/dist/index_stdio.js"]
+startup_timeout_sec = 120
+
+[mcp_servers.browser_control.env]
+CDP_PORT = "9222"
+```
 
 ### 可选：GodeX Studio 拉起
 - chrome-browser-mcp 作为 GodeX Studio 的子进程
 - Studio 管理生命周期
 
-## MCP 服务 (端口 9224)
+### HTTP 模式（测试用）
+```powershell
+cd D:\Documents\VibeCoding\GodeX\chrome-browser-mcp
+node dist/index_new.js  # HTTP 模式，端口 9224
+```
 
-### 固定 + 动态避让
-- 默认端口：9224
-- 环境变量：`MCP_PORT`
-- 如果端口被占用，使用 port-finder 自动找可用端口
+## MCP 服务
+
+### stdio 模式（Codex 调用）
+使用 `index_stdio.js`，通过 stdin/stdout 与 Codex 通信
+
+### HTTP 模式（测试用）
+使用 `index_new.js`，通过 HTTP API 调用（端口 9224）
+
+### 端口配置
+- **CDP_PORT**：Chrome DevTools 端口（默认 9222）
+- **MCP_PORT**：HTTP 模式端口（默认 9224，stdio 模式不需要）
 
 ### 13 个工具
 
@@ -106,50 +126,45 @@ Extension 可用？ → Yes → Extension 控制
 
 ### MCP SDK
 - 版本：@modelcontextprotocol/sdk ^1.0.0
-- 模式：stateless（每个请求创建新 McpServer 实例）
-- 避免 "Already connected" 错误
+- stdio 模式：StdioServerTransport（Codex 调用）
+- HTTP 模式：StreamableHTTPServerTransport（测试用）
 
-### 关键配置
-```json
-{
-  "mcpServers": {
-    "browser_control": {
-      "url": "http://localhost:9224/mcp"
-    }
-  }
-}
-```
-
-### 环境变量
-- `MCP_PORT`：MCP 服务端口（默认 9224）
-- `CDP_PORT`：Chrome DevTools 端口（默认 9222）
-
-## 文件结构
+### 关键文件
 ```
 chrome-browser-mcp/
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── index_new.ts     # 主入口（stateless MCP）
-│   ├── chrome.ts        # Playwright Chrome 管理
-│   ├── extension.ts     # Extension 通信
+│   ├── index_stdio.ts    # stdio 入口（Codex 调用）
+│   ├── index_new.ts      # HTTP 入口（测试用）
+│   ├── chrome.ts         # Playwright Chrome 管理
+│   ├── extension.ts      # Extension 通信
 │   └── tools/
-│       ├── basic.ts     # 基础工具
-│       └── enhanced.ts  # Extension 增强工具
-└── chrome-extension/    # Chrome 扩展（待实现）
+│       ├── basic.ts      # 基础工具
+│       └── enhanced.ts    # Extension 增强工具
+└── dist/
+    ├── index_stdio.js    # stdio 编译输出
+    └── index_new.js       # HTTP 编译输出
 ```
 
 ## 状态
 
-- [x] MCP Server 基本功能（13 工具）
+- [x] MCP Server stdio 模式（Codex 调用）
+- [x] MCP Server HTTP 模式（测试用）
 - [x] Playwright 控制 Chrome
 - [x] Mail.163.com 测试通过
 - [ ] Extension 实现
 - [ ] GodeX Studio 集成
 - [ ] 生命周期管理
 
-## 启动命令
-```powershell
-cd D:\Documents\VibeCoding\GodeX\chrome-browser-mcp
-node dist/index_new.js
+## Codex++ 配置示例
+
+在 Codex++ 的「工具与插件」页面，Kind 选择「MCP」：
+- **ID**: browser_control
+- **TOML 内容**:
+```toml
+enabled = true
+command = "node"
+args = ["D:/Documents/VibeCoding/GodeX/chrome-browser-mcp/dist/index_stdio.js"]
+startup_timeout_sec = 120
 ```
