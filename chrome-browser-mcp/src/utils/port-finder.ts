@@ -6,7 +6,7 @@
 import { WebSocket } from "ws";
 
 const DEFAULT_PORTS = [9222, 9223, 9224, 9225];
-const CONNECT_TIMEOUT_MS = 1500;
+const CONNECT_TIMEOUT_MS = 800;
 
 export interface ChromeConnectionInfo {
   port: number;
@@ -84,11 +84,9 @@ async function probePort(port: number): Promise<ChromeConnectionInfo | null> {
 export async function findChromePort(
   ports: number[] = DEFAULT_PORTS
 ): Promise<ChromeConnectionInfo | null> {
-  for (const port of ports) {
-    const info = await probePort(port);
-    if (info) {
-      return info;
-    }
+  const results = await Promise.all(ports.map(port => probePort(port)));
+  for (const info of results) {
+    if (info) return info;
   }
   return null;
 }

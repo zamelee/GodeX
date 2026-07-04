@@ -38,6 +38,8 @@ let cachedInstance: ChromeInstance | null = null;
  * 获取 Chrome 实例（连接已有或启动新实例）
  */
 export async function getChrome(options: ChromeOptions = {}): Promise<ChromeInstance> {
+  const _opts: any = (globalThis as any).__chromeOptions || {};
+  options = { headless: true, ..._opts, ...options };
   if (cachedInstance) {
     return cachedInstance;
   }
@@ -57,10 +59,11 @@ export async function getChrome(options: ChromeOptions = {}): Promise<ChromeInst
   }
 
   if (info) {
- // 连接已有 Chrome
-   console.log(`[chrome] 接管已有 Chrome 调试端口 ${info.port}`);
-    savePortToRegistry(info.port);
-    const browser = await chromium.connect(info.wsUrl);
+ // 接合已有 Chrome
+  console.log(`[chrome] 接吏已有 Chrome 调试端口 ${info.port}`);
+   savePortToRegistry(info.port);
+   try {
+    const browser = await chromium.connect(info.wsUrl, { timeout: 1000 });
     cachedInstance = {
       browser,
       launchedByPlaywright: false,
@@ -68,7 +71,10 @@ export async function getChrome(options: ChromeOptions = {}): Promise<ChromeInst
       wsUrl: info.wsUrl,
     };
     return cachedInstance;
-  }
+   } catch (connectErr) {
+    console.log(`[chrome] connect failed (${connectErr}), launching new Chrome`);
+   }
+ }
 
  // 启动 Playwright 管理的 Chrome
   console.log(`[chrome] 未找到可用调试端口，启动独立 Chrome（端口 ${debugPort}）`);
