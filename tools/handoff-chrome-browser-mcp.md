@@ -1,76 +1,155 @@
-# Handoff: chrome-browser-mcp — 绕过 node_repl 的浏览器控制方案
+# chrome-browser-mcp 详细设计文档
 
 ## 项目位置
 `D:\Documents\VibeCoding\GodeX\chrome-browser-mcp\`
 
-## 当前状态：✅ 已完全可用
+## 架构
 
-**已完成的文件：**
+```
+Codex++ (启动器)
+    ↓ 配置注入
+Codex ←→ MCP 协议 ←→ chrome-browser-mcp (子进程)
+                          ↓
+                    Extension 可用？──Yes──→ Extension 控制
+                          ↓ No
+                    Playwright 控制
+                          ↓
+                    用户已有 Chrome / 独立 Chrome
+```
+
+## 启动方式
+
+### 默认：Codex++ 配置页面注入
+- 用户在 Codex++ 的工具与插件页面手动配置
+- 配置项：`mcpServers.browser_control.url`
+
+### 可选：GodeX Studio 拉起
+- chrome-browser-mcp 作为 GodeX Studio 的子进程
+- Studio 管理生命周期
+
+## MCP 服务 (端口 9224)
+
+### 固定 + 动态避让
+- 默认端口：9224
+- 环境变量：`MCP_PORT`
+- 如果端口被占用，使用 port-finder 自动找可用端口
+
+### 13 个工具
+
+| 工具 | 功能 | Extension 增强 |
+|------|------|---------------|
+| open_url | 新标签页打开 URL | ✅ |
+| navigate | 当前标签页导航 | ✅ |
+| screenshot | 截图（base64 PNG） | ✅ |
+| click | 点击元素 | ✅ |
+| type_text | 输入文本 | ✅ |
+| get_text | 获取元素文本 | ✅ |
+| wait_for | 等待元素出现 | ✅ |
+| evaluate | 执行 JS | ✅ |
+| scroll_to | 滚动到元素 | ✅ |
+| list_pages | 列出所有标签页 | ✅ 精确 |
+| get_active_tab | 获取当前标签页 | ✅ 精确 |
+| switch_tab | 切换标签页 | ✅ 精确 |
+| get_element_info | 获取元素详情 | ✅ 精确 |
+
+## Chrome 控制策略
+
+### 优先级
+1. **Extension**：优先使用 Chrome Extension 控制
+   - 精确元素定位
+   - 获取 Chrome 动态（锁定对话与标签）
+   - 复用用户已有 Chrome 窗口
+   
+2. **Playwright Fallback**：Extension 不可用时
+   - 新开独立 Chrome 窗口
+   - 端口：9222（CDP）
+
+### Chrome 生命周期
+- **不关闭**：对话结束不断开，保持连接
+- **复用**：下次直接复用已有 Chrome，不新建窗口
+- **常驻**：chrome-browser-mcp 保持运行，避免频繁启停
+
+## Extension 功能（chrome-extension/）
+
+### 核心功能
+- 获取 Chrome 动态状态
+- 精确元素定位（替代 Playwright selector）
+- 锁定对话到特定标签页
+- 与用户已有 Chrome 通信
+
+### Fallback 机制
+```
+Extension 可用？ → Yes → Extension 控制
+                → No → Playwright 控制
+```
+
+## 生命周期管理
+
+### 常驻模式
+- chrome-browser-mcp 保持运行
+- 不产生一堆 Chrome 窗口
+- 下次直接复用
+
+### 自动重启
+- GodeX Studio 作为 supervisor
+- 监控 chrome-browser-mcp 子进程状态
+- 崩溃后自动拉起新实例
+- Codex 无感知，保持连接
+
+## 服务多个实例
+
+- 单个 chrome-browser-mcp 可同时服务多个 Codex 实例
+- 通过 MCP session 管理
+- 每个实例独立的状态（不同标签页等）
+
+## 技术实现
+
+### MCP SDK
+- 版本：@modelcontextprotocol/sdk ^1.0.0
+- 模式：stateless（每个请求创建新 McpServer 实例）
+- 避免 "Already connected" 错误
+
+### 关键配置
+```json
+{
+  "mcpServers": {
+    "browser_control": {
+      "url": "http://localhost:9224/mcp"
+    }
+  }
+}
+```
+
+### 环境变量
+- `MCP_PORT`：MCP 服务端口（默认 9224）
+- `CDP_PORT`：Chrome DevTools 端口（默认 9222）
+
+## 文件结构
 ```
 chrome-browser-mcp/
-  package.json        ✅ 入口改为 index_new.js
-  tsconfig.json      ✅ 排除 index.ts
-  src/
-    index_new.ts     ✅ stateless 模式，修复 transport 连接问题
-    chrome.ts        ✅ 正常
-    extension.ts     ✅ 正常
-    tools/basic.ts   ✅ screenshot 修复为 Buffer.from().toString("base64")
-    tools/enhanced.ts ✅ url -> pageUrl 变量名修复
-    utils/port-finder.ts ✅
-  dist/               ✅ 编译输出
-  test_mcp.py        ✅ 验证脚本
-  chrome-extension/  ❌ 空目录，Extension 待实现（可选）
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── index_new.ts     # 主入口（stateless MCP）
+│   ├── chrome.ts        # Playwright Chrome 管理
+│   ├── extension.ts     # Extension 通信
+│   └── tools/
+│       ├── basic.ts     # 基础工具
+│       └── enhanced.ts  # Extension 增强工具
+└── chrome-extension/    # Chrome 扩展（待实现）
 ```
 
-## 验证结果（2026-07-03）
+## 状态
 
-| 测试项 | 结果 |
-|--------|------|
-| MCP Server 启动 | ✅ `http://localhost:9224/mcp` |
-| Initialize 握手 | ✅ |
-| tools/list | ✅ 返回 13 个工具 |
-| open_url | ✅ 打开百度 |
-| screenshot | ✅ 返回 base64 PNG，92961 bytes |
-
-## 13 个 MCP 工具
-
-1. `open_url` - 新标签页打开 URL
-2. `navigate` - 当前标签页导航
-3. `screenshot` - 截图（返回 base64 PNG）
-4. `click` - 点击元素
-5. `type_text` - 输入文本
-6. `get_text` - 获取元素文本
-7. `wait_for` - 等待元素出现
-8. `evaluate` - 执行 JS
-9. `scroll_to` - 滚动到元素
-10. `list_pages` - 列出所有标签页
-11. `get_active_tab` - 获取当前标签页
-12. `switch_tab` - 切换标签页
-13. `get_element_info` - 获取元素详情（需 Extension）
-
-## 关键技术点（MCP SDK v1.29.0）
-
-1. **stateless 模式**：每个请求创建新的 `McpServer` 实例，避免 "Already connected" 错误
-2. **导入方式**：`@modelcontextprotocol/sdk/server/mcp.js` + `streamableHttp.js`
-3. **StreamableHTTPServerTransport**：需 `sessionIdGenerator: undefined`
-4. **HTTP Accept Header**：必须包含 `application/json, text/event-stream`
+- [x] MCP Server 基本功能（13 工具）
+- [x] Playwright 控制 Chrome
+- [x] Mail.163.com 测试通过
+- [ ] Extension 实现
+- [ ] GodeX Studio 集成
+- [ ] 生命周期管理
 
 ## 启动命令
-
 ```powershell
 cd D:\Documents\VibeCoding\GodeX\chrome-browser-mcp
 node dist/index_new.js
 ```
-
-## 下一步（按优先级）
-
-1. **接入 GodeX relay**：将 MCP URL 注入 Codex config
-   - 路径 A：`mcp_servers.node_repl.command` 指向 `node dist/index_new.js`
-   - 路径 B：GodeX 启动时注入独立 MCP Server URL
-
-2. **Chrome Extension**（可选）：用于精确元素定位
-   - 当前 Playwright 可用，但扩展可提供更精确的坐标
-
-3. **打包进 Studio**：外部程序调试完成后，集成进 GodeX 启动器
-
-4. **GodeX 端口避让**：确保 9224 端口不会被其他程序占用
