@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod";
-import { getChrome, closeChrome } from "./chrome.js";
+import { closeChrome } from "./chrome.js";
 import { openUrl, navigate, screenshot, click, typeText, getText, waitFor, evaluate, scrollTo, listAllPages } from "./tools/basic.js";
 import { getActiveTab, switchTab, getElementInfo } from "./tools/enhanced.js";
 function createServer() {
@@ -23,15 +23,13 @@ function createServer() {
 }
 async function main() {
     const cdpPort = parseInt(process.env.CDP_PORT || "0", 10);
-    console.error("[chrome-browser-mcp] Starting in stdio mode...");
-    try {
-        await getChrome({ preferredPort: cdpPort === 0 ? undefined : cdpPort, headless: false });
-        console.error("[chrome-browser-mcp] Chrome connected");
-    }
-    catch (err) {
-        console.error("[chrome-browser-mcp] Chrome connect error: " + err);
-        process.exit(1);
-    }
+    const headless = process.env.HEADLESS !== "false";
+    console.error("[chrome-browser-mcp] Starting stdio mode (lazy-chrome, headless=" + headless + ")");
+    // Store options for lazy init
+    globalThis.__chromeOptions = {
+        preferredPort: cdpPort === 0 ? undefined : cdpPort,
+        headless,
+    };
     const transport = new StdioServerTransport();
     const server = createServer();
     await server.connect(transport);

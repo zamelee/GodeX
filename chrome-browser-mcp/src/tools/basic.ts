@@ -2,10 +2,10 @@
  * 基础浏览器工具（无需 Chrome Extension）
  */
 
-import { getChrome, getActivePage, listPages } from "../chrome.js";
+import { ensureChrome, getActivePage, listPages } from "../chrome.js";
 
 export async function openUrl(url: string): Promise<string> {
-  const inst = await getChrome();
+  const inst = await ensureChrome();
   const context = inst.browser.contexts()[0] || await inst.browser.newContext();
   const page = await context.newPage();
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });

@@ -51,7 +51,7 @@ export async function getActiveTab(): Promise<TabInfo> {
  * 切换到指定标签页（通过 URL 匹配）
  */
 export async function switchTab(urlPattern: string): Promise<string> {
-  const inst = await import("../chrome.js").then((m) => m.getChrome());
+  const inst = await import("../chrome.js").then((m) => m.ensureChrome());
   const browser = (await inst).browser;
 
   for (const ctx of browser.contexts()) {

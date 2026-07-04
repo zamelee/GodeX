@@ -136,3 +136,18 @@ export async function closeChrome(): Promise<void> {
     cachedInstance = null;
   }
 }
+/**
+ * Lazy Chrome init - logs to stderr for stdio mode.
+ * Safe to call multiple times (getChrome has internal caching).
+ */
+export async function ensureChrome(): Promise<ChromeInstance> {
+  console.error("[chrome] Initializing Chrome...");
+  try {
+    const inst = await getChrome();
+    console.error("[chrome] Ready on port " + inst.port);
+    return inst;
+  } catch (err) {
+    console.error("[chrome] Init failed: " + err);
+    throw err;
+  }
+}
