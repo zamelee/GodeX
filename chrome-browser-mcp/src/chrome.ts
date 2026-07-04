@@ -38,8 +38,11 @@ let cachedInstance: ChromeInstance | null = null;
  * 获取 Chrome 实例（连接已有或启动新实例）
  */
 export async function getChrome(options: ChromeOptions = {}): Promise<ChromeInstance> {
+  console.error("[chrome-getChrome] start, cached=" + !!cachedInstance);
   const _opts: any = (globalThis as any).__chromeOptions || {};
+  console.error("[chrome-getChrome] _opts=", JSON.stringify(_opts));
   options = { headless: true, ..._opts, ...options };
+  console.error("[chrome-getChrome] final options headless=", options.headless, "preferredPort=", options.preferredPort);
   if (cachedInstance) {
     return cachedInstance;
   }

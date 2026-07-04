@@ -1,173 +1,109 @@
 /**
- * HTTP 入口 - 适合独立后台运行
- * Codex 可通过 HTTP 连接使用 MCP
- * 启动器使用此模式
+ * HTTP 入口 - 简单 REST 风格，直接暴露工具
+ * Codex 可通过 HTTP 调用工具
  */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import * as z from "zod";
 import { closeChrome } from "./chrome.js";
 import { openUrl, navigate, screenshot, click, typeText, getText, waitFor, evaluate, scrollTo, listAllPages } from "./tools/basic.js";
 import { getActiveTab, switchTab, getElementInfo } from "./tools/enhanced.js";
 
-const DEFAULT_MCP_PORT = 9224;
-const DEFAULT_HEADLESS = false;
+const DEFAULT_PORT = 9224;
 
-type ToolHandler = (args: any) => Promise<any>;
-const tools = new Map<string, { description: string; schema: object; handler: ToolHandler }>();
+const toolHandlers = {
+  open_url: async ({ url }: { url: string }) => ({ content: [{ type: "text", text: await openUrl(url) }] }),
+  navigate: async ({ url }: { url: string }) => ({ content: [{ type: "text", text: await navigate(url) }] }),
+  screenshot: async () => { const r = await screenshot(); return { content: [{ type: "image", data: r.split(",")[1], mimeType: "image/png" }] }; },
+  click: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await click(selector) }] }),
+  type_text: async ({ selector, text }: { selector: string; text: string }) => ({ content: [{ type: "text", text: await typeText(selector, text) }] }),
+  get_text: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await getText(selector) }] }),
+  wait_for: async ({ selector, timeout }: { selector: string; timeout?: number }) => ({ content: [{ type: "text", text: await waitFor(selector, timeout) }] }),
+  evaluate: async ({ js }: { js: string }) => ({ content: [{ type: "text", text: String(await evaluate(js)) }] }),
+  scroll_to: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await scrollTo(selector) }] }),
+  list_pages: async () => ({ content: [{ type: "text", text: JSON.stringify(await listAllPages()) }] }),
+  get_active_tab: async () => ({ content: [{ type: "text", text: JSON.stringify(await getActiveTab()) }] }),
+  switch_tab: async ({ url_pattern }: { url_pattern: string }) => ({ content: [{ type: "text", text: await switchTab(url_pattern) }] }),
+  get_element_info: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: JSON.stringify(await getElementInfo(selector)) }] }),
+};
 
-function registerTool(name: string, description: string, schema: object, handler: ToolHandler) {
-  tools.set(name, { description, schema, handler });
-}
-
-registerTool("open_url", "Open URL in new tab", { type: "object", properties: { url: { type: "string" } }, required: ["url"] }, async ({ url }: any) => ({
-  content: [{ type: "text", text: await openUrl(url) }],
-}));
-
-registerTool("navigate", "Navigate current tab", { type: "object", properties: { url: { type: "string" } }, required: ["url"] }, async ({ url }: any) => ({
-  content: [{ type: "text", text: await navigate(url) }],
-}));
-
-registerTool("screenshot", "Screenshot", { type: "object", properties: {} }, async () => {
-  const r = await screenshot();
-  return { content: [{ type: "image", data: r.split(",")[1], mimeType: "image/png" }] };
-});
-
-registerTool("click", "Click element", { type: "object", properties: { selector: { type: "string" } }, required: ["selector"] }, async ({ selector }: any) => ({
-  content: [{ type: "text", text: await click(selector) }],
-}));
-
-registerTool("type_text", "Type text", { type: "object", properties: { selector: { type: "string" }, text: { type: "string" } }, required: ["selector", "text"] }, async ({ selector, text }: any) => ({
-  content: [{ type: "text", text: await typeText(selector, text) }],
-}));
-
-registerTool("get_text", "Get element text", { type: "object", properties: { selector: { type: "string" } }, required: ["selector"] }, async ({ selector }: any) => ({
-  content: [{ type: "text", text: await getText(selector) }],
-}));
-
-registerTool("wait_for", "Wait for element", { type: "object", properties: { selector: { type: "string" }, timeout: { type: "number" } }, required: ["selector"] }, async ({ selector, timeout }: any) => ({
-  content: [{ type: "text", text: await waitFor(selector, timeout) }],
-}));
-
-registerTool("evaluate", "Run JS in page", { type: "object", properties: { js: { type: "string" } }, required: ["js"] }, async ({ js }: any) => ({
-  content: [{ type: "text", text: String(await evaluate(js)) }],
-}));
-
-registerTool("scroll_to", "Scroll to element", { type: "object", properties: { selector: { type: "string" } }, required: ["selector"] }, async ({ selector }: any) => ({
-  content: [{ type: "text", text: await scrollTo(selector) }],
-}));
-
-registerTool("list_pages", "List all tabs", { type: "object", properties: {} }, async () => ({
-  content: [{ type: "text", text: JSON.stringify(await listAllPages()) }],
-}));
-
-registerTool("get_active_tab", "Get active tab", { type: "object", properties: {} }, async () => ({
-  content: [{ type: "text", text: JSON.stringify(await getActiveTab()) }],
-}));
-
-registerTool("switch_tab", "Switch tab", { type: "object", properties: { url_pattern: { type: "string" } }, required: ["url_pattern"] }, async ({ url_pattern }: any) => ({
-  content: [{ type: "text", text: await switchTab(url_pattern) }],
-}));
-
-registerTool("get_element_info", "Element info", { type: "object", properties: { selector: { type: "string" } }, required: ["selector"] }, async ({ selector }: any) => ({
-  content: [{ type: "text", text: JSON.stringify(await getElementInfo(selector)) }],
-}));
-
-function createServer(): McpServer {
-  const server = new McpServer({ name: "chrome-browser-mcp", version: "0.1.0" }, { capabilities: {} });
-
-  for (const [name, tool] of tools) {
-    server.registerTool(
-      name,
-      { description: tool.description, inputSchema: tool.schema as z.ZodObject<any> },
-      async (args: any) => {
-        try {
-          return await tool.handler(args);
-        } catch (err: any) {
-          return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-      }
-    );
-  }
-
-  return server;
-}
+const TOOL_SCHEMAS: Record<string, z.ZodObject<any>> = {
+  open_url: z.object({ url: z.string() }),
+  navigate: z.object({ url: z.string() }),
+  screenshot: z.object({}),
+  click: z.object({ selector: z.string() }),
+  type_text: z.object({ selector: z.string(), text: z.string() }),
+  get_text: z.object({ selector: z.string() }),
+  wait_for: z.object({ selector: z.string(), timeout: z.number().optional() }),
+  evaluate: z.object({ js: z.string() }),
+  scroll_to: z.object({ selector: z.string() }),
+  list_pages: z.object({}),
+  get_active_tab: z.object({}),
+  switch_tab: z.object({ url_pattern: z.string() }),
+  get_element_info: z.object({ selector: z.string() }),
+};
 
 async function main() {
-  const mcpPort = parseInt(process.env.MCP_PORT || String(DEFAULT_MCP_PORT), 10);
+  const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
   const cdpPort = parseInt(process.env.CDP_PORT || "0", 10);
   const headless = process.env.HEADLESS !== "true";
 
-  console.error(`[chrome-browser-mcp] HTTP 模式启动`);
-  console.error(`  MCP 端口: ${mcpPort}`);
-  console.error(`  CDP 端口: ${cdpPort === 0 ? "自动" : cdpPort}`);
-  console.error(`  HEADLESS: ${headless}`);
-
-  // 设置懒加载参数
+  console.error(`[chrome-browser-mcp] HTTP 启动 (端口 ${port})`);
   (globalThis as any).__chromeOptions = {
     preferredPort: cdpPort === 0 ? undefined : cdpPort,
     headless,
   };
 
-  // 动态导入 express
   const express = (await import("express")).default;
   const app = express();
-  app.use(express.json());
-
-  // MCP 端点
-  app.post("/mcp", async (req: any, res: any) => {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => `session-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    });
-    const server = createServer();
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  });
+  app.use(express.json({ limit: "10mb" }));
 
   // 健康检查
-  app.get("/health", (_req: any, res: any) => {
-    res.json({ status: "ok", version: "0.1.0", tools: tools.size });
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", tools: Object.keys(toolHandlers) });
   });
 
-  // 工具列表（调试用）
-  app.get("/tools", (_req: any, res: any) => {
+  // 工具列表
+  app.get("/tools", (_req, res) => {
     res.json({
-      tools: Array.from(tools.entries()).map(([name, t]) => ({
+      tools: Object.entries(TOOL_SCHEMAS).map(([name, schema]) => ({
         name,
-        description: t.description,
-        schema: t.schema,
+        description: name.replace(/_/g, " "),
+        inputSchema: schema,
       })),
     });
   });
 
-  const server = app.listen(mcpPort, () => {
-    console.error(`[chrome-browser-mcp] ✅ HTTP 服务已就绪`);
-    console.error(`  MCP 端点: http://localhost:${mcpPort}/mcp`);
-    console.error(`  健康检查: http://localhost:${mcpPort}/health`);
-    console.error(`  工具列表: http://localhost:${mcpPort}/tools`);
+  // 调用工具
+  app.post("/call", async (req, res) => {
+    const { tool, arguments: args = {} } = req.body;
+    if (!tool || !toolHandlers[tool as keyof typeof toolHandlers]) {
+      res.status(400).json({ error: `Unknown tool: ${tool}` });
+      return;
+    }
+    try {
+      const schema = TOOL_SCHEMAS[tool as keyof typeof TOOL_SCHEMAS];
+      const parsed = schema.parse(args);
+      const result = await (toolHandlers as any)[tool](parsed);
+      res.json({ result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
-  server.on("error", (err: Error) => {
-    console.error(`[chrome-browser-mcp] ❌ 端口 ${mcpPort} 被占用: ${err.message}`);
-    process.exit(1);
+  app.listen(port, () => {
+    console.error(`[chrome-browser-mcp] ✅ 就绪`);
+    console.error(`  工具列表: GET  http://localhost:${port}/tools`);
+    console.error(`  调用工具: POST http://localhost:${port}/call`);
+    console.error(`  Body: {"tool":"open_url","arguments":{"url":"https://mail.163.com"}}`);
   });
 
   process.on("SIGINT", async () => {
-    console.error("[chrome-browser-mcp] 关闭中...");
+    console.error("关闭中...");
     await closeChrome();
-    server.close();
-    process.exit(0);
-  });
-
-  process.on("SIGTERM", async () => {
-    console.error("[chrome-browser-mcp] 关闭中...");
-    await closeChrome();
-    server.close();
     process.exit(0);
   });
 }
 
 main().catch((err: Error) => {
-  console.error(`[chrome-browser-mcp] ❌ Fatal: ${err.message}`);
+  console.error(`Fatal: ${err.message}`);
   process.exit(1);
 });
