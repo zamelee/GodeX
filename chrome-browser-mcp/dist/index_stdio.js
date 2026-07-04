@@ -1,11 +1,18 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import * as z from "zod";
 import { closeChrome } from "./chrome.js";
 import { openUrl, navigate, screenshot, click, typeText, getText, waitFor, evaluate, scrollTo, listAllPages } from "./tools/basic.js";
 import { getActiveTab, switchTab, getElementInfo } from "./tools/enhanced.js";
-function createServer() {
-    const server = new McpServer({ name: "chrome-browser-mcp", version: "0.1.0" }, { capabilities: {} });
+import * as z from "zod";
+async function main() {
+    const { McpServer: ServerClass } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { StdioServerTransport: TransportClass } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+    const cdpPort = parseInt(process.env.CDP_PORT || "0", 10);
+    const headless = process.env.HEADLESS !== "false";
+    console.error("[chrome-browser-mcp] Starting stdio mode (headless=" + headless + ")");
+    globalThis.__chromeOptions = {
+        preferredPort: cdpPort === 0 ? undefined : cdpPort,
+        headless,
+    };
+    const server = new ServerClass({ name: "chrome-browser-mcp", version: "0.1.0" }, { capabilities: {} });
     server.registerTool("open_url", { description: "Open URL in new tab", inputSchema: z.object({ url: z.string() }) }, async ({ url }) => ({ content: [{ type: "text", text: await openUrl(url) }] }));
     server.registerTool("navigate", { description: "Navigate current tab", inputSchema: z.object({ url: z.string() }) }, async ({ url }) => ({ content: [{ type: "text", text: await navigate(url) }] }));
     server.registerTool("screenshot", { description: "Screenshot", inputSchema: z.object({}) }, async () => { const r = await screenshot(); return { content: [{ type: "image", data: r.split(",")[1], mimeType: "image/png" }] }; });
@@ -19,21 +26,9 @@ function createServer() {
     server.registerTool("get_active_tab", { description: "Get active tab", inputSchema: z.object({}) }, async () => ({ content: [{ type: "text", text: JSON.stringify(await getActiveTab()) }] }));
     server.registerTool("switch_tab", { description: "Switch tab", inputSchema: z.object({ url_pattern: z.string() }) }, async ({ url_pattern }) => ({ content: [{ type: "text", text: await switchTab(url_pattern) }] }));
     server.registerTool("get_element_info", { description: "Element info", inputSchema: z.object({ selector: z.string() }) }, async ({ selector }) => ({ content: [{ type: "text", text: JSON.stringify(await getElementInfo(selector)) }] }));
-    return server;
-}
-async function main() {
-    const cdpPort = parseInt(process.env.CDP_PORT || "0", 10);
-    const headless = process.env.HEADLESS !== "false";
-    console.error("[chrome-browser-mcp] Starting stdio mode (lazy-chrome, headless=" + headless + ")");
-    // Store options for lazy init
-    globalThis.__chromeOptions = {
-        preferredPort: cdpPort === 0 ? undefined : cdpPort,
-        headless,
-    };
-    const transport = new StdioServerTransport();
-    const server = createServer();
+    const transport = new TransportClass();
     await server.connect(transport);
-    process.on("SIGINT", async () => { console.error("Shutting down..."); await closeChrome(); process.exit(0); });
-    process.on("SIGTERM", async () => { console.error("Shutting down..."); await closeChrome(); process.exit(0); });
+    process.on("SIGINT", async () => { await closeChrome(); process.exit(0); });
+    process.on("SIGTERM", async () => { await closeChrome(); process.exit(0); });
 }
-main().catch(err => { console.error("Fatal: " + err); process.exit(1); });
+main().catch(err => { console.error("Fatal:", err); process.exit(1); });

@@ -1,0 +1,10 @@
+node_modules/
+.mcp.err
+.mcp.log
+.mcp.pid
+start_visible.bat
+start-mcp.bat
+start-mcp.ps1
+start-stdio.ps1
+.DS_Store
+Thumbs.db

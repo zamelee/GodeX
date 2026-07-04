@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Codex Browser Control",
+  "version": "0.1.0",
+  "description": "F12-level Chrome control via chrome.debugger, persists per install",
+  "permissions": [
+    "debugger",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "alarms",
+    "unlimitedStorage"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
+  }
+}

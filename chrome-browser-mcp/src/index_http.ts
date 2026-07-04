@@ -1,28 +1,106 @@
 /**
- * HTTP 入口 - 简单 REST 风格，直接暴露工具
- * Codex 可通过 HTTP 调用工具
+ * HTTP entry - exposes MCP tools over HTTP
+ * Tools like click/type_text/navigate/screenshot route through Chrome extension (chrome.debugger) when available,
+ * fall back to Playwright when extension is not connected.
  */
 import * as z from "zod";
 import { closeChrome } from "./chrome.js";
-import { openUrl, navigate, screenshot, click, typeText, getText, waitFor, evaluate, scrollTo, listAllPages } from "./tools/basic.js";
-import { getActiveTab, switchTab, getElementInfo } from "./tools/enhanced.js";
+import { openUrl, navigate, screenshot as pwScreenshot, click, typeText, getText, waitFor, evaluate as pwEvaluate, scrollTo, listAllPages as pwListPages } from "./tools/basic.js";
+import { getActiveTab as extGetActiveTabFn, switchTab, getElementInfo as extGetElementInfoFn } from "./tools/enhanced.js";
+import { extPing, extIsAvailable, extNavigate, extScreenshot, extClick as extClickFn, extTypeText as extTypeTextFn, extGetAllInputs, extListPages, extEvaluate as extEvalFn, extGetElementInfo as extGetElInfoFn } from "./tools/ext.js";
+import { startExtWsServer } from "./ext-ws.js";
 
 const DEFAULT_PORT = 9224;
 
-const toolHandlers = {
+// Smart wrappers: extension first, Playwright fallback
+async function smartNavigate(url: string): Promise<string> {
+  if (await extIsAvailable()) {
+    try { return await extNavigate(url); } catch {}
+  }
+  return navigate(url);
+}
+
+async function smartScreenshot(): Promise<string> {
+  if (await extIsAvailable()) {
+    try { return await extScreenshot(); } catch {}
+  }
+  return pwScreenshot();
+}
+
+async function smartClick(selector: string): Promise<string> {
+  if (await extIsAvailable()) {
+    try { return await extClickFn(selector); } catch (e) { return "Extension: " + (e as Error).message; }
+  }
+  return click(selector);
+}
+
+async function smartTypeText(selector: string, text: string): Promise<string> {
+  if (await extIsAvailable()) {
+    try { return await extTypeTextFn(selector, text); } catch (e) { return "Extension: " + (e as Error).message; }
+  }
+  return typeText(selector, text);
+}
+
+async function smartEvaluate(js: string): Promise<string> {
+  if (await extIsAvailable()) {
+    try {
+      const r = await extEvalFn(js);
+      return String(r);
+    } catch (e) {
+      // Fall through to Playwright
+    }
+  }
+  return String(await pwEvaluate(js));
+}
+
+async function smartListPages(): Promise<unknown[]> {
+  if (await extIsAvailable()) {
+    try { return await extListPages(); } catch {}
+  }
+  return pwListPages();
+}
+
+async function smartGetActiveTab(): Promise<unknown> {
+  if (await extIsAvailable()) {
+    try { return await extGetActiveTabFn(); } catch {}
+  }
+  // Fallback: Playwright via enhanced.ts
+  const tab = await extGetActiveTabFn();
+  return tab;
+}
+
+async function smartGetElementInfo(selector: string): Promise<unknown> {
+  if (await extIsAvailable()) {
+    try { return await extGetElInfoFn(selector); } catch {}
+  }
+  return extGetElementInfoFn(selector);
+}
+
+const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   open_url: async ({ url }: { url: string }) => ({ content: [{ type: "text", text: await openUrl(url) }] }),
-  navigate: async ({ url }: { url: string }) => ({ content: [{ type: "text", text: await navigate(url) }] }),
-  screenshot: async () => { const r = await screenshot(); return { content: [{ type: "image", data: r.split(",")[1], mimeType: "image/png" }] }; },
-  click: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await click(selector) }] }),
-  type_text: async ({ selector, text }: { selector: string; text: string }) => ({ content: [{ type: "text", text: await typeText(selector, text) }] }),
+  navigate: async ({ url }: { url: string }) => ({ content: [{ type: "text", text: await smartNavigate(url) }] }),
+  screenshot: async () => {
+    const r = await smartScreenshot();
+    return { content: [{ type: "image", data: r.split(",")[1], mimeType: "image/png" }] };
+  },
+  click: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await smartClick(selector) }] }),
+  type_text: async ({ selector, text }: { selector: string; text: string }) => ({ content: [{ type: "text", text: await smartTypeText(selector, text) }] }),
   get_text: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await getText(selector) }] }),
   wait_for: async ({ selector, timeout }: { selector: string; timeout?: number }) => ({ content: [{ type: "text", text: await waitFor(selector, timeout) }] }),
-  evaluate: async ({ js }: { js: string }) => ({ content: [{ type: "text", text: String(await evaluate(js)) }] }),
+  evaluate: async ({ js }: { js: string }) => ({ content: [{ type: "text", text: await smartEvaluate(js) }] }),
   scroll_to: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: await scrollTo(selector) }] }),
-  list_pages: async () => ({ content: [{ type: "text", text: JSON.stringify(await listAllPages()) }] }),
-  get_active_tab: async () => ({ content: [{ type: "text", text: JSON.stringify(await getActiveTab()) }] }),
+  list_pages: async () => ({ content: [{ type: "text", text: JSON.stringify(await smartListPages()) }] }),
+  get_active_tab: async () => ({ content: [{ type: "text", text: JSON.stringify(await smartGetActiveTab()) }] }),
   switch_tab: async ({ url_pattern }: { url_pattern: string }) => ({ content: [{ type: "text", text: await switchTab(url_pattern) }] }),
-  get_element_info: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: JSON.stringify(await getElementInfo(selector)) }] }),
+  get_element_info: async ({ selector }: { selector: string }) => ({ content: [{ type: "text", text: JSON.stringify(await smartGetElementInfo(selector)) }] }),
+  ext_ping: async () => ({ content: [{ type: "text", text: JSON.stringify(await extPing()) }] }),
+  ext_get_inputs: async () => {
+    if (await extIsAvailable()) {
+      const inputs = await extGetAllInputs();
+      return { content: [{ type: "text", text: JSON.stringify(inputs) }] };
+    }
+    return { content: [{ type: "text", text: "Extension not available" }] };
+  },
 };
 
 const TOOL_SCHEMAS: Record<string, z.ZodObject<any>> = {
@@ -39,29 +117,33 @@ const TOOL_SCHEMAS: Record<string, z.ZodObject<any>> = {
   get_active_tab: z.object({}),
   switch_tab: z.object({ url_pattern: z.string() }),
   get_element_info: z.object({ selector: z.string() }),
+  ext_ping: z.object({}),
+  ext_get_inputs: z.object({}),
 };
 
 async function main() {
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
   const cdpPort = parseInt(process.env.CDP_PORT || "0", 10);
-  const headless = process.env.HEADLESS !== "true";
+  const headless = process.env.HEADLESS === "1";
 
-  console.error(`[chrome-browser-mcp] HTTP 启动 (端口 ${port})`);
+  console.error("[chrome-browser-mcp] HTTP 启动 (端口 " + port + ")");
   (globalThis as any).__chromeOptions = {
     preferredPort: cdpPort === 0 ? undefined : cdpPort,
     headless,
   };
 
+  // Start extension WebSocket server (port 9225)
+  startExtWsServer();
+
   const express = (await import("express")).default;
   const app = express();
   app.use(express.json({ limit: "10mb" }));
 
-  // 健康检查
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", tools: Object.keys(toolHandlers) });
+  app.get("/health", async (_req, res) => {
+    const { extIsConnected } = await import("./ext-ws.js");
+    res.json({ status: "ok", tools: Object.keys(toolHandlers), extConnected: extIsConnected() });
   });
 
-  // 工具列表
   app.get("/tools", (_req, res) => {
     res.json({
       tools: Object.entries(TOOL_SCHEMAS).map(([name, schema]) => ({
@@ -72,28 +154,26 @@ async function main() {
     });
   });
 
-  // 调用工具
   app.post("/call", async (req, res) => {
     const { tool, arguments: args = {} } = req.body;
-    if (!tool || !toolHandlers[tool as keyof typeof toolHandlers]) {
-      res.status(400).json({ error: `Unknown tool: ${tool}` });
+    if (!tool || !toolHandlers[tool]) {
+      res.status(400).json({ error: "Unknown tool: " + tool });
       return;
     }
     try {
-      const schema = TOOL_SCHEMAS[tool as keyof typeof TOOL_SCHEMAS];
+      const schema = TOOL_SCHEMAS[tool];
       const parsed = schema.parse(args);
-      const result = await (toolHandlers as any)[tool](parsed);
+      const result = await toolHandlers[tool](parsed);
       res.json({ result });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(200).json({ result: { content: [{ type: "text", text: "Error: " + err.message }] } });
     }
   });
 
   app.listen(port, () => {
-    console.error(`[chrome-browser-mcp] ✅ 就绪`);
-    console.error(`  工具列表: GET  http://localhost:${port}/tools`);
-    console.error(`  调用工具: POST http://localhost:${port}/call`);
-    console.error(`  Body: {"tool":"open_url","arguments":{"url":"https://mail.163.com"}}`);
+    console.error("[chrome-browser-mcp] \u2713 就绪");
+    console.error("  HTTP tools: http://localhost:" + port + "/call");
+    console.error("  Extension WS: ws://localhost:9225/ext");
   });
 
   process.on("SIGINT", async () => {
@@ -104,6 +184,6 @@ async function main() {
 }
 
 main().catch((err: Error) => {
-  console.error(`Fatal: ${err.message}`);
+  console.error("Fatal: " + err.message);
   process.exit(1);
 });
