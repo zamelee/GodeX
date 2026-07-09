@@ -56,6 +56,7 @@ export const MINIMAX_SPEC_CAPABILITIES: ProviderCapabilities = {
 			["computer_use", "function"],
 			["computer", "function"],
 			["web_search", "function"],
+			["mcp", "function"],
 		]),
 		maxTools: MINIMAX_MAX_TOOLS,
 	},

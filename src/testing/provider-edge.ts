@@ -12,7 +12,7 @@ import type { ResponseUsage } from "../protocol/openai/responses";
 
 export interface TestChatResponse {
 	choices: Array<{
-		message?: { content?: string | null };
+		message?: { content?: string | null; tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> };
 		finish_reason?: string | null;
 	}>;
 	usage?: ResponseUsage | null;

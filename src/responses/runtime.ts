@@ -4,6 +4,7 @@ import type {
 	ResponseStreamEvent,
 } from "../protocol/openai/responses";
 import type { ResponsesBridge } from "./bridge";
+import { BrowserFunctionLoop } from "./browser-function-loop";
 import { ProviderExchange } from "./provider-exchange";
 import { StreamPipeline } from "./stream-pipeline";
 import { SyncRequestPipeline } from "./sync-request-pipeline";
@@ -25,7 +26,11 @@ export class ResponsesBridgeRuntime implements ResponsesBridge {
 		streamPipeline?: ResponsesStreamPipeline,
 	) {
 		const exchange = new ProviderExchange();
-		this.syncPipeline = syncPipeline ?? new SyncRequestPipeline(exchange);
+		const baseSync = syncPipeline ?? new SyncRequestPipeline(exchange);
+		this.syncPipeline =
+			process.env.GODEX_DISABLE_BROWSER_FUNCTION_LOOP === "1"
+				? baseSync
+				: new BrowserFunctionLoop(baseSync);
 		this.streamPipeline = streamPipeline ?? new StreamPipeline(exchange);
 	}
 

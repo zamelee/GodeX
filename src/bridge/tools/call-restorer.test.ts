@@ -592,3 +592,84 @@ describe("restoreToolCall", () => {
 		});
 	});
 });
+
+test("restores mcp calls as mcp_call with split server_label and tool name", () => {
+	const identities = new ToolIdentityMap();
+	identities.add({
+		requestedName: "mcp__chrome-devtools__list_pages",
+		providerName: "mcp__chrome-devtools__list_pages",
+		requestedType: "mcp",
+		providerType: "function",
+	});
+
+	const item = restoreToolCall(
+		{
+			callId: "call_mcp_1",
+			name: "mcp__chrome-devtools__list_pages",
+			arguments: "{}",
+		},
+		identities,
+	);
+
+	expect(item).toEqual({
+		id: "call_mcp_1",
+		type: "mcp_call",
+		server_label: "chrome-devtools",
+		name: "list_pages",
+		arguments: "{}",
+		status: "in_progress",
+	});
+});
+
+test("preserves arguments and call_id on mcp restoration", () => {
+	const identities = new ToolIdentityMap();
+	identities.add({
+		requestedName: "mcp__repo__list_files",
+		providerName: "mcp__repo__list_files",
+		requestedType: "mcp",
+		providerType: "function",
+	});
+
+	const item = restoreToolCall(
+		{
+			callId: "call_mcp_2",
+			name: "mcp__repo__list_files",
+			arguments: '{"path": "/tmp"}',
+		},
+		identities,
+	);
+
+	expect(item).toMatchObject({
+		id: "call_mcp_2",
+		type: "mcp_call",
+		server_label: "repo",
+		name: "list_files",
+		arguments: '{"path": "/tmp"}',
+	});
+});
+
+test("falls back to function_call for mcp identity with malformed requestedName", () => {
+	const identities = new ToolIdentityMap();
+	identities.add({
+		requestedName: "mcp__no_separator",
+		providerName: "mcp__no_separator",
+		requestedType: "mcp",
+		providerType: "function",
+	});
+
+	const item = restoreToolCall(
+		{
+			callId: "call_mcp_3",
+			name: "mcp__no_separator",
+			arguments: "{}",
+		},
+		identities,
+	);
+
+	expect(item).toEqual({
+		type: "function_call",
+		call_id: "call_mcp_3",
+		name: "mcp__no_separator",
+		arguments: "{}",
+	});
+});

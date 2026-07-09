@@ -4,6 +4,7 @@ import type {
 	ComputerCall,
 	CustomToolCall,
 	LocalShellCall,
+	McpCall,
 	ResponseItem,
 	ShellCall,
 	ToolSearchCall,
@@ -60,6 +61,12 @@ export function restoreToolCall(
 			fallbackFunctionCall(call, identity.requestedName)
 		);
 	}
+	if (identity?.requestedType === "mcp") {
+		return (
+			mcpCall(call, identity.requestedName) ??
+			fallbackFunctionCall(call, identity.requestedName)
+		);
+	}
 	return fallbackFunctionCall(call, identity?.requestedName ?? call.name);
 }
 
@@ -75,6 +82,35 @@ function fallbackFunctionCall(
 	};
 }
 
+function mcpCall(
+	call: ProviderFunctionCall,
+	requestedName: string,
+): McpCall | null {
+	const parsed = parseMcpRequestedName(requestedName);
+	if (!parsed) return null;
+	return {
+		id: call.callId,
+		type: "mcp_call",
+		server_label: parsed.serverLabel,
+		name: parsed.toolName,
+		arguments: call.arguments,
+		status: "in_progress",
+	};
+}
+
+function parseMcpRequestedName(
+	requestedName: string,
+): { serverLabel: string; toolName: string } | null {
+	// Format: mcp__<server_label>__<tool_name>
+	if (!requestedName.startsWith("mcp__")) return null;
+	const remainder = requestedName.slice("mcp__".length);
+	const sep = remainder.indexOf("__");
+	if (sep < 0) return null;
+	const serverLabel = remainder.slice(0, sep);
+	const toolName = remainder.slice(sep + 2);
+	if (!serverLabel || !toolName) return null;
+	return { serverLabel, toolName };
+}
 function localShellCall(call: ProviderFunctionCall): LocalShellCall | null {
 	const parsed = parsedRecord(call.arguments);
 	if (!parsed) return null;

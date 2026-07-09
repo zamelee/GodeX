@@ -559,7 +559,7 @@ describe("planTools", () => {
 
 		expect(
 			plan.declarations.map((declaration) => declaration.requestedName),
-		).toEqual(["file_search_0", "mcp_1"]);
+		).toEqual(["file_search_0", "repo"]);
 		expect(renderProviderToolDeclarations(plan.declarations)).toEqual([
 			{
 				type: "retrieval",
@@ -693,5 +693,181 @@ describe("planTools", () => {
 				},
 			}),
 		).toThrow(BridgeError);
+	});
+});
+describe("planTools - mcp tool degradation", () => {
+	const minimaxProfile: ToolPlanningProfile = {
+		provider: "minimax",
+		nativeToolTypes: new Set(["function"]),
+		degradedToolTypes: new Map([["mcp", "function"]]),
+		toolChoice: new Set(["auto", "function"]),
+		maxTools: 128,
+	};
+
+	test("expands a single mcp tool into one function declaration per allowed_tool", () => {
+		const plan = planTools({
+			tools: [
+				{
+					type: "mcp",
+					server_label: "chrome-devtools",
+					server_url: "http://127.0.0.1:9222",
+					allowed_tools: ["list_pages", "navigate_page", "take_snapshot"],
+				},
+			],
+			profile: minimaxProfile,
+		});
+
+		expect(plan.declarations.map((d) => d.requestedName)).toEqual([
+			"mcp__chrome-devtools__list_pages",
+			"mcp__chrome-devtools__navigate_page",
+			"mcp__chrome-devtools__take_snapshot",
+		]);
+		expect(plan.declarations.map((d) => d.providerName)).toEqual([
+			"mcp__chrome-devtools__list_pages",
+			"mcp__chrome-devtools__navigate_page",
+			"mcp__chrome-devtools__take_snapshot",
+		]);
+		expect(plan.declarations.every((d) => d.providerType === "function")).toBe(
+			true,
+		);
+		expect(plan.declarations.every((d) => d.requestedType === "mcp")).toBe(
+			true,
+		);
+		expect(
+			plan.declarations.every(
+				(d) =>
+					d.tool.type === "function" &&
+					"parameters" in d.tool &&
+					(d.tool as { parameters: unknown }).parameters !== undefined,
+			),
+		).toBe(true);
+		expect(plan.decisions.filter((d) => d.action === "degraded")).toHaveLength(
+			3,
+		);
+	});
+
+	test("skips the mcp tool when allowed_tools is missing", () => {
+		const plan = planTools({
+			tools: [{ type: "mcp", server_label: "noop" }],
+			profile: minimaxProfile,
+		});
+
+		expect(plan.declarations).toHaveLength(0);
+		expect(plan.decisions).toContainEqual(
+			expect.objectContaining({
+				path: "tools[type=mcp,server=noop]",
+				action: "ignored",
+			}),
+		);
+	});
+
+	test("skips the mcp tool when allowed_tools is empty array", () => {
+		const plan = planTools({
+			tools: [{ type: "mcp", server_label: "noop", allowed_tools: [] }],
+			profile: minimaxProfile,
+		});
+
+		expect(plan.declarations).toHaveLength(0);
+	});
+
+	test("extracts tool_names from McpToolFilter object", () => {
+		const plan = planTools({
+			tools: [
+				{
+					type: "mcp",
+					server_label: "filter-server",
+					allowed_tools: { tool_names: ["only_this"] },
+				},
+			],
+			profile: minimaxProfile,
+		});
+
+		expect(plan.declarations.map((d) => d.requestedName)).toEqual([
+			"mcp__filter-server__only_this",
+		]);
+	});
+
+	test("passes an mcp tool through natively when provider declares it as native", () => {
+		const nativeProfile: ToolPlanningProfile = {
+			provider: "native-mcp",
+			nativeToolTypes: new Set(["mcp"]),
+			degradedToolTypes: new Map(),
+			toolChoice: new Set(["auto"]),
+			maxTools: 32,
+		};
+		const plan = planTools({
+			tools: [
+				{
+					type: "mcp",
+					server_label: "repo",
+					allowed_tools: ["list_files"],
+				},
+			],
+			profile: nativeProfile,
+		});
+
+		expect(plan.declarations).toHaveLength(1);
+		expect(plan.declarations[0]).toMatchObject({
+			requestedType: "mcp",
+			providerType: "mcp",
+			requestedName: "repo",
+		});
+	});
+
+	test("renderProviderToolDeclarations emits Chat API function declarations for degraded mcp tools", () => {
+		const plan = planTools({
+			tools: [
+				{
+					type: "mcp",
+					server_label: "chrome-devtools",
+					allowed_tools: ["list_pages"],
+				},
+			],
+			profile: minimaxProfile,
+		});
+
+		expect(renderProviderToolDeclarations(plan.declarations)).toEqual([
+			{
+				type: "function",
+				function: {
+					name: "mcp__chrome-devtools__list_pages",
+					description:
+						"MCP tool 'list_pages' on server 'chrome-devtools'. Arguments are forwarded as JSON; the MCP server validates them.",
+					parameters: { type: "object", additionalProperties: true },
+					strict: false,
+				},
+			},
+		]);
+	});
+
+	test("ignores mcp tool when provider lists neither native nor degraded support", () => {
+		const unsupportedProfile: ToolPlanningProfile = {
+			provider: "no-mcp",
+			nativeToolTypes: new Set(["function"]),
+			degradedToolTypes: new Map(),
+			toolChoice: new Set(["auto"]),
+			maxTools: 32,
+		};
+		const plan = planTools({
+			tools: [
+				{
+					type: "mcp",
+					server_label: "chrome-devtools",
+					allowed_tools: ["list_pages"],
+				},
+			],
+			profile: unsupportedProfile,
+		});
+
+		expect(plan.declarations).toHaveLength(0);
+		expect(plan.decisions).toContainEqual(
+			expect.objectContaining({
+				path: "tools[type=mcp,server=chrome-devtools]",
+				action: "ignored",
+				reason: expect.stringContaining(
+					"does not support Responses tool 'mcp'",
+				),
+			}),
+		);
 	});
 });

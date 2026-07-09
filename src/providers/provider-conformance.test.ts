@@ -84,10 +84,11 @@ describe("ProviderSpec runtime conformance", () => {
 		}
 	});
 
-	test("chat-completions provider specs do not expose native MCP calls before response reconstruction supports them", () => {
+	test("chat-completions provider specs do not expose native MCP calls", () => {
 		for (const spec of BUILTIN_PROVIDER_SPECS) {
 			expect(spec.capabilities.tools.supported.has("mcp")).toBe(false);
-			expect(spec.capabilities.tools.degraded?.has("mcp")).toBe(false);
+			// mcp→function degradation is permitted because call-restorer now
+			// reconstructs provider function_calls back to Responses mcp_call items.
 		}
 	});
 

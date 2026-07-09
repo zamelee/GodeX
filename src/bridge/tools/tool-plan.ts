@@ -1,8 +1,10 @@
 import { BRIDGE_REQUEST_UNSUPPORTED_PARAMETER, BridgeError } from "../../error";
 import type {
+	McpTool,
 	ResponseTool,
 	ResponseToolChoice,
 } from "../../protocol/openai/responses";
+import type { McpAllowedTools } from "../../protocol/openai/shared";
 import type { ProviderCapabilities } from "../compatibility";
 import { buildToolCatalog, type ToolCatalogEntry } from "./tool-catalog";
 import {
@@ -111,6 +113,15 @@ function planToolDeclaration(
 	decisions: PlannedToolDecision[],
 	allocateProviderName: (requestedName: string) => string,
 ): ToolDeclarationPlan[] {
+	if (entry.type === "mcp" && entry.tool.type === "mcp") {
+		return planMcpToolDeclaration(
+			entry,
+			profile,
+			decisions,
+			allocateProviderName,
+		);
+	}
+
 	if (profile.nativeToolTypes.has(entry.type)) {
 		decisions.push({
 			path: `tools[type=${entry.type}]`,
@@ -172,6 +183,82 @@ function createProviderNameAllocator(
 	};
 }
 
+function planMcpToolDeclaration(
+	entry: ToolCatalogEntry,
+	profile: ToolPlanningProfile,
+	decisions: PlannedToolDecision[],
+	allocateProviderName: (requestedName: string) => string,
+): ToolDeclarationPlan[] {
+	const tool = entry.tool as McpTool;
+
+	if (profile.nativeToolTypes.has("mcp")) {
+		decisions.push({
+			path: `tools[type=mcp,server=${tool.server_label}]`,
+			action: "supported",
+			reason: `${profile.provider} supports Responses tool 'mcp'.`,
+		});
+		return [
+			{
+				requestedType: "mcp",
+				providerType: "mcp",
+				requestedName: tool.server_label,
+				providerName: tool.server_label,
+				tool,
+			},
+		];
+	}
+
+	const providerType = profile.degradedToolTypes.get("mcp");
+	if (providerType !== "function") {
+		decisions.push({
+			path: `tools[type=mcp,server=${tool.server_label}]`,
+			action: "ignored",
+			reason: `${profile.provider} does not support Responses tool 'mcp'; skipping declaration.`,
+		});
+		return [];
+	}
+
+	const allowedNames = extractMcpToolNames(tool.allowed_tools);
+	if (allowedNames === undefined || allowedNames.length === 0) {
+		decisions.push({
+			path: `tools[type=mcp,server=${tool.server_label}]`,
+			action: "ignored",
+			reason: `MCP server '${tool.server_label}' has no allowed_tools or only read_only filter; cannot expand to function declarations.`,
+		});
+		return [];
+	}
+
+	return allowedNames.map((mcpToolName) => {
+		const requestedName = `mcp__${tool.server_label}__${mcpToolName}`;
+		const providerName = allocateProviderName(requestedName);
+		decisions.push({
+			path: `tools[type=mcp,server=${tool.server_label},tool=${mcpToolName}]`,
+			action: "degraded",
+			reason: `${profile.provider} maps MCP tool '${mcpToolName}' on server '${tool.server_label}' to function '${requestedName}'.`,
+		});
+		return {
+			requestedType: "mcp",
+			providerType: "function",
+			requestedName,
+			providerName,
+			tool: {
+				type: "function",
+				name: providerName,
+				description: `MCP tool '${mcpToolName}' on server '${tool.server_label}'. Arguments are forwarded as JSON; the MCP server validates them.`,
+				parameters: { type: "object", additionalProperties: true },
+				strict: false,
+			} as ResponseTool,
+		};
+	});
+}
+function extractMcpToolNames(
+	allowed: McpAllowedTools | undefined,
+): string[] | undefined {
+	if (allowed === undefined) return undefined;
+	if (Array.isArray(allowed)) return allowed;
+	if (Array.isArray(allowed.tool_names)) return allowed.tool_names;
+	return undefined;
+}
 function assertMaxTools(
 	declarations: readonly ToolDeclarationPlan[],
 	profile: ToolPlanningProfile,
