@@ -26,6 +26,7 @@
     "node_modules",
     "dist",
     "backup",
-    "studio-tauri/src-tauri/target"
+    "studio-tauri/src-tauri/target",
+    "chrome-browser-mcp"
   ]
 }

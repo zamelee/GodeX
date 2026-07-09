@@ -9,6 +9,10 @@ import type {
 	ResponseToolChoice,
 } from "../../protocol/openai/responses";
 import type { McpAllowedTools } from "../../protocol/openai/shared";
+import {
+	buildBrowserFunctionDeclarations,
+	GODEX_CHROME_PREFIX,
+} from "../../tools/browser-function-tools/declarations";
 import type { ProviderCapabilities } from "../compatibility";
 import { buildToolCatalog, type ToolCatalogEntry } from "./tool-catalog";
 import {
@@ -84,6 +88,12 @@ export function planTools(input: {
 	readonly tools?: readonly ResponseTool[];
 	readonly toolChoice?: ResponseToolChoice;
 	readonly profile: ToolPlanningProfile;
+	/**
+	 * Whether to auto-inject Path D browser function tools (godex_chrome_*).
+	 * Defaults to true so the bridge always surfaces them to the model.
+	 * Tests that need an exact declaration count can opt out.
+	 */
+	readonly browserFunctionInject?: boolean;
 }): ToolPlan {
 	const decisions: PlannedToolDecision[] = [];
 	if (input.toolChoice === "none") {
@@ -107,6 +117,9 @@ export function planTools(input: {
 	const declarations = buildToolCatalog(input.tools).flatMap((entry) =>
 		planToolDeclaration(entry, input.profile, decisions, allocateProviderName),
 	);
+	if (input.browserFunctionInject !== false) {
+		injectBrowserFunctionDeclarations(declarations, decisions);
+	}
 	assertMaxTools(declarations, input.profile);
 	const providerToolChoice = planProviderToolChoice({
 		toolChoice: input.toolChoice,
@@ -120,6 +133,51 @@ export function planTools(input: {
 		...(providerToolChoice !== undefined ? { providerToolChoice } : {}),
 		decisions,
 	};
+}
+
+/**
+ * Path D auto-inject: append the GodeX-internal browser function tools
+ * (godex_chrome_*) to the plan output. Codex decides which tools to surface
+ * to the model based on the server-supplied declarations, so we have to
+ * always include them — otherwise the model can never call them and the
+ * BrowserFunctionLoop has nothing to intercept.
+ *
+ * The bridge never sees these tools as `mcp__<server>__<tool>` (the Codex
+ * MCP dispatcher has been broken in practice for months). Declaring them
+ * as native Responses `function` tools is the workaround — see
+ * src/responses/browser-function-loop.ts for the matching execution side.
+ *
+ * If the caller already supplied a tool with the same provider name we
+ * keep the caller's version (their custom description/parameters win) and
+ * skip the auto-injected one. This keeps request-level declarations
+ * authoritative when present.
+ */
+function injectBrowserFunctionDeclarations(
+	declarations: ToolDeclarationPlan[],
+	decisions: PlannedToolDecision[],
+): void {
+	if (process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT === "1") return;
+	const existing = new Set(declarations.map((d) => d.providerName));
+	let injected = 0;
+	for (const tool of buildBrowserFunctionDeclarations()) {
+		if (existing.has(tool.name)) continue;
+		declarations.push({
+			requestedType: "function",
+			providerType: "function",
+			requestedName: tool.name,
+			providerName: tool.name,
+			tool,
+			execution: "godex_managed",
+		});
+		injected++;
+	}
+	if (injected > 0) {
+		decisions.push({
+			path: "tools[auto-inject=godex_chrome_*]",
+			action: "supported",
+			reason: `Auto-injected ${injected} Path D browser function tool(s) with prefix "${GODEX_CHROME_PREFIX}".`,
+		});
+	}
 }
 
 function planToolDeclaration(

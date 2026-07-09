@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { BridgeError } from "../../error";
 import {
 	renderFunctionDeclarations,
@@ -934,5 +934,84 @@ describe("planTools - mcp tool degradation", () => {
 				),
 			}),
 		);
+	});
+});
+
+describe("Path D browser function auto-inject", () => {
+	const previous = process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT;
+	beforeEach(() => {
+		delete process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT;
+	});
+	afterEach(() => {
+		if (previous === undefined) {
+			delete process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT;
+		} else {
+			process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT = previous;
+		}
+	});
+
+	test("auto-injects 13 godex_chrome_* declarations when caller passes no tools", () => {
+		const profile: ToolPlanningProfile = {
+			provider: "minnimax.chat",
+			nativeToolTypes: new Set(["function"]),
+			degradedToolTypes: new Map(),
+			toolChoice: new Set(["auto", "none", "function"]),
+			maxTools: 128,
+		};
+		const plan = planTools({ profile });
+		expect(plan.declarations).toHaveLength(13);
+		for (const decl of plan.declarations) {
+			expect(decl.providerName.startsWith("godex_chrome_")).toBe(true);
+			expect(decl.execution).toBe("godex_managed");
+			expect(decl.providerType).toBe("function");
+		}
+		expect(plan.decisions).toContainEqual(
+			expect.objectContaining({
+				path: "tools[auto-inject=godex_chrome_*]",
+				action: "supported",
+				reason: expect.stringContaining("13 Path D browser function tool"),
+			}),
+		);
+	});
+
+	test("auto-inject is skipped when caller already declared the same name", () => {
+		const profile: ToolPlanningProfile = {
+			provider: "minnimax.chat",
+			nativeToolTypes: new Set(["function"]),
+			degradedToolTypes: new Map(),
+			toolChoice: new Set(["auto", "none", "function"]),
+			maxTools: 128,
+		};
+		const plan = planTools({
+			tools: [
+				{
+					type: "function",
+					name: "godex_chrome_list_pages",
+					description: "user override",
+					parameters: { type: "object", properties: {} },
+					strict: true,
+				},
+			],
+			profile,
+		});
+		const chromeDecls = plan.declarations.filter((d) =>
+			d.providerName.startsWith("godex_chrome_"),
+		);
+		expect(chromeDecls).toHaveLength(13);
+		expect((chromeDecls[0]!.tool as { description: string }).description).toBe(
+			"user override",
+		);
+	});
+
+	test("opt-out via GODEX_DISABLE_BROWSER_FUNCTION_INJECT=1", () => {
+		process.env.GODEX_DISABLE_BROWSER_FUNCTION_INJECT = "1";
+		const profile: ToolPlanningProfile = {
+			provider: "minnimax.chat",
+			nativeToolTypes: new Set(["function"]),
+			degradedToolTypes: new Map(),
+			toolChoice: new Set(["auto", "none", "function"]),
+		};
+		const plan = planTools({ profile });
+		expect(plan.declarations).toHaveLength(0);
 	});
 });
