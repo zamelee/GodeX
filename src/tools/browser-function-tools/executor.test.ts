@@ -193,7 +193,7 @@ describe("executeBrowserFunctionCall", () => {
 		expect(out.output).toBe("fallback-ok");
 	});
 
-	test("returns image placeholder when content has no text", async () => {
+	test("returns image content parts when result is image-only", async () => {
 		const fetchImpl: FetchStub = async () =>
 			sseResponse({
 				jsonrpc: "2.0",
@@ -209,6 +209,61 @@ describe("executeBrowserFunctionCall", () => {
 			baseCall,
 			fetchImpl as unknown as typeof fetch,
 		);
-		expect(out.output).toContain("image content returned");
+		expect(Array.isArray(out.output)).toBe(true);
+		const parts = out.output as Array<{
+			type: string;
+			image_url?: string;
+			text?: string;
+		}>;
+		expect(parts).toHaveLength(1);
+		expect(parts[0]!.type).toBe("input_image");
+		expect(parts[0]!.image_url).toBe("data:image/png;base64,BASE64DATA");
+	});
+
+	test("returns mixed text and image content parts", async () => {
+		const fetchImpl: FetchStub = async () =>
+			sseResponse({
+				jsonrpc: "2.0",
+				id: 1,
+				result: {
+					content: [
+						{ type: "text", text: "PNG bytes below:" },
+						{ type: "image", data: "AAAA", mimeType: "image/jpeg" },
+					],
+				},
+			});
+
+		const out = await executeBrowserFunctionCall(
+			baseCall,
+			fetchImpl as unknown as typeof fetch,
+		);
+		expect(Array.isArray(out.output)).toBe(true);
+		const parts = out.output as Array<{
+			type: string;
+			image_url?: string;
+			text?: string;
+		}>;
+		expect(parts).toHaveLength(2);
+		expect(parts[0]).toEqual({ type: "input_text", text: "PNG bytes below:" });
+		expect(parts[1]!.type).toBe("input_image");
+		expect(parts[1]!.image_url).toBe("data:image/jpeg;base64,AAAA");
+	});
+
+	test("uses image/png default mime when mimeType is missing", async () => {
+		const fetchImpl: FetchStub = async () =>
+			sseResponse({
+				jsonrpc: "2.0",
+				id: 1,
+				result: {
+					content: [{ type: "image", data: "XYZ" }],
+				},
+			});
+
+		const out = await executeBrowserFunctionCall(
+			baseCall,
+			fetchImpl as unknown as typeof fetch,
+		);
+		const parts = out.output as Array<{ type: string; image_url?: string }>;
+		expect(parts[0]!.image_url).toBe("data:image/png;base64,XYZ");
 	});
 });

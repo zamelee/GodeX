@@ -1,3 +1,4 @@
+import type { ResponseInputContent } from "../../protocol/openai/responses/content";
 import type {
 	FunctionCall,
 	FunctionCallOutput,
@@ -214,19 +215,39 @@ function extractText(result: McpJsonRpcResponse["result"]): string {
 	return parts.join("\n").trim();
 }
 
-function serializeMcpResult(result: McpJsonRpcResponse["result"]): string {
+function serializeMcpResult(
+	result: McpJsonRpcResponse["result"],
+): string | ResponseInputContent[] {
 	const content = result?.content ?? [];
-	const text = extractText(result);
-	if (text) return text;
-
-	// Image-only results (e.g. screenshot) — emit a structured placeholder so
-	// the model knows an image came back. The full image is discarded for now;
-	// surfacing inline images requires Responses input content parts that the
-	// current bridge does not yet serialize for tool outputs.
 	const hasImage = content.some((block) => block?.type === "image");
-	if (hasImage) return "[image content returned by browser tool]";
+	const text = extractText(result);
 
-	return JSON.stringify(content);
+	// Plain text: keep the legacy string path for backward compatibility.
+	if (!hasImage) {
+		if (text) return text;
+		return JSON.stringify(content);
+	}
+
+	// Mixed or image-only results: build ResponseInputContent[] so the model
+	// can actually see the image. text blocks become input_text, image blocks
+	// become input_image with a data URL.
+	const parts: ResponseInputContent[] = [];
+	for (const block of content) {
+		if (block?.type === "text" && typeof block.text === "string") {
+			parts.push({ type: "input_text", text: block.text });
+		} else if (
+			block?.type === "image" &&
+			typeof block.data === "string" &&
+			block.data.length > 0
+		) {
+			const mime = block.mimeType ?? "image/png";
+			parts.push({
+				type: "input_image",
+				image_url: `data:${mime};base64,${block.data}`,
+			});
+		}
+	}
+	return parts.length > 0 ? parts : "[image content returned by browser tool]";
 }
 
 function errorMessage(err: unknown): string {
