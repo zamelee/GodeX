@@ -137,8 +137,42 @@ describe("ResponsesBridgeRuntime", () => {
 		expect(events[0]?.type).toBe("response.created");
 	});
 
+	test("wrap-mode stream forces upstream to non-streaming and restores the flag", async () => {
+		const ctx = {
+			request: { stream: true, model: "mock/test" } as never,
+		} as unknown as ResponsesContext;
+		const seen: Array<{ stream: boolean | undefined }> = [];
+		const bridge = new ResponsesBridgeRuntime(
+			{
+				request: async (receivedCtx) => {
+					seen.push({
+						stream: (receivedCtx.request as { stream?: boolean }).stream,
+					});
+					return {
+						id: "resp_x",
+						object: "response",
+						status: "completed",
+						model: "test",
+						created_at: 1,
+						output: [],
+					} as ResponseObject;
+				},
+			},
+			undefined,
+		);
+
+		await bridge.stream(ctx);
+
+		// During the inner sync call, stream must be false so the upstream
+		// Chat Completions API returns a parseable JSON body rather than SSE.
+		expect(seen).toEqual([{ stream: false }]);
+		// After wrap completes, the original intent is preserved so any
+		// post-wrap reader of ctx.request.stream sees what the client sent.
+		expect((ctx.request as { stream: boolean | undefined }).stream).toBe(true);
+	});
+
 	test("delegates request and stream to injected pipelines", async () => {
-		const ctx = {} as ResponsesContext;
+		const ctx = { request: { stream: false } } as unknown as ResponsesContext;
 		const responseObject = {
 			id: "resp_injected",
 			object: "response",
