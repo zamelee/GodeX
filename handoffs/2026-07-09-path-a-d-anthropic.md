@@ -496,3 +496,126 @@ Pending decision: proceed with Anthropic provider (in parallel with Path D)?
 - Cherry-pick upstream: `73dc7f9 feat: add built-in web search (#144)`
 - Codex++ plugin name resolution bug (browser: prefix resolving to sites/0.1.16)
 - Chrome process leak cleanup
+
+## Path D Auto-Inject — Completed 2026-07-09 ~12:18
+
+Commit: `93e21e9` (pushed to `fork/main`)
+
+### What changed
+
+- `src/bridge/tools/tool-plan.ts` — `planTools()` now auto-injects the 13
+  `godex_chrome_*` declarations whenever the caller did not pass any tools.
+  Dedup by `providerName` so caller wins on conflict. Each injected
+  declaration is tagged `execution: "godex_managed"`. Opt-out per-call via
+  `planTools({ browserFunctionInject: false })` or process-wide via
+  `GODEX_DISABLE_BROWSER_FUNCTION_INJECT=1`.
+- `src/bridge/tools/tool-plan.test.ts` — 3 new tests in a new
+  `Path D browser function auto-inject` describe block. The block uses
+  `beforeEach`/`afterEach` to toggle the env var.
+- `test-setup.ts` (new) + `bunfig.toml` (new) — preload that disables
+  auto-inject globally for the test process, so the 800+ existing tests
+  that assert on exact tool shape stay green without per-file boilerplate.
+- `tsconfig.json` — added `chrome-browser-mcp/` to `exclude`. The
+  subproject has 51 pre-existing TypeScript errors unrelated to GodeX.
+  `bun run check` now returns 0 typecheck errors.
+
+### Verification
+
+- `bun test src/bridge/tools/tool-plan.test.ts`: 34/0 (31 existing + 3 new)
+- `bun test src/e2e`: 65/0/9 skip
+- `bun run test`: 850/0
+- `bun run check`: typecheck 0 errors, lint clean, test 850/0
+
+### End-to-end test (non-streaming, no tools in request)
+
+POST `http://127.0.0.1:5680/v1/responses` with model
+`minnimax.chat/MiniMax-M3` and NO `tools` field in the body.
+
+Test 1 — list_pages:
+
+```json
+{
+  "input": [{"type":"message","role":"user","content":"用 godex_chrome_list_pages 看现在开了哪些标签"}]
+}
+```
+
+Model output (final message, in Chinese):
+
+> 当前打开了 **2 个标签页**，都是同一个页面：Example Domain / https://example.com/ ...
+
+Function calls in the response: `godex_chrome_list_pages` with `arguments: "{}"`.
+The call was executed by the BrowserFunctionLoop, returned the 2 tabs, and
+fed back to the model as a `function_call_output` item. **This proves
+auto-inject fired and the model saw the tools without the caller having
+to declare them.**
+
+Test 2 — navigate + screenshot (image content part consumption):
+
+```json
+{
+  "input": [{"type":"message","role":"user","content":"用 godex_chrome_navigate 打开 https://example.com，再用 godex_chrome_screenshot 截图。最后告诉我页面长什么样。"}]
+}
+```
+
+Model output (in Chinese) — model described the page after seeing the
+screenshot image:
+
+> 页面已经成功打开并截图了。这是经典的 **example.com** 页面，整体非常简洁：
+>
+> - 📄 **标题**：「Example Domain」（黑色加粗，位于页面左上方位置）
+> - 📝 **正文段落**：写着「This domain is for use in documentation examples...」
+> - 🔗 **链接**：一个蓝色的下划线链接「Learn more」（了解更多），指向 IANA 的相关说明
+>
+> **视觉风格：**
+> - 纯白背景
+> - 文字采用无衬线字体（看起来像 Helvetica/Arial）
+> - 内容整体偏左对齐
+> - 没有任何图片、按钮或其他交互元素
+
+This confirms:
+1. Auto-inject: model called `godex_chrome_navigate` and `godex_chrome_screenshot`
+   without the request declaring them.
+2. Image content parts: `godex_chrome_screenshot` returned base64 PNG,
+   the bridge wrapped it as `input_image` content part, the model received
+   the image and visually described the page.
+
+### End-to-end test (streaming, no tools in request)
+
+POST `http://127.0.0.1:5680/v1/responses?stream=true`. The stream emits
+15 events covering the first turn (reasoning + function_call to
+`godex_chrome_list_pages`), then `response.completed`. **The
+BrowserFunctionLoop does not run in the streaming path** — the function
+call is delivered to the client, but no second turn is triggered to feed
+the result back to the model. The response.completed output has empty
+`output_text`.
+
+This is a known limitation, flagged earlier. For Path D with auto-inject,
+**the non-streaming endpoint is the working path**. Codex++ would need to
+either:
+- Use the non-streaming endpoint for browser automation, or
+- Buffer the streaming function_call and re-issue as a non-streaming
+  follow-up turn, or
+- We add a streaming-aware BrowserFunctionLoop (separate task).
+
+### Live process state (current)
+
+| pid  | process | port | role                                      |
+|------|---------|------|-------------------------------------------|
+| 3756 | godex4  | 5678 | user's primary LLM gateway — KEEP         |
+| 16976| godex5  | 5679 | LLM gateway — KEEP                        |
+| 11196| godex6  | 5680 | **Path D test gateway (auto-inject ON)**  |
+| 14412| node    | 9224 | chrome-browser-mcp backend — KEEP         |
+| 6800 | chrome  | 9222 | user's Chrome debug instance — KEEP       |
+
+### Next steps (resume order)
+
+1. **Streaming BrowserFunctionLoop** — extend the streaming pipeline to
+   detect function_call items, execute them, and re-issue a follow-up
+   turn with the function_call_output appended. This makes Path D work
+   in streaming mode too.
+2. **Cherry-pick Ahoo-Wang upstream changes** that don't conflict with
+   Path D (e.g. newer tool planning, provider fixes). Re-verify auto-
+   inject still works after each pick.
+3. **Expose `GODEX_CHROME_*` tool surface as a Codex tool surface** if
+   Codex++ wants to call godex_chrome_* directly without going through
+   the bridge (i.e. expose the godex-cdp MCP server too).
