@@ -179,3 +179,112 @@ Status: step 1 of F class rename done. Phase A steps 2-8 NOT yet done. This hand
 Next session should:
 1. Confirm whether to proceed with steps 2-8 (the full bridge decoupling) or pivot to Phase B (Anthropic pipeline) directly with the remaining Chat-shape leakage accepted as known technical debt.
 2. If proceeding with 2-8, start with `input-normalizer.ts` (step 2) — that is the smallest pivot point with the highest leak density.
+
+## Round 2 (2026-07-09 evening) - pre-existing e2e failures investigation
+
+User asked: how deep is the landmine from the 7 pre-existing e2e failures? Will it bite us during Phase B (Anthropic integration)?
+
+### Investigation result: it IS a real bug, not a flake
+
+Drilled down bun test src/e2e/e2e.test.ts -t streams SSE events through the full lifecycle with intermediate debug at three points:
+
+1. Server-side raw body (src/server/routes/responses/handler.ts) - JSON dump showed { model: gpt-5, input: Hello!, stream: true }. Stream field arrived correctly.
+2. Provider-exchange stream entry point (src/responses/provider-exchange.ts) - called buildProviderRequest(ctx, true, options), then buildChatCompletionRequest(...) which calls applyRequestOptions.
+3. applyRequestOptions runtime (src/bridge/request/request-builder.ts:471) - threw TypeError: undefined is not an object (evaluating capabilities.parameters.supported).
+
+So the upstream mock never received body.stream because the stream pipeline crashed before reaching the request body construction step. Capabilities was undefined when applyRequestOptions ran.
+
+### Why mock received body without stream field
+
+The chain:
+- e2e test - POST /v1/responses with stream: true
+- GodeX server parses - body.stream === true (correct)
+- provider-exchange.stream(...) - buildProviderRequest(ctx, true) - buildChatCompletionRequest - applyRequestOptions - CRASH at capabilities.parameters.supported
+- Exception caught somewhere - returns 400 to upstream mock
+- Mock writes body (stream was undefined so body.stream is undefined in the captured request)
+- Mock returns JSON (handleMockChat branch)
+- Fetcher-eventstream rejects because content-type is JSON not SSE
+
+### What is actually broken
+
+The stream pipeline (probably StreamPipeline or provider-exchange.stream) does not pass capabilities through to applyRequestOptions. Either:
+
+- A) provider-exchange.ts:75 builds buildProviderRequest without capabilities
+- B) StreamPipeline constructs its own BuildChatCompletionRequestInput and omits capabilities
+- C) Some recent change (commit d6622ca Path D wrap-mode, or b37e737 stream=false fix, or e1a9d54 Path D screenshot) regressed this.
+
+### Risk assessment for Phase B (Anthropic)
+
+HIGH RISK. Anthropic /v1/messages is stream-first; every Codex++ turn that uses Anthropic will eventually want stream: true. If we skip the fix and proceed to Phase B:
+
+- Pure-text sync request: probably works (sync pipeline unaffected)
+- Any stream request with tools/web-search/parallel-tool-calls: hits this bug
+- All 4 stream tests that fail would still fail under Anthropic
+- Codex++ may silently fall back to non-stream (if GodeX exposes a flag) or hit a 500 loop
+
+### Estimated fix cost
+
+1-2 hours of focused work. Need to:
+
+1. Read src/responses/provider-exchange.ts lines 30-110, especially the stream branch and the buildProviderRequest argument list
+2. Read StreamPipeline (likely in src/responses/stream-pipeline.ts) to see if it duplicates request building
+3. Compare capabilities flow between SyncRequestPipeline (works) and the stream path (broken)
+4. Likely a missing capabilities argument or a wrongly-typed intermediate object
+
+### Decision point
+
+Option 1: Fix this bug first (1-2 h) - cleaner foundation, all 7 e2e tests should pass, Phase B risk low.
+Option 2: Document the bug, defer, proceed to Phase B - faster start, but bug will resurface at Phase B smoke test, net delay probably same.
+
+Recommendation: Option 1. The bug is small, the failure mode is hidden behind a 400, and it would absolutely block Phase B first stream smoke test.
+
+## Round 3 (2026-07-09 evening) - plain-language explanation request
+
+User asked for a plain-language explanation of:
+- What we did in F-class step 1
+- The cleanup vs no-cleanup tradeoff for Phase A steps 2-8
+- The blast radius of the 7 pre-existing failures
+
+Delivered a translator-metaphor walkthrough:
+- F-class step 1 = repainted two door signs so they dont say Chat anymore; no rewiring
+- Cleanup = also rewire internal hallways so they dont assume Chat-shaped luggage
+- No cleanup = fast but luggage shape mismatches Anthropic expectations
+- Pre-existing fail = the front door has a broken step (capabilities undefined when going stream)
+
+## Round 4 (2026-07-09 evening) - tooling note (carried forward)
+
+User reaffirmed:
+- Use pwsh7 for PowerShell (Windows PowerShell 5.1 has here-string and escape bugs)
+- Use Python 3.12 for text transformation and HTTP request bodies
+- DO NOT commit anything under bin/ (working tree is full of probe scripts, logs, binaries)
+
+Tooling pain points encountered:
+- python pathlib.Path.write_text() on Windows emits CRLF - biome rejects the file as format diff. Use write_bytes() with explicit LF normalization.
+- bun test swallows console.error output unless you write to a file. Dont waste iterations on console.log debugging in tests.
+- Triple-quoted Python here-strings inside PS7 -Command arguments break on backslash line endings. Always write the Python script to a file with Set-Content -Encoding utf8 and then python script.py.
+
+## Round 5 (2026-07-09 evening) - debug code reverts
+
+Added temporary debug statements to src/server/routes/responses/handler.ts, src/e2e/e2e.test.ts, src/bridge/request/request-builder.ts. Reverted via git restore. Confirmed clean: bun run typecheck returns no errors. Working tree shows only the original bin/godex.exe modification (compiled binary; not to be committed) and untracked bin/_debug*.txt, bin/_patch-*.py, bin/_revert-debug.py, bin/_last-test*.txt, bin/_write-handoff.ps1. These are temporary probe artifacts; do not commit.
+
+## Live process state - UPDATED 2026-07-09 evening
+
+| pid | process | port | role |
+|---|---|---|---|
+| 16976 | godex5 | 5679 | LLM gateway (long-running) |
+| 15124 | godex6 | 5680 | user primary LLM keepalive for Codex++ |
+| 2568 | godex7 | 5681 | Path D test gateway (auto-inject + wrap-mode + stream=false fix) |
+| 14412 | node | - | chrome-browser-mcp (CDP backend on 9224) |
+| 6800 | chrome | 9222 | user Chrome debug |
+
+Note: godex4 (pid 3756) no longer running. godex6 is the current keepalive per user direction.
+
+## Recommended next actions
+
+1. Fix the stream-pipeline capabilities bug (Option 1) - 1-2 h, should make all 7 e2e failures pass.
+2. Then Phase A step 2 (input-normalizer neutral types) - 1.5 h.
+3. Then Phase B (Anthropic pipeline) - 3 h.
+
+Total to Codex++ uses Anthropic: ~6 hours from now. If we skip option 1 and go straight to Phase A step 2, we will still hit this stream bug at Phase B end-to-end smoke test, so the 1-2 h is unavoidable.
+
+If user explicitly wants to defer the bug fix to maximize parallel exploration, document the bug in commit message of the next change so future agents know where to find it.
