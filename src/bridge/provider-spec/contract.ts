@@ -7,8 +7,15 @@ import type { ProviderCapabilities } from "../compatibility";
 
 export type ProviderSpecStreamDelta = unknown;
 export const CHAT_COMPLETIONS_PROTOCOL = "chat_completions" as const;
-export type ProviderProtocol = typeof CHAT_COMPLETIONS_PROTOCOL;
+export const MESSAGES_PROTOCOL = "messages" as const;
+export type ProviderProtocol =
+	| typeof CHAT_COMPLETIONS_PROTOCOL
+	| typeof MESSAGES_PROTOCOL;
 export const BEARER_AUTH_SCHEME = "bearer" as const;
+export const X_API_KEY_AUTH_SCHEME = "x_api_key" as const;
+export type ProviderAuthScheme =
+	| typeof BEARER_AUTH_SCHEME
+	| typeof X_API_KEY_AUTH_SCHEME;
 
 export interface ProviderRuntimeConfig {
 	readonly spec: string;
@@ -22,17 +29,20 @@ export interface ProviderEndpointSpec {
 }
 
 export interface ProviderAuthSpec {
-	readonly scheme: typeof BEARER_AUTH_SCHEME;
+	readonly scheme: ProviderAuthScheme;
 }
 
 export const BEARER_AUTH: ProviderAuthSpec = { scheme: BEARER_AUTH_SCHEME };
+export const X_API_KEY_AUTH: ProviderAuthSpec = {
+	scheme: X_API_KEY_AUTH_SCHEME,
+};
 
 export interface ToolNameCodec {
 	toProviderName(name: string): string;
 	fromProviderName(name: string): string | undefined;
 }
 
-export interface ChatCompletionResponseAccessor<TResponse> {
+export interface BridgeResponseAccessor<TResponse> {
 	firstChoice(response: TResponse): unknown | undefined;
 	finishReason(response: TResponse): string | undefined;
 	outputText(response: TResponse): string;
@@ -41,7 +51,7 @@ export interface ChatCompletionResponseAccessor<TResponse> {
 	usage(response: TResponse): ResponseUsage | null;
 }
 
-export interface ChatCompletionStreamAccessor<TChunk> {
+export interface BridgeStreamAccessor<TChunk> {
 	deltas(chunk: TChunk): ProviderSpecStreamDelta[];
 }
 
@@ -73,8 +83,8 @@ export interface ProviderSpec<
 	readonly endpoint: ProviderEndpointSpec;
 	readonly auth: ProviderAuthSpec;
 	readonly toolName: ToolNameCodec;
-	readonly response: ChatCompletionResponseAccessor<TResponse>;
-	readonly stream: ChatCompletionStreamAccessor<TChunk>;
+	readonly response: BridgeResponseAccessor<TResponse>;
+	readonly stream: BridgeStreamAccessor<TChunk>;
 	readonly hooks?: ProviderHooks<
 		TBridgeRequest,
 		TResponse,

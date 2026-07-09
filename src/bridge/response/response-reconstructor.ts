@@ -9,7 +9,7 @@ import {
 	type TerminalResponseStatus,
 } from "../finish-reason";
 import { validateOutputContract } from "../output";
-import type { ChatCompletionResponseAccessor } from "../provider-spec";
+import type { BridgeResponseAccessor } from "../provider-spec";
 import {
 	type ProviderFunctionCall,
 	restoreToolCall,
@@ -25,7 +25,7 @@ interface ReconstructResponseObjectInput<TResponse> {
 	readonly provider: string;
 	readonly model: string;
 	readonly providerResponse: TResponse;
-	readonly accessor: ChatCompletionResponseAccessor<TResponse>;
+	readonly accessor: BridgeResponseAccessor<TResponse>;
 	readonly toolIdentity?: unknown;
 	readonly outputContract: { readonly requiresValidJson: boolean };
 	readonly echo?: Partial<ResponseObject>;
