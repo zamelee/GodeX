@@ -4,6 +4,12 @@
 //
 // A mock Zhipu upstream server is started alongside the GodeX server so no
 // real API key is required.
+//
+// E2E covers the real stream path (passthrough mode). wrap-mode (the
+// default in production, which absorbs tool calls into a server-side sync
+// loop) is tested separately by src/responses/runtime.test.ts.
+
+process.env.GODEX_STREAM_MODE = "passthrough";
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { GodeXConfig } from "../config";

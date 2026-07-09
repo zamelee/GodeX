@@ -1,3 +1,5 @@
+process.env.GODEX_STREAM_MODE = "passthrough";
+
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
