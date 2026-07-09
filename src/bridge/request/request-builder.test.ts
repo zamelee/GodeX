@@ -173,6 +173,37 @@ describe("buildChatCompletionRequest", () => {
 		});
 	});
 
+	test("passes web-search planning options into tool planning", async () => {
+		const result = await buildChatCompletionRequest({
+			provider: "acme",
+			model: "acme-chat",
+			capabilities,
+			profile: toolProfile,
+			webSearch: {
+				mode: "godex_managed",
+				available: true,
+				onUnavailable: "client_tool_call",
+			},
+			request: request({
+				tools: [{ type: "web_search", search_context_size: "medium" }],
+			}),
+		});
+
+		expect(result.tools.declarations[0]).toMatchObject({
+			requestedType: "web_search",
+			providerType: "function",
+			execution: "godex_managed",
+		});
+		expect(result.request.tools).toEqual([
+			expect.objectContaining({
+				type: "function",
+				function: expect.objectContaining({
+					name: "web_search",
+				}),
+			}),
+		]);
+	});
+
 	test("plans strict degraded json_schema as json_object and appends schema instruction to the last user turn", async () => {
 		const result = await buildChatCompletionRequest({
 			provider: "acme",
@@ -1135,7 +1166,14 @@ describe("normalizeCurrentInput", () => {
 					{
 						id: "ts_out_1",
 						type: "tool_search_output",
-						tools: [{ type: "function", name: "lookup_weather" }],
+						tools: [
+							{
+								type: "function",
+								name: "lookup_weather",
+								parameters: { type: "object", properties: {} },
+								strict: true,
+							},
+						],
 						status: "completed",
 					},
 					{
@@ -1165,7 +1203,14 @@ describe("normalizeCurrentInput", () => {
 				tool_call_id: "ts_out_1",
 				content: JSON.stringify({
 					status: "completed",
-					tools: [{ type: "function", name: "lookup_weather" }],
+					tools: [
+						{
+							type: "function",
+							name: "lookup_weather",
+							parameters: { type: "object", properties: {} },
+							strict: true,
+						},
+					],
 				}),
 			},
 			{ role: "user", content: "Thanks." },

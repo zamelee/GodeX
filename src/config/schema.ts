@@ -86,6 +86,25 @@ export interface PluginsConfig {
 	paths: string[];
 }
 
+export type WebSearchMode =
+	| "auto"
+	| "provider_native"
+	| "godex_managed"
+	| "disabled";
+
+export type WebSearchProvider = "none" | "mock" | "zhipu";
+
+export type WebSearchOnUnavailable = "client_tool_call" | "fail" | "ignore";
+
+export interface WebSearchConfig {
+	enabled: boolean;
+	mode: WebSearchMode;
+	provider: WebSearchProvider;
+	on_unavailable: WebSearchOnUnavailable;
+	max_iterations: number;
+	timeout_ms: number;
+}
+
 export interface GodeXConfig {
 	server: ServerConfig;
 	default_provider: string;
@@ -95,4 +114,5 @@ export interface GodeXConfig {
 	logging: LoggingConfig;
 	trace: TraceConfig;
 	plugins?: PluginsConfig;
+	web_search?: WebSearchConfig;
 }

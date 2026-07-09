@@ -5,3 +5,4 @@ export * from "./providers";
 export * from "./server";
 export * from "./session";
 export * from "./trace";
+export * from "./web-search";

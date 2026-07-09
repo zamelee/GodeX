@@ -4,6 +4,7 @@ import type { Logger } from "../logger";
 import type { Registrar } from "../providers/registrar";
 import type { ModelResolver } from "../resolver";
 import type { ResponsesBridge } from "../responses/bridge";
+import type { SearchService } from "../search";
 import type { ResponseSessionStore } from "../session";
 import type { TraceRecorder } from "../trace";
 import { createApplicationServices } from "./application-services";
@@ -14,6 +15,7 @@ export class ApplicationContext {
 	readonly resolver: ModelResolver;
 	readonly registrar: Registrar;
 	readonly responses: ResponsesBridge;
+	readonly search: SearchService;
 	readonly sessionStore: ResponseSessionStore;
 	readonly traceRecorder: TraceRecorder;
 	readonly traceEnabled: boolean;
@@ -32,6 +34,7 @@ export class ApplicationContext {
 		this.resolver = services.resolver;
 		this.registrar = services.registrar;
 		this.responses = services.responses;
+		this.search = services.search;
 		this.sessionStore = services.sessionStore;
 		this.traceRecorder = services.traceRecorder;
 		this.traceEnabled = services.traceEnabled;

@@ -29,6 +29,7 @@ import {
 	renderProviderToolDeclarations,
 	type ToolPlan,
 	type ToolPlanningProfile,
+	type WebSearchPlanningOptions,
 } from "../tools";
 import {
 	type InputNormalizerContext,
@@ -46,6 +47,7 @@ export interface BuildChatCompletionRequestInput {
 	readonly profile: ToolPlanningProfile;
 	readonly session?: ResponseSessionSnapshot | null;
 	readonly plugins?: readonly GodexPlugin[];
+	readonly webSearch?: WebSearchPlanningOptions;
 }
 
 export interface BuildChatCompletionRequestResult {
@@ -69,7 +71,10 @@ export async function buildChatCompletionRequest(
 	const tools = planTools({
 		tools: input.request.tools,
 		toolChoice: input.request.tool_choice,
-		profile: input.profile,
+		profile: {
+			...input.profile,
+			webSearch: input.webSearch,
+		},
 	});
 	assertNoRejectedCompatibility(input, compatibility);
 	const output = planOutputContract({

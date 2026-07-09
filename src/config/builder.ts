@@ -8,6 +8,7 @@ import { parseProvidersConfig } from "./sections/providers";
 import { parseServerConfig } from "./sections/server";
 import { parseSessionConfig } from "./sections/session";
 import { parseTraceConfig } from "./sections/trace";
+import { parseWebSearchConfig } from "./sections/web-search";
 
 export interface ConfigOverrides {
 	port?: number;
@@ -38,6 +39,7 @@ export function buildConfig(
 		logging: parseLoggingConfig(file.logging, overrides.logLevel),
 		trace: parseTraceConfig(file.trace),
 		plugins,
+		web_search: parseWebSearchConfig(file.web_search),
 	};
 }
 

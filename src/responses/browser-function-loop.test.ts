@@ -33,6 +33,8 @@ function makeCtx(
 			traceEnabled: false,
 			traceRecorder: { record: () => {} },
 			plugins: [],
+			config: {},
+			search: { available: false },
 		},
 		logger: {
 			info: () => {},

@@ -2,8 +2,6 @@ import type {
 	FileSearchTool,
 	McpTool,
 	ResponseTool,
-	WebSearchPreviewTool,
-	WebSearchTool,
 } from "../../protocol/openai/responses";
 import { getBuiltinFunctionToolDefinition } from "../../tools";
 import {
@@ -11,6 +9,11 @@ import {
 	degradedCustomToolParameters,
 } from "./custom-tool-degradation";
 import type { ToolDeclarationPlan } from "./tool-plan";
+import {
+	isWebSearchTool,
+	webSearchFunctionDescription,
+	webSearchFunctionParameters,
+} from "./web-search";
 
 export interface ChatFunctionToolDeclaration {
 	readonly type: "function";
@@ -39,7 +42,7 @@ export function renderFunctionDeclarations(
 ): ChatFunctionToolDeclaration[] {
 	return plans
 		.filter((plan) => plan.providerType === "function")
-		.map((plan) => functionDeclaration(plan.tool, plan.providerName));
+		.map((plan) => functionDeclaration(plan));
 }
 
 function providerToolDeclaration(
@@ -47,9 +50,9 @@ function providerToolDeclaration(
 ): ProviderToolDeclaration | undefined {
 	switch (plan.providerType) {
 		case "function":
-			return functionDeclaration(plan.tool, plan.providerName);
+			return functionDeclaration(plan);
 		case "web_search":
-			return webSearchDeclaration(plan.tool, plan.providerType);
+			return webSearchDeclaration(plan.tool);
 		case "retrieval":
 			return retrievalDeclaration(plan.tool);
 		case "mcp":
@@ -60,9 +63,9 @@ function providerToolDeclaration(
 }
 
 function functionDeclaration(
-	tool: ResponseTool,
-	providerName: string,
+	plan: ToolDeclarationPlan,
 ): ChatFunctionToolDeclaration {
+	const { tool, providerName } = plan;
 	if (tool.type === "function") {
 		return {
 			type: "function",
@@ -81,6 +84,16 @@ function functionDeclaration(
 				name: providerName,
 				description: degradedCustomToolDescription(tool),
 				parameters: degradedCustomToolParameters(tool),
+			},
+		};
+	}
+	if (isWebSearchTool(tool) && plan.providerType === "function") {
+		return {
+			type: "function",
+			function: {
+				name: providerName,
+				description: webSearchFunctionDescription(),
+				parameters: webSearchFunctionParameters(),
 			},
 		};
 	}
@@ -106,56 +119,18 @@ function functionDeclaration(
 
 function webSearchDeclaration(
 	tool: ResponseTool,
-	providerType: string,
 ): ProviderToolDeclaration | undefined {
 	if (!isWebSearchTool(tool)) return undefined;
-	// Native rendering: Zhipu, DeepSeek, etc. have a dedicated web_search tool
-	// type in their API. Pass the standard fields through unchanged.
-	if (providerType === "web_search") {
-		return {
-			type: "web_search",
-			web_search: {
-				enable: true,
-				search_engine: "search_std",
-				content_size: tool.search_context_size === "high" ? "high" : "medium",
-			},
-		};
-	}
-	// Degraded rendering (providerType === "function"): minimax and similar
-	// providers do not have a native web_search tool, so we render the tool as
-	// a generic function. We include the full parameter schema for all three
-	// Codex web_search actions (search / open_page / find_in_page) so the
-	// model knows how to invoke each. The call-restorer detects the action
-	// from the argument shape and reconstructs the original web_search_call.
+	const allowedDomain =
+		"filters" in tool ? tool.filters?.allowed_domains?.[0] : undefined;
 	return {
-		type: "function",
-		function: {
-			name: "web_search",
-			description:
-				"Search the web or open a specific URL.\n" +
-				'- To search the web: pass {"query": "<search terms>"}.\n' +
-				'- To open a URL: pass {"url": "<https://...>"}.\n' +
-				'- To find text on a page: pass {"url": "<https://...>", "pattern": "<text>"}.\n',
-			parameters: {
-				type: "object",
-				properties: {
-					query: {
-						type: "string",
-						description: "Search query (for the search action)",
-					},
-					url: {
-						type: "string",
-						description:
-							"URL to open (for the open_page or find_in_page action)",
-					},
-					pattern: {
-						type: "string",
-						description:
-							"Text pattern to find on the page (for the find_in_page action)",
-					},
-				},
-				required: [],
-			},
+		type: "web_search",
+		web_search: {
+			enable: true,
+			search_engine: "search_std",
+			content_size: tool.search_context_size === "high" ? "high" : "medium",
+			...(allowedDomain ? { search_domain_filter: allowedDomain } : {}),
+			...(tool.user_location ? { user_location: tool.user_location } : {}),
 		},
 	};
 }
@@ -194,17 +169,6 @@ function genericObjectSchema(): Record<string, unknown> {
 		type: "object",
 		additionalProperties: true,
 	};
-}
-
-function isWebSearchTool(
-	tool: ResponseTool,
-): tool is WebSearchTool | WebSearchPreviewTool {
-	return (
-		tool.type === "web_search" ||
-		tool.type === "web_search_2025_08_26" ||
-		tool.type === "web_search_preview" ||
-		tool.type === "web_search_preview_2025_03_11"
-	);
 }
 
 function isFileSearchTool(tool: ResponseTool): tool is FileSearchTool {
