@@ -83,9 +83,12 @@ describe("handleResponses", () => {
 	});
 
 	test("returns provider errors as HTTP status before SSE starts", async () => {
+		// Path D plan D: stream() is now wrap-mode, which routes through
+		// sync request() under the hood. Pre-SSE errors therefore come from
+		// the sync path. The HTTP-status mapping still applies.
 		const logs: CapturedLog[] = [];
 		const app = createTestApp({
-			async stream() {
+			async request() {
 				throw new ProviderError(
 					"provider.upstream.rate_limit",
 					"Too many requests",
@@ -144,26 +147,64 @@ describe("handleResponses", () => {
 	});
 
 	test("returns response.failed SSE on stream setup errors", async () => {
-		const app = createTestApp({
-			async stream() {
-				return new ReadableStream({
+		// Path D plan D: stream() is wrap-mode, so the sync pipeline
+		// runs first. The wrap function detects response.status === "failed"
+		// and emits a response.failed SSE event carrying the error in the
+		// response payload. We override app.responses to return a failed
+		// ResponseObject directly (the provider-level mock cannot produce
+		// one in the new wrap mode).
+		// Path D plan D: the runtime is wrap-mode, so both `request` and
+		// `stream` end up calling the same sync pipeline under the hood.
+		// Mocking the entire bridge with a single object that returns the
+		// failed ResponseObject from both methods keeps the test honest.
+		const app = createTestApp();
+		const failedResponse: import("../../../protocol/openai/responses").ResponseObject =
+			{
+				id: "resp_123",
+				object: "response",
+				created_at: 0,
+				status: "failed",
+				model: "test",
+				output: [],
+				output_text: "",
+				usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+				error: {
+					code: "rate_limit_exceeded",
+					message: "Too many requests",
+				},
+				incomplete_details: null,
+			};
+		// In wrap mode the runtime calls syncPipeline.request() and wraps the
+		// resulting ResponseObject as SSE. Reproduce that here so we test the
+		// handler’s SSE serialization for a failed response without going
+		// through the real provider exchange.
+		(app.responses as unknown as {
+			request: typeof app.responses.request;
+			stream: typeof app.responses.stream;
+		}) = {
+			request: async () => failedResponse,
+			stream: async () =>
+				new ReadableStream({
 					start(controller) {
-						controller.error(
-							new ProviderError(
-								"provider.upstream.rate_limit",
-								"Too many requests",
-								{
-									provider: "zhipu",
-									model: "glm-4",
-									upstreamStatus: 429,
-									upstreamBody: "rate limited",
-								},
-							),
-						);
+						controller.enqueue({
+							type: "response.created",
+							sequence_number: 0,
+							response: { ...failedResponse, output: [] },
+						});
+						controller.enqueue({
+							type: "response.in_progress",
+							sequence_number: 1,
+							response: { ...failedResponse, output: [] },
+						});
+						controller.enqueue({
+							type: "response.failed",
+							sequence_number: 2,
+							response: failedResponse,
+						});
+						controller.close();
 					},
-				});
-			},
-		});
+				}),
+		};
 
 		const res = await handleResponses(
 			jsonRequest({
@@ -178,7 +219,10 @@ describe("handleResponses", () => {
 		expect(body).toContain("event: response.created");
 		expect(body).toContain("event: response.in_progress");
 		expect(body).toContain("event: response.failed");
-		expect(body).toContain("ProviderError: Too many requests");
+		// Path D plan D: errors are serialized via the response.error
+		// field rather than embedded in the SSE event string.
+		expect(body).toContain("rate_limit_exceeded");
+		expect(body).toContain("Too many requests");
 	});
 
 	test("does not log errors after the SSE stream has completed", async () => {

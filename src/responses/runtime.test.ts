@@ -115,10 +115,11 @@ describe("ResponsesBridgeRuntime", () => {
 		expect(sessionStore.saved[0]?.id).toBe("resp_123");
 	});
 
-	test("default construction wires a working stream pipeline", async () => {
-		const provider = createMockProvider("", [
-			{ event: "chunk", data: { text: "stream text", finishReason: "stop" } },
-		]);
+	test("default construction wires a working wrap-mode stream pipeline", async () => {
+		// Path D plan D: stream() goes through sync.request() and wraps the
+		// resulting ResponseObject as SSE. The provider`s sync `response`
+		// is what gets serialized, not its stream events.
+		const provider = createMockProvider("wrap text");
 		const sessionStore = createMockSessionStore();
 		const ctx = createMockCtx(provider, sessionStore);
 
@@ -128,9 +129,12 @@ describe("ResponsesBridgeRuntime", () => {
 
 		expect(events.at(-1)).toMatchObject({
 			type: "response.completed",
-			response: { id: "resp_123", output_text: "stream text" },
+			response: { id: "resp_123", output_text: "wrap text" },
 		});
 		expect(sessionStore.saved[0]?.id).toBe("resp_123");
+
+		// First and last events frame the response.
+		expect(events[0]?.type).toBe("response.created");
 	});
 
 	test("delegates request and stream to injected pipelines", async () => {
@@ -164,10 +168,17 @@ describe("ResponsesBridgeRuntime", () => {
 		const streamResult = await bridge.stream(ctx);
 
 		expect(responseResult).toBe(responseObject);
-		expect(streamResult).toBe(stream);
+		// In wrap mode, stream() routes through the sync pipeline; the
+		// stream pipeline is held in reserve for passthrough mode. The
+		// stream pipeline is therefore NOT called when the runtime is in
+		// its default wrap mode (it would only fire under
+		// GODEX_STREAM_MODE=passthrough).
 		expect(calls).toEqual([
 			{ pipeline: "sync", ctx },
-			{ pipeline: "stream", ctx },
+			{ pipeline: "sync", ctx },
 		]);
+		// streamResult is the wrapped SSE stream (not the injected stream).
+		expect(streamResult).not.toBe(stream);
+		expect(streamResult).toBeInstanceOf(ReadableStream);
 	});
 });
