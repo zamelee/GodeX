@@ -619,3 +619,75 @@ either:
 3. **Expose `GODEX_CHROME_*` tool surface as a Codex tool surface** if
    Codex++ wants to call godex_chrome_* directly without going through
    the bridge (i.e. expose the godex-cdp MCP server too).
+
+
+---
+
+## Wrap-Mode Stream + Stream=false Fix — 2026-07-09 ~15:55
+
+### Symptom (before this fix)
+
+Codex++ issues `stream: true` against `/v1/responses`. GodeX's wrap-mode
+stream path (commit `d6622ca`) ran the agentic loop in sync mode and
+re-emitted the result as SSE — but the sync call forwarded `stream: true`
+to the upstream Chat Completions API, which returned SSE instead of JSON.
+Result: every Codex++ stream request failed with `502 Failed to parse
+JSON`. Sync requests worked fine because Codex++ sets `stream: false`
+there.
+
+### Fix
+
+Commit `b37e737` (`fix(plan-d): force upstream to non-streaming during
+wrap-mode sync loop`):
+
+- Mutate `ctx.request.stream` to `false` for the duration of the wrap
+  sync call via a controlled `as unknown as { request: ... }` cast.
+- Restore the original flag in `finally` so any post-wrap code that
+  reads `ctx.request.stream` still sees the client's intent.
+- Added regression test `wrap-mode stream forces upstream to
+  non-streaming and restores the flag` that captures the inner pipeline's
+  view of `ctx.request.stream` and asserts both the inner-true and
+  outer-true states.
+
+### Verification (godex7 pid 2568 on 5681, then godex6 swap)
+
+| Step | Result |
+|---|---|
+| `bun run check` | 862 pass / 0 fail, typecheck clean, lint clean |
+| godex7 sync list_pages | 200 OK, 4 output items, function_call → function_call_output → reasoning → message, Chinese summary correct |
+| godex7 stream list_pages | 200 OK, 15 SSE events: response.created → function_call → function_call_output → message → response.completed |
+| godex7 stream navigate+screenshot | 200 OK, 27 SSE events including `input_image` content part (data:image/png;base64, ~19KB), model described "Example Domain" correctly |
+| godex6 sync after binary swap | 200 OK, 4 output items |
+| godex6 stream after binary swap | 200 OK, 21 SSE events |
+
+### Process state after fix
+
+| Port | PID | Binary | Started | Role |
+|---|---|---|---|---|
+| 5678 | 18904 | godex4 | 2026-07-09 15:49 | keepalive LLM (user temporarily switched here during godex6 swap) |
+| 5679 | 16976 | godex5 | 2026-07-08 23:15 | gateway (long-running) |
+| 5680 | 10724 | godex6 (rebuilt from godex7 binary) | 2026-07-09 15:52 | Codex++ LLM (auto-inject + wrap-mode + stream=false fix) |
+| 5681 | 2568 | godex7 (rebuilt) | 2026-07-09 15:44 | Plan D test gateway (same fixes as godex6) |
+| 9222 | 6800 | chrome | (long-running) | user's Chrome debug |
+| 9224 | 14412 | node | (long-running) | chrome-browser-mcp backend |
+
+### Codex++ action
+
+No Codex++ config change needed. `base_url` continues to point at
+`127.0.0.1:5680` (godex6), which now serves the same auto-injected
+godex_chrome_* tools with wrap-mode stream and the stream=false fix.
+User can switch Codex++ back to 5680 (or keep it on 5678 keepalive)
+and the conversation will resume normally — though the in-flight
+Codex++ session continuity was lost during the godex6 restart since
+Codex++ was holding an open stream and the swap dropped it.
+
+### Next steps (open)
+
+1. Image content part in `function_call_output` is working end-to-end.
+   Verify the same on godex6 (smoke test pending user reconnection).
+2. Decide whether to also flip the wrap-mode default off via
+   `GODEX_STREAM_MODE=passthrough` for any Codex++ clients that prefer
+   native Responses API streaming. Default is still wrap.
+3. Consider whether to commit `bin/godex*.yaml` and `bin/godex*.exe`
+   into a separate distribution repo so the swap doesn't require
+   rebuilding locally. Currently they're untracked (working artifacts).
