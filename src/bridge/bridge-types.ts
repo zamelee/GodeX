@@ -1,48 +1,73 @@
 // src/bridge/bridge-types.ts
 //
 // Neutral bridge types shared by request normalization, message building,
-// and provider-specific request construction. These types intentionally
-// carry no OpenAI Chat Completions, Anthropic Messages, or Responses API
-// vocabulary in their names so that downstream consumers (request
-// dispatcher, response reconstructor, future Anthropic adapter) can
-// operate against a protocol-agnostic shape.
+// and provider-specific request construction. These types are intentionally
+// protocol-agnostic: they carry neither OpenAI Chat Completions, Anthropic
+// Messages, nor Responses API vocabulary in their shape. Each downstream
+// builder (chat-completions-builder today, anthropic-messages-builder in
+// Phase B3+) translates BridgeMessage[] into its provider-specific shape.
 //
-// Phase A step 2 (2026-07-09): minimal rename. BridgeMessage,
-// BridgeContentBlock, and BridgeRole are aliases for the OpenAI Chat
-// Completions types they currently correspond to. The internal
-// implementation continues to use Chat types inside provider-specific
-// adapters (the "折中1" pattern from F class step 1). A truly neutral
-// representation is deferred to Phase B once Open Questions 1-3 from
-// handoffs/2026-07-09-fclass-step1-bridge-accessor-rename.md are
-// resolved (BridgeMessage.role shape, BridgeContentBlock.type enum,
-// Anthropic thinking default policy).
-
-import type {
-	ChatCompletionContentPart,
-	ChatCompletionMessageParam,
-} from "../protocol/openai/completions";
+// Phase B1 (2026-07-10): canonical neutral type introduced.
+//
+// History:
+//   - Phase A step 2 (2026-07-09): BridgeMessage / BridgeContentBlock / BridgeRole
+//     were aliases for OpenAI Chat Completions types (the 折中1 pattern).
+//   - Phase B1: alias dropped. BridgeMessage is now a real neutral shape
+//     (role + content: BridgeContentBlock[]). The previous Chat shape is
+//     re-derived inside chat-completions-builder via translation.
 
 /**
- * A single message in the normalized input/output history. Currently an
- * alias for the OpenAI Chat Completions ChatCompletionMessageParam;
- * downstream providers (chat-completions today, anthropic-messages in
- * Phase B) consume this through their own adapters.
+ * A single content part within a BridgeMessage. Discriminated union by `type`.
+ *
+ * - text: plain string content
+ * - image: URL or data: URI; detail optional for downstream fidelity hints
+ * - video: URL or data: URI; detail optional
+ * - tool_use: assistant-side tool call (id, name, parsed input)
+ * - tool_result: tool output for a prior tool_use (tool_use_id + content)
+ * - reasoning: model reasoning surfaced as text (Anthropic's thinking, OpenAI's reasoning summaries)
  */
-export type BridgeMessage = ChatCompletionMessageParam;
+export type BridgeContentBlock =
+	| { readonly type: "text"; readonly text: string }
+	| {
+			readonly type: "image";
+			readonly url: string;
+			readonly detail?: "low" | "high";
+	  }
+	| {
+			readonly type: "video";
+			readonly url: string;
+			readonly detail?: "low" | "high";
+	  }
+	| {
+			readonly type: "tool_use";
+			readonly id: string;
+			readonly name: string;
+			readonly input: unknown;
+	  }
+	| {
+			readonly type: "tool_result";
+			readonly tool_use_id: string;
+			readonly content: string | readonly BridgeContentBlock[];
+			readonly is_error?: boolean;
+	  }
+	| { readonly type: "reasoning"; readonly text: string };
 
 /**
- * A single content part within a BridgeMessage. Today an alias for the
- * OpenAI Chat Completions ChatCompletionContentPart; the Anthropic
- * adapter will convert tool_use / tool_result blocks to this shape at
- * the bridge boundary.
+ * Role discriminator on BridgeMessage. Note: NO `tool` role. Tool outputs are
+ * carried as `tool_result` blocks inside user-role messages; this keeps the
+ * shape uniform across Chat (which uses `role: "tool"` natively) and Anthropic
+ * (which uses `tool_result` blocks inside user messages). chat-completions-builder
+ * splits tool_result blocks out into Chat `role: "tool"` messages during
+ * translation; anthropic-messages-builder keeps them as-is.
  */
-export type BridgeContentBlock = ChatCompletionContentPart;
+export type BridgeRole = "system" | "developer" | "user" | "assistant";
 
 /**
- * Role discriminator on BridgeMessage. Matches the OpenAI Chat
- * Completions role union ("system" | "user" | "assistant" | "tool" |
- * "developer" | "function"); Anthropic has no equivalent role union and
- * expresses tool results as content blocks, so the adapter layer will
- * normalize.
+ * A single message in the normalized input/output history. Content is always
+ * an array of BridgeContentBlock; consumers (chat or anthropic builders)
+ * translate into their provider-specific shape.
  */
-export type BridgeRole = BridgeMessage["role"];
+export interface BridgeMessage {
+	readonly role: BridgeRole;
+	readonly content: readonly BridgeContentBlock[];
+}

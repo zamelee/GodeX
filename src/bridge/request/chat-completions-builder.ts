@@ -5,6 +5,7 @@ import {
 } from "../../error";
 import type {
 	ChatCompletionAssistantMessageParam,
+	ChatCompletionContentPart,
 	ChatCompletionCreateRequest,
 	ChatCompletionMessageParam,
 	ChatCompletionToolChoiceOption,
@@ -15,7 +16,7 @@ import type {
 } from "../../protocol/openai/responses";
 import type { ReasoningEffort } from "../../protocol/openai/shared";
 import type { ResponseSessionSnapshot } from "../../session";
-import type { BridgeMessage } from "../bridge-types";
+import type { BridgeContentBlock, BridgeMessage } from "../bridge-types";
 import {
 	type ProviderCapabilities,
 	planBridgeCompatibility,
@@ -64,12 +65,28 @@ export { type BridgeMessage, normalizeCurrentInput };
 // ============================================================
 
 export function buildChatCompletionsMessages(
-	normalized: readonly BridgeMessage[],
+	bridge: readonly BridgeMessage[],
 ): ChatCompletionMessageParam[] {
-	const messages: ChatCompletionMessageParam[] = [];
-	for (const message of normalized) {
+	// Phase 1: translate each BridgeMessage (block shape) to one or more
+	// Chat messages (Chat-shape). A single user-role message with multiple
+	// tool_result blocks becomes multiple Chat tool messages; a single
+	// assistant-role message with tool_use blocks becomes one Chat
+	// assistant message with a tool_calls field.
+	const translated: ChatCompletionMessageParam[] = [];
+	for (const message of bridge) {
+		translated.push(...bridgeToChatMessages(message));
+	}
+	// Phase 2: apply the existing merge logic to the translated list.
+	return mergeTranslatedChatMessages(translated);
+}
+
+function mergeTranslatedChatMessages(
+	messages: ChatCompletionMessageParam[],
+): ChatCompletionMessageParam[] {
+	const merged: ChatCompletionMessageParam[] = [];
+	for (const message of messages) {
 		const next = cloneMessage(message);
-		const previous = messages.at(-1);
+		const previous = merged.at(-1);
 		if (
 			isAssistantToolCallMessage(previous) &&
 			isAssistantToolCallMessage(next)
@@ -86,35 +103,195 @@ export function buildChatCompletionsMessages(
 			isAssistantTurnPrefixMessage(previous) &&
 			isAssistantTurnPrefixMessage(next)
 		) {
-			messages[messages.length - 1] = mergeAssistantTextMessages(
-				previous,
-				next,
-			);
+			merged[merged.length - 1] = mergeAssistantTextMessages(previous, next);
 			continue;
 		}
 		if (
 			isAssistantTurnPrefixMessage(previous) &&
 			isAssistantToolCallMessage(next)
 		) {
-			messages[messages.length - 1] = mergeAssistantTurnPrefix(previous, next);
+			merged[merged.length - 1] = mergeAssistantTurnPrefix(previous, next);
 			continue;
 		}
 		if (
 			isAssistantToolCallMessage(previous) &&
 			isAssistantTurnPrefixMessage(next)
 		) {
-			messages[messages.length - 1] = mergeAssistantToolCallSuffix(
-				previous,
-				next,
-			);
+			merged[merged.length - 1] = mergeAssistantToolCallSuffix(previous, next);
 			continue;
 		}
-		messages.push(next);
+		merged.push(next);
 	}
-	return messages;
+	return merged;
 }
 
-function cloneMessage(message: BridgeMessage): ChatCompletionMessageParam {
+function bridgeToChatMessages(
+	bridge: BridgeMessage,
+): ChatCompletionMessageParam[] {
+	const chat: ChatCompletionMessageParam[] = [];
+
+	if (bridge.role === "system" || bridge.role === "developer") {
+		const textBlocks = bridge.content.filter(isTextBlock);
+		const nonTextBlocks = bridge.content.filter(
+			(
+				b,
+			): b is Exclude<
+				BridgeContentBlock,
+				{ type: "text" } | { type: "reasoning" }
+			> => b.type !== "text" && b.type !== "reasoning",
+		);
+		chat.push({
+			role: "system",
+			content: textBlocks.map((b) => b.text).join(""),
+		});
+		if (nonTextBlocks.length > 0) {
+			chat.push({ role: "user", content: blocksToChatContent(nonTextBlocks) });
+		}
+		return chat;
+	}
+
+	if (bridge.role === "user") {
+		const toolResultMessages: ChatCompletionMessageParam[] = [];
+		const otherBlocks: BridgeContentBlock[] = [];
+		for (const block of bridge.content) {
+			if (block.type === "tool_result") {
+				const contentText =
+					typeof block.content === "string"
+						? block.content
+						: blocksToChatTextString(block.content);
+				toolResultMessages.push({
+					role: "tool",
+					tool_call_id: block.tool_use_id,
+					content: contentText,
+				});
+			} else {
+				otherBlocks.push(block);
+			}
+		}
+		chat.push(...toolResultMessages);
+		if (otherBlocks.length > 0) {
+			chat.push({ role: "user", content: blocksToChatContent(otherBlocks) });
+		}
+		return chat;
+	}
+
+	if (bridge.role === "assistant") {
+		const toolUseBlocks = bridge.content.filter(isToolUseBlock);
+		const reasoningText = bridge.content
+			.filter(isReasoningBlock)
+			.map((b) => b.text)
+			.join("\n");
+		const textBlocks = bridge.content.filter(isTextBlock);
+		const mediaBlocks = bridge.content.filter(
+			(
+				b,
+			): b is Extract<
+				BridgeContentBlock,
+				{ type: "image" } | { type: "video" }
+			> => b.type === "image" || b.type === "video",
+		);
+		const chatMsg: ChatCompletionAssistantMessageParam = {
+			role: "assistant",
+			content:
+				textBlocks.length > 0 ? textBlocks.map((b) => b.text).join("") : "",
+		};
+		if (toolUseBlocks.length > 0) {
+			chatMsg.tool_calls = toolUseBlocks.map((b) => ({
+				id: b.id,
+				type: "function",
+				function: {
+					name: b.name,
+					arguments: JSON.stringify(b.input),
+				},
+			}));
+		}
+		if (reasoningText) {
+			chatMsg.reasoning_content = reasoningText;
+		}
+		chat.push(chatMsg);
+		if (mediaBlocks.length > 0) {
+			chat.push({ role: "user", content: blocksToChatContent(mediaBlocks) });
+		}
+		return chat;
+	}
+
+	return chat;
+}
+
+function blocksToChatContent(
+	blocks: readonly BridgeContentBlock[],
+): string | ChatCompletionContentPart[] {
+	if (blocks.length === 0) return "";
+
+	const texts: string[] = [];
+	const parts: ChatCompletionContentPart[] = [];
+	let hasNonText = false;
+
+	for (const block of blocks) {
+		if (block.type === "text") {
+			texts.push(block.text);
+			parts.push({ type: "text", text: block.text });
+			continue;
+		}
+		if (block.type === "image") {
+			hasNonText = true;
+			parts.push({
+				type: "image_url",
+				image_url: {
+					url: block.url,
+					...(block.detail ? { detail: block.detail } : {}),
+				},
+			});
+			continue;
+		}
+		if (block.type === "video") {
+			hasNonText = true;
+			parts.push({
+				type: "video_url",
+				video_url: {
+					url: block.url,
+					...(block.detail ? { detail: block.detail } : {}),
+				},
+			});
+		}
+		// tool_use / tool_result / reasoning blocks are not expected here;
+		// they are handled by bridgeToChatMessages before reaching this function.
+	}
+
+	if (!hasNonText) return texts.join("");
+	return parts;
+}
+
+function blocksToChatTextString(blocks: readonly BridgeContentBlock[]): string {
+	const texts: string[] = [];
+	for (const block of blocks) {
+		if (block.type === "text") texts.push(block.text);
+		else texts.push(JSON.stringify(block));
+	}
+	return texts.join("\n");
+}
+
+function isTextBlock(
+	block: BridgeContentBlock,
+): block is { type: "text"; text: string } {
+	return block.type === "text";
+}
+
+function isToolUseBlock(
+	block: BridgeContentBlock,
+): block is { type: "tool_use"; id: string; name: string; input: unknown } {
+	return block.type === "tool_use";
+}
+
+function isReasoningBlock(
+	block: BridgeContentBlock,
+): block is { type: "reasoning"; text: string } {
+	return block.type === "reasoning";
+}
+
+function cloneMessage(
+	message: ChatCompletionMessageParam,
+): ChatCompletionMessageParam {
 	if (isAssistantToolCallMessage(message)) {
 		return { ...message, tool_calls: [...message.tool_calls] };
 	}
@@ -245,14 +422,22 @@ function dropOrphanToolOutputs(
 	const knownCallIds = new Set<string>();
 	for (const message of messages) {
 		if (message.role !== "assistant") continue;
-		for (const call of message.tool_calls ?? []) {
-			if (call.id) knownCallIds.add(call.id);
+		for (const block of message.content) {
+			if (block.type === "tool_use" && block.id) {
+				knownCallIds.add(block.id);
+			}
 		}
 	}
-	return messages.filter((message) => {
-		if (message.role !== "tool") return true;
-		if (!message.tool_call_id) return true;
-		return knownCallIds.has(message.tool_call_id);
+	return messages.flatMap((message) => {
+		if (message.role !== "user") return [message];
+		const filteredContent = message.content.filter((block) => {
+			if (block.type !== "tool_result") return true;
+			return knownCallIds.has(block.tool_use_id);
+		});
+		if (filteredContent.length === message.content.length) {
+			return [message];
+		}
+		return [{ ...message, content: filteredContent }];
 	});
 }
 
@@ -265,27 +450,25 @@ function appendFinalInstruction(
 		if (message && isFinalInstructionTarget(message)) {
 			messages[index] = {
 				...message,
-				content: `${message.content}
-
-${instruction}`,
+				content: [
+					...message.content,
+					{ type: "text", text: `\n\n${instruction}` },
+				],
 			};
 			return;
 		}
 	}
-	messages.push({ role: "system", content: instruction });
+	messages.push({
+		role: "system",
+		content: [{ type: "text", text: `\n\n${instruction}` }],
+	});
 }
 
-function isFinalInstructionTarget(
-	message: BridgeMessage,
-): message is BridgeMessage & {
-	readonly role: "developer" | "system" | "user";
-	readonly content: string;
-} {
+function isFinalInstructionTarget(message: BridgeMessage): boolean {
 	return (
-		(message.role === "developer" ||
-			message.role === "system" ||
-			message.role === "user") &&
-		typeof message.content === "string"
+		message.role === "developer" ||
+		message.role === "system" ||
+		message.role === "user"
 	);
 }
 

@@ -3,7 +3,6 @@ import {
 	BRIDGE_REQUEST_UNSUPPORTED_INPUT_ITEM,
 	BridgeError,
 } from "../../error";
-import type { ChatCompletionContentPart } from "../../protocol/openai/completions";
 import type {
 	ResponseCreateRequest,
 	ResponseItem,
@@ -12,12 +11,12 @@ import {
 	canonicalizeFunctionArguments,
 	isValidFunctionArguments,
 } from "../../providers/shared/tool-arguments";
-import type { BridgeMessage } from "../bridge-types";
+import type { BridgeContentBlock, BridgeMessage } from "../bridge-types";
 import type { ToolPlan } from "../tools";
 
 interface NormalizedToolOutput {
 	readonly text: string;
-	readonly extras: readonly ChatCompletionContentPart[];
+	readonly extras: readonly BridgeContentBlock[];
 }
 
 export interface InputNormalizerContext {
@@ -39,12 +38,18 @@ export function normalizeCurrentInput(
 ): BridgeMessage[] {
 	const messages: BridgeMessage[] = [];
 	if (request.instructions) {
-		messages.push({ role: "system", content: request.instructions });
+		messages.push({
+			role: "system",
+			content: [{ type: "text", text: request.instructions }],
+		});
 	}
 
 	if (request.input === undefined) return messages;
 	if (typeof request.input === "string") {
-		messages.push({ role: "user", content: request.input });
+		messages.push({
+			role: "user",
+			content: [{ type: "text", text: request.input }],
+		});
 		return messages;
 	}
 
@@ -140,9 +145,13 @@ function normalizeInputItems(
 		}
 		const itemMessages = normalizeInputItem(item, request, context);
 		if (pendingReasoning && itemMessages[0]?.role === "assistant") {
+			// Prepend reasoning block to the first assistant message of this item's output.
 			itemMessages[0] = {
 				...itemMessages[0],
-				reasoning_content: pendingReasoning,
+				content: [
+					{ type: "reasoning", text: pendingReasoning },
+					...itemMessages[0].content,
+				],
 			};
 			pendingReasoning = undefined;
 		}
@@ -155,15 +164,15 @@ function reorderToolMediaMessages(
 	messages: readonly BridgeMessage[],
 ): BridgeMessage[] {
 	// Move any user messages that carry tool media (inserted by tool-output
-	// splitting) out of the middle of a consecutive tool message run so that
-	// Chat Completions providers see assistant → tool → tool → ... before any
+	// splitting) out of the middle of a consecutive tool-result run so that
+	// Chat Completions providers see assistant -> tool -> tool -> ... before any
 	// user turn. Some upstreams (e.g. minimax) reject sequences where a tool
 	// result is followed by a non-tool message and then another tool result.
 	const result: BridgeMessage[] = [];
 	const deferred: BridgeMessage[] = [];
 	let inToolRun = false;
 	for (const msg of messages) {
-		if (msg.role === "tool") {
+		if (isToolResultMessage(msg)) {
 			inToolRun = true;
 			result.push(msg);
 			continue;
@@ -183,13 +192,21 @@ function reorderToolMediaMessages(
 	return result;
 }
 
+function isToolResultMessage(msg: BridgeMessage): boolean {
+	if (msg.role !== "user") return false;
+	return msg.content.some(
+		(block) =>
+			typeof block === "object" &&
+			block !== null &&
+			"type" in block &&
+			block.type === "tool_result",
+	);
+}
+
 function isMediaUserMessage(msg: BridgeMessage): boolean {
 	if (msg.role !== "user") return false;
-	if (typeof msg.content === "string" || !Array.isArray(msg.content)) {
-		return false;
-	}
 	const first = msg.content[0];
-	if (!isRecord(first) || typeof first.text !== "string") return false;
+	if (first?.type !== "text") return false;
 	return first.text.startsWith("[Attached media from tool result");
 }
 
@@ -207,16 +224,17 @@ function normalizeInputItem(
 	context: InputNormalizerContext,
 ): BridgeMessage[] {
 	if (isSimpleMessageItem(item)) {
-		const role = item.role === "developer" ? "system" : item.role;
+		const role: BridgeMessage["role"] =
+			item.role === "developer" ? "system" : item.role;
 		return [
 			{
 				role,
 				content: normalizeMessageContent(item.content, request, context),
-			} as BridgeMessage,
+			},
 		];
 	}
 	if (item.type === "function_call") {
-		const call = assistantToolCallMessage(
+		const call = assistantToolUseMessage(
 			item.call_id,
 			providerToolName(context, "function", toolName(item)),
 			item.arguments,
@@ -224,24 +242,24 @@ function normalizeInputItem(
 		return call ? [call] : [];
 	}
 	if (item.type === "function_call_output") {
-		const { text, extras } = outputText(item.output, request, context);
-		const messages: BridgeMessage[] = [toolOutputMessage(item.call_id, text)];
+		const { text, extras } = outputBlocks(item.output, request, context);
+		const messages: BridgeMessage[] = [toolResultMessage(item.call_id, text)];
 		if (extras.length > 0) {
 			messages.push(toolExtrasUserMessage(extras, item.call_id));
 		}
 		return messages;
 	}
 	if (item.type === "web_search_call") {
-		return webSearchCallToFunctionMessages(item, context);
+		return webSearchCallToToolMessages(item, context);
 	}
 	if (item.type === "tool_search_call") {
-		return toolSearchCallToFunctionMessages(item, context);
+		return toolSearchCallToToolMessages(item, context);
 	}
 	if (item.type === "tool_search_output") {
-		return toolSearchOutputToFunctionMessages(item);
+		return toolSearchOutputToToolMessages(item);
 	}
 	if (item.type === "shell_call") {
-		const call = assistantToolCallMessage(
+		const call = assistantToolUseMessage(
 			item.call_id,
 			providerToolName(context, "shell", "shell"),
 			JSON.stringify(item.action),
@@ -250,7 +268,7 @@ function normalizeInputItem(
 	}
 	if (item.type === "shell_call_output") {
 		return [
-			toolOutputMessage(
+			toolResultMessage(
 				item.call_id,
 				item.output
 					.map((chunk) => {
@@ -265,7 +283,7 @@ function normalizeInputItem(
 		];
 	}
 	if (item.type === "local_shell_call") {
-		const call = assistantToolCallMessage(
+		const call = assistantToolUseMessage(
 			item.call_id,
 			providerToolName(context, "local_shell", "local_shell"),
 			JSON.stringify({
@@ -283,10 +301,10 @@ function normalizeInputItem(
 		return call ? [call] : [];
 	}
 	if (item.type === "local_shell_call_output") {
-		return [toolOutputMessage(item.call_id, item.output)];
+		return [toolResultMessage(item.call_id, item.output)];
 	}
 	if (item.type === "apply_patch_call") {
-		const call = assistantToolCallMessage(
+		const call = assistantToolUseMessage(
 			item.call_id,
 			providerToolName(context, "apply_patch", "apply_patch"),
 			JSON.stringify({ operation: item.operation }),
@@ -295,14 +313,14 @@ function normalizeInputItem(
 	}
 	if (item.type === "apply_patch_call_output") {
 		return [
-			toolOutputMessage(
+			toolResultMessage(
 				item.call_id,
 				`${item.status}: ${item.output ?? ""}`.trim(),
 			),
 		];
 	}
 	if (item.type === "custom_tool_call") {
-		const call = assistantToolCallMessage(
+		const call = assistantToolUseMessage(
 			item.call_id,
 			providerToolName(context, "custom", toolName(item)),
 			JSON.stringify({ input: item.input }),
@@ -310,8 +328,8 @@ function normalizeInputItem(
 		return call ? [call] : [];
 	}
 	if (item.type === "custom_tool_call_output") {
-		const { text, extras } = outputText(item.output, request, context);
-		const messages: BridgeMessage[] = [toolOutputMessage(item.call_id, text)];
+		const { text, extras } = outputBlocks(item.output, request, context);
+		const messages: BridgeMessage[] = [toolResultMessage(item.call_id, text)];
 		if (extras.length > 0) {
 			messages.push(toolExtrasUserMessage(extras, item.call_id));
 		}
@@ -321,7 +339,7 @@ function normalizeInputItem(
 	throw unsupportedInputItemError(item, request, context);
 }
 
-function webSearchCallToFunctionMessages(
+function webSearchCallToToolMessages(
 	item: {
 		id: string;
 		action:
@@ -356,16 +374,16 @@ function webSearchCallToFunctionMessages(
 		};
 		output = { status: item.status };
 	}
-	const call = assistantToolCallMessage(
+	const call = assistantToolUseMessage(
 		item.id,
 		providerToolName(context, "web_search", "web_search"),
 		canonicalizeFunctionArguments(JSON.stringify(args)),
 	);
 	if (!call) return [];
-	return [call, toolOutputMessage(item.id, JSON.stringify(output))];
+	return [call, toolResultMessage(item.id, JSON.stringify(output))];
 }
 
-function toolSearchCallToFunctionMessages(
+function toolSearchCallToToolMessages(
 	item: {
 		id?: string;
 		call_id?: string;
@@ -375,7 +393,7 @@ function toolSearchCallToFunctionMessages(
 ): BridgeMessage[] {
 	const callId = item.id ?? item.call_id;
 	if (!callId) return [];
-	const call = assistantToolCallMessage(
+	const call = assistantToolUseMessage(
 		callId,
 		providerToolName(context, "tool_search", "tool_search"),
 		canonicalizeFunctionArguments(JSON.stringify(item.arguments ?? {})),
@@ -383,7 +401,7 @@ function toolSearchCallToFunctionMessages(
 	return call ? [call] : [];
 }
 
-function toolSearchOutputToFunctionMessages(item: {
+function toolSearchOutputToToolMessages(item: {
 	id?: string;
 	call_id?: string;
 	tools: unknown;
@@ -392,7 +410,7 @@ function toolSearchOutputToFunctionMessages(item: {
 	const callId = item.call_id ?? item.id;
 	if (!callId) return [];
 	return [
-		toolOutputMessage(
+		toolResultMessage(
 			callId,
 			JSON.stringify({
 				status: item.status,
@@ -402,34 +420,42 @@ function toolSearchOutputToFunctionMessages(item: {
 	];
 }
 
-function assistantToolCallMessage(
+function assistantToolUseMessage(
 	callId: string,
 	name: string,
 	argumentsValue: string,
 ): BridgeMessage | undefined {
 	if (!isValidFunctionArguments(argumentsValue)) return undefined;
+	const canonical = canonicalizeFunctionArguments(argumentsValue);
+	const parsed: unknown = JSON.parse(canonical);
 	return {
 		role: "assistant",
-		content: "",
-		tool_calls: [
+		content: [
 			{
+				type: "tool_use",
 				id: callId,
-				type: "function",
-				function: {
-					name,
-					arguments: canonicalizeFunctionArguments(argumentsValue),
-				},
+				name,
+				input: parsed,
 			},
 		],
 	};
 }
 
-function toolOutputMessage(callId: string, content: string): BridgeMessage {
-	return { role: "tool", tool_call_id: callId, content };
+function toolResultMessage(callId: string, content: string): BridgeMessage {
+	return {
+		role: "user",
+		content: [
+			{
+				type: "tool_result",
+				tool_use_id: callId,
+				content,
+			},
+		],
+	};
 }
 
 function toolExtrasUserMessage(
-	extras: readonly ChatCompletionContentPart[],
+	extras: readonly BridgeContentBlock[],
 	callId: string,
 ): BridgeMessage {
 	return {
@@ -445,18 +471,18 @@ function normalizeMessageContent(
 	content: unknown,
 	request: ResponseCreateRequest,
 	context: TextOnlyInputNormalizerContext,
-): string;
+): BridgeContentBlock[];
 function normalizeMessageContent(
 	content: unknown,
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): string | ChatCompletionContentPart[];
+): BridgeContentBlock[];
 function normalizeMessageContent(
 	content: unknown,
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): string | ChatCompletionContentPart[] {
-	if (typeof content === "string") return content;
+): BridgeContentBlock[] {
+	if (typeof content === "string") return [{ type: "text", text: content }];
 	if (!Array.isArray(content)) {
 		throw unsupportedInputContentError(
 			`Unsupported Responses input content type: ${typeof content}`,
@@ -465,23 +491,18 @@ function normalizeMessageContent(
 		);
 	}
 
-	const parts: ChatCompletionContentPart[] = [];
-	const textParts: string[] = [];
-	let hasNonTextPart = false;
+	const blocks: BridgeContentBlock[] = [];
 	for (const part of content) {
 		if (isTextPart(part)) {
-			parts.push({ type: "text", text: part.text });
-			textParts.push(part.text);
+			blocks.push({ type: "text", text: part.text });
 			continue;
 		}
 		if (isImagePart(part) && context.supportsImageInput) {
-			parts.push(toImageContentPart(part));
-			hasNonTextPart = true;
+			blocks.push(toImageBlock(part));
 			continue;
 		}
 		if (isVideoPart(part) && context.supportsVideoInput) {
-			parts.push(toVideoContentPart(part));
-			hasNonTextPart = true;
+			blocks.push(toVideoBlock(part));
 			continue;
 		}
 		throw unsupportedInputContentError(
@@ -490,8 +511,7 @@ function normalizeMessageContent(
 			context,
 		);
 	}
-	if (!hasNonTextPart) return textParts.join("");
-	return parts;
+	return blocks;
 }
 
 function isSimpleMessageItem(item: ResponseItem): item is ResponseItem & {
@@ -531,17 +551,15 @@ function isImagePart(part: unknown): part is {
 	);
 }
 
-function toImageContentPart(part: {
+function toImageBlock(part: {
 	readonly image_url: string;
 	readonly detail?: unknown;
-}): ChatCompletionContentPart {
+}): BridgeContentBlock {
 	const detail = imageDetail(part.detail);
 	return {
-		type: "image_url",
-		image_url: {
-			url: part.image_url,
-			...(detail ? { detail } : {}),
-		},
+		type: "image",
+		url: part.image_url,
+		...(detail ? { detail } : {}),
 	};
 }
 
@@ -561,15 +579,13 @@ function isVideoPart(part: unknown): part is VideoInputPart {
 	return false;
 }
 
-function toVideoContentPart(part: VideoInputPart): ChatCompletionContentPart {
+function toVideoBlock(part: VideoInputPart): BridgeContentBlock {
 	const url = videoUrl(part);
 	const detail = videoDetail(part.detail);
 	return {
-		type: "video_url",
-		video_url: {
-			url,
-			...(detail ? { detail } : {}),
-		},
+		type: "video",
+		url,
+		...(detail ? { detail } : {}),
 	};
 }
 
@@ -604,7 +620,7 @@ function isVideoReference(value: string): boolean {
 	return VIDEO_FILE_EXTENSIONS.has(extension);
 }
 
-function outputText(
+function outputBlocks(
 	output: string | readonly unknown[],
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
@@ -613,11 +629,8 @@ function outputText(
 		return { text: output, extras: [] };
 	}
 	const normalized = normalizeMessageContent(output, request, context);
-	if (typeof normalized === "string") {
-		return { text: normalized, extras: [] };
-	}
 	const textParts: string[] = [];
-	const extras: ChatCompletionContentPart[] = [];
+	const extras: BridgeContentBlock[] = [];
 	for (const part of normalized) {
 		if (part.type === "text") {
 			textParts.push(part.text);

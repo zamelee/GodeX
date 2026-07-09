@@ -923,3 +923,68 @@ Phase B sequencing proposed:
 - B6 (~0.5 day): live E2E + Codex++ smoke
 
 Awaiting user authorization to start Phase B1, or any redirection.
+
+### Round 14 - 2026-07-10: Phase B1 Completion (BridgeContentBlock goes GREEN)
+
+__Status__: Phase B1 in production. 862 pass / 0 fail / 2036 expect() in bun run check. e2e: 65 pass / 9 skip / 0 fail / 301 expect(). godex-step6.exe smoke at port 5684 all green.
+
+#### Final 7 test fixes
+
+1. input-normalizer.test.ts parallel tool call length (Site 4 + Site 6): implementation emits one user message per tool_result, not merged. Adjusted expected lengths 3->5 and 4->8.
+
+2. request-builder.test.ts L334 (Site 3): toEqual expected block array, actual is Chat-shape string (output of buildChatCompletionRequest). Updated to string.
+
+3. request-builder.test.ts L1055 (Site 4): normalizeCurrentInput output IS Bridge-shape. Updated to Bridge-shape block array.
+
+4. request-builder.test.ts L1141+1202+1697 (Sites 5,6,7): normalizeCurrentInput returns Bridge-shape. Rewrote all 3 sites from role:tool/tool_calls to role:user/content:[{tool_result}].
+
+5. Lint cleanup: bun run lint:fix for biome formatter + useOptionalChain fix at input-normalizer.ts:209.
+
+#### Implementation contract (locked)
+
+```typescript
+type BridgeContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; url: string; detail?: "low" | "high" }
+  | { type: "video"; url: string; detail?: "low" | "high" }
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string | readonly BridgeContentBlock[]; is_error?: boolean }
+  | { type: "reasoning"; text: string };
+
+type BridgeRole = "system" | "developer" | "user" | "assistant"; // NO tool role
+
+interface BridgeMessage { role: BridgeRole; content: readonly BridgeContentBlock[]; }
+```
+
+- INPUT to buildChatCompletionsMessages is Bridge-shape block arrays.
+- OUTPUT of buildChatCompletionsMessages is Chat-shape (role:tool allowed).
+- normalizeCurrentInput returns BridgeMessage[] (block arrays, no role:tool).
+- buildChatCompletionRequest returns Chat-shape (on-the-wire contract preserved).
+
+#### Smoke test on port 5684
+
+- /health -> 200
+- /v1/models -> 200
+- /v1/responses sync -> 200 with model reply (OK / Hey there friend / etc.)
+- All 7 local godex binaries return SAME upstream error on tool_requests; minnimax spec issue, not bridge regression.
+
+#### godex-step6 binary + assets (bin/, never committed)
+
+- bin/godex-step6.exe (~99.16 MB)
+- bin/godex-step6.yaml (port 5684)
+- bin/start-godex-step6.ps1 (keepalive wrapper)
+
+#### Phase A + B1 step status
+
+| Step | Status | Note |
+|---|---|---|
+| 1-7 | DONE | prior commits |
+| 8 | DONE | 862/0 + 65/9/0/301 + smoke 5684 |
+| Phase B1 | DONE | 7 failing tests fixed; canonical types stable |
+| Phase B2-B6 | next | AnthropicMessages pipeline per design doc |
+
+#### Pre-existing issues noted
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
+- Provider minimax upstream 422 on function parameters (external, not bridge regression).
+- Studio.exe improvements deferred per user request.

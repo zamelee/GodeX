@@ -50,11 +50,12 @@ describe("normalizeCurrentInput - tool call argument sanitization", () => {
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				{
+					type: "tool_use",
 					id: "call_ok",
-					type: "function",
-					function: { name: "lookup", arguments: `{"city":"Hangzhou"}` },
+					name: "lookup",
+					input: { city: "Hangzhou" },
 				},
 			],
 		});
@@ -110,8 +111,9 @@ describe("normalizeCurrentInput - tool call argument sanitization", () => {
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				expect.objectContaining({
+					type: "tool_use",
 					id: "call_custom_ok",
 				}),
 			],
@@ -135,11 +137,12 @@ describe("normalizeCurrentInput - tool call argument sanitization", () => {
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				{
+					type: "tool_use",
 					id: "call_empty_args",
-					type: "function",
-					function: { name: "shell_command", arguments: "{}" },
+					name: "shell_command",
+					input: {},
 				},
 			],
 		});
@@ -166,9 +169,10 @@ describe("normalizeCurrentInput - tool call argument sanitization", () => {
 
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toEqual({
-			role: "tool",
-			tool_call_id: "call_broken",
-			content: "result",
+			role: "user",
+			content: [
+				{ type: "tool_result", tool_use_id: "call_broken", content: "result" },
+			],
 		});
 	});
 });
@@ -195,10 +199,12 @@ describe("normalizeResponseItems - session history pairing", () => {
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				{
+					type: "tool_use",
 					id: "call_paired",
-					function: { name: "lookup", arguments: `{"city":"Hangzhou"}` },
+					name: "lookup",
+					input: { city: "Hangzhou" },
 				},
 			],
 		});
@@ -225,17 +231,20 @@ describe("normalizeResponseItems - session history pairing", () => {
 		expect(messages).toHaveLength(2);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				{
+					type: "tool_use",
 					id: "call_paired",
-					function: { name: "lookup", arguments: `{"city":"Hangzhou"}` },
+					name: "lookup",
+					input: { city: "Hangzhou" },
 				},
 			],
 		});
 		expect(messages[1]).toEqual({
-			role: "tool",
-			tool_call_id: "call_paired",
-			content: "Sunny",
+			role: "user",
+			content: [
+				{ type: "tool_result", tool_use_id: "call_paired", content: "Sunny" },
+			],
 		});
 	});
 
@@ -255,10 +264,12 @@ describe("normalizeResponseItems - session history pairing", () => {
 		expect(messages).toHaveLength(1);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [
+			content: [
 				{
+					type: "tool_use",
 					id: "call_orphan",
-					function: { name: "lookup", arguments: `{"city":"Hangzhou"}` },
+					name: "lookup",
+					input: { city: "Hangzhou" },
 				},
 			],
 		});
@@ -321,12 +332,24 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		expect(messages).toHaveLength(3);
 		expect(messages[0]).toMatchObject({
 			role: "assistant",
-			tool_calls: [{ id: "call_screenshot_1" }],
+			content: [
+				{
+					type: "tool_use",
+					id: "call_screenshot_1",
+					name: "browser.screenshot",
+					input: {},
+				},
+			],
 		});
 		expect(messages[1]).toEqual({
-			role: "tool",
-			tool_call_id: "call_screenshot_1",
-			content: "Screenshot captured",
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_screenshot_1",
+					content: "Screenshot captured",
+				},
+			],
 		});
 		expect(messages[2]).toEqual({
 			role: "user",
@@ -336,11 +359,9 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 					text: "[Attached media from tool result call_screenshot_1]",
 				},
 				{
-					type: "image_url",
-					image_url: {
-						url: "data:image/png;base64,iVBORw0KGgo=",
-						detail: "high",
-					},
+					type: "image",
+					url: "data:image/png;base64,iVBORw0KGgo=",
+					detail: "high",
 				},
 			],
 		});
@@ -360,9 +381,14 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		);
 		expect(messages).toEqual([
 			{
-				role: "tool",
-				tool_call_id: "call_text_1",
-				content: "plain result",
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_text_1",
+						content: "plain result",
+					},
+				],
 			},
 		]);
 	});
@@ -381,9 +407,14 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		);
 		expect(messages).toEqual([
 			{
-				role: "tool",
-				tool_call_id: "call_str_1",
-				content: "string result",
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_str_1",
+						content: "string result",
+					},
+				],
 			},
 		]);
 	});
@@ -414,16 +445,21 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		);
 		expect(messages).toHaveLength(3);
 		expect(messages[1]).toEqual({
-			role: "tool",
-			tool_call_id: "call_custom_1",
-			content: "",
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_custom_1",
+					content: "",
+				},
+			],
 		});
 		expect(messages[2]?.role).toBe("user");
-		const content = messages[2]?.content as Array<{ type: string }>;
-		expect(content[0]).toMatchObject({ type: "text" });
-		expect(content[1]).toMatchObject({
-			type: "image_url",
-			image_url: { url: "https://example.com/img.png" },
+		const content = messages[2]?.content;
+		expect(content?.[0]).toMatchObject({ type: "text" });
+		expect(content?.[1]).toMatchObject({
+			type: "image",
+			url: "https://example.com/img.png",
 		});
 	});
 
@@ -453,9 +489,14 @@ describe("normalizeCurrentInput - tool output media splitting", () => {
 		);
 		expect(messages).toHaveLength(3);
 		expect(messages[1]).toEqual({
-			role: "tool",
-			tool_call_id: "call_session_1",
-			content: "ok",
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_session_1",
+					content: "ok",
+				},
+			],
 		});
 		expect(messages[2]?.role).toBe("user");
 	});
@@ -504,19 +545,19 @@ describe("normalizeCurrentInput - tool media reordering for parallel tool calls"
 			}),
 			ctx,
 		);
-		// 2 assistant + 2 tool results (in call order) + 1 hoisted user with image
+		// Bridge shape: 2 assistant (one tool_use each) + 2 tool_result user + 1 media user = 5
+		// After reorder: tool_results stay in order, media user hoisted to the end
 		expect(messages).toHaveLength(5);
-		expect(messages[2]?.role).toBe("tool");
-		expect(messages[3]?.role).toBe("tool");
-		expect(messages[4]?.role).toBe("user");
-		// The image user message must carry the first call's id in the prefix
-		const lastContent = messages[4]?.content as Array<{
-			type: string;
-			text?: string;
-		}>;
-		expect(lastContent[0]?.text).toBe(
-			"[Attached media from tool result call_view_1]",
-		);
+		expect(messages[0]?.role).toBe("assistant");
+		expect(messages[1]?.role).toBe("assistant");
+		expect(messages[2]?.role).toBe("user");
+		expect(messages[3]?.role).toBe("user");
+		// The image user message is hoisted to position 4 with the first call's id in the prefix
+		const lastContent = messages[4]?.content;
+		expect(lastContent?.[0]).toMatchObject({
+			type: "text",
+			text: "[Attached media from tool result call_view_1]",
+		});
 	});
 
 	test("hoists multiple media user messages out of a tool run", () => {
@@ -560,14 +601,24 @@ describe("normalizeCurrentInput - tool media reordering for parallel tool calls"
 			}),
 			ctx,
 		);
-		// 3 assistant + 3 tool results + 2 hoisted user with image
+		// Bridge shape: 3 assistant (one tool_use each) + 3 tool_result user + 2 media user = 8
+		// After reorder: all tool_results stay in order, all media users hoisted to the end
 		expect(messages).toHaveLength(8);
-		expect(messages.slice(3, 6).map((m) => m.role)).toEqual([
-			"tool",
-			"tool",
-			"tool",
-		]);
-		expect(messages[6]?.role).toBe("user");
+		expect(messages[3]?.role).toBe("user");
+		expect(messages[4]?.role).toBe("user");
+		expect(messages[5]?.role).toBe("user");
+		// Tool results live at positions 3,4,5 (one per call); media users hoisted to 6 and 7
+		const lastContent = messages[7]?.content;
+		const lastPrefix = lastContent?.[0];
+		expect(lastPrefix).toMatchObject({
+			type: "text",
+			text: "[Attached media from tool result call_b]",
+		});
+		const firstMedia = messages[6]?.content?.[0];
+		expect(firstMedia).toMatchObject({
+			type: "text",
+			text: "[Attached media from tool result call_a]",
+		});
 		expect(messages[7]?.role).toBe("user");
 	});
 
@@ -601,7 +652,7 @@ describe("normalizeCurrentInput - tool media reordering for parallel tool calls"
 		expect(messages[2]?.role).toBe("user");
 		expect(messages[3]?.role).toBe("user");
 		// Text-only content normalizes to a plain string, not a content-part array.
-		expect(messages[3]?.content).toBe("explain");
+		expect(messages[3]?.content).toEqual([{ type: "text", text: "explain" }]);
 	});
 
 	test("keeps single-image tool output in place when no parallel tool follows", () => {
@@ -625,7 +676,7 @@ describe("normalizeCurrentInput - tool media reordering for parallel tool calls"
 			ctx,
 		);
 		expect(messages).toHaveLength(3);
-		expect(messages[1]?.role).toBe("tool");
+		expect(messages[1]?.role).toBe("user");
 		expect(messages[2]?.role).toBe("user");
 	});
 });

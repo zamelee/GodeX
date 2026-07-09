@@ -334,7 +334,10 @@ describe("buildChatCompletionRequest", () => {
 		expect(result.request.messages).toEqual([
 			{ role: "system", content: "Current system rules." },
 			{ role: "user", content: "Earlier request." },
-			{ role: "assistant", content: "Earlier answer." },
+			{
+				role: "assistant",
+				content: "Earlier answer.",
+			},
 			{
 				role: "user",
 				content: expect.stringContaining("Continue.\n\nSchema name: payload"),
@@ -971,13 +974,17 @@ describe("buildChatCompletionRequest", () => {
 		const messages = buildChatCompletionsMessages([
 			{
 				role: "assistant",
-				content: "Earlier answer.",
-				reasoning_content: "First thought.",
+				content: [
+					{ type: "reasoning", text: "First thought." },
+					{ type: "text", text: "Earlier answer." },
+				],
 			},
 			{
 				role: "assistant",
-				content: "Continue answer.",
-				reasoning_content: "Second thought.",
+				content: [
+					{ type: "reasoning", text: "Second thought." },
+					{ type: "text", text: "Continue answer." },
+				],
 			},
 		]);
 
@@ -1007,9 +1014,9 @@ describe("normalizeCurrentInput", () => {
 		);
 
 		expect(normalized).toEqual([
-			{ role: "system", content: "Global rules." },
-			{ role: "system", content: "Use strict tone." },
-			{ role: "user", content: "Hello." },
+			{ role: "system", content: [{ type: "text", text: "Global rules." }] },
+			{ role: "system", content: [{ type: "text", text: "Use strict tone." }] },
+			{ role: "user", content: [{ type: "text", text: "Hello." }] },
 		]);
 		expect(buildChatCompletionsMessages(normalized)).toEqual([
 			{ role: "system", content: "Global rules." },
@@ -1047,14 +1054,22 @@ describe("normalizeCurrentInput", () => {
 		expect(normalized).toHaveLength(2);
 		expect(normalized[0]).toMatchObject({
 			role: "assistant",
-			content: "Earlier answer.",
+			content: [
+				{ type: "reasoning", text: "Earlier thought." },
+				{ type: "text", text: "Earlier answer." },
+			],
 		});
 		expect(normalized[0]?.role).toBe("assistant");
 		if (normalized[0]?.role !== "assistant") {
 			throw new Error("Expected assistant message.");
 		}
-		expect(normalized[0].reasoning_content).toBe("Earlier thought.");
-		expect(normalized[1]).toEqual({ role: "user", content: "Continue." });
+		expect(
+			normalized[0]?.content.find((b) => b.type === "reasoning")?.text,
+		).toBe("Earlier thought.");
+		expect(normalized[1]).toEqual({
+			role: "user",
+			content: [{ type: "text", text: "Continue." }],
+		});
 	});
 
 	test("accumulates consecutive reasoning items before assistant messages", async () => {
@@ -1091,9 +1106,9 @@ describe("normalizeCurrentInput", () => {
 		if (normalized[0]?.role !== "assistant") {
 			throw new Error("Expected assistant message.");
 		}
-		expect(normalized[0].reasoning_content).toBe(
-			"First thought.\nSecond thought.",
-		);
+		expect(
+			normalized[0]?.content.find((b) => b.type === "reasoning")?.text,
+		).toBe("First thought.\nSecond thought.");
 	});
 
 	test("falls back web_search_call to a function call + tool output for the upstream provider", async () => {
@@ -1129,27 +1144,36 @@ describe("normalizeCurrentInput", () => {
 		expect(normalized).toEqual([
 			expect.objectContaining({
 				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
+				content: [
+					{
+						type: "tool_use",
 						id: "ws_resp_123_0",
-						type: "function",
-						function: {
-							name: "web_search",
-							arguments: '{"query":"web search"}',
-						},
-					}),
+						name: "web_search",
+						input: { query: "web search" },
+					},
 				],
 			}),
 			{
-				role: "tool",
-				tool_call_id: "ws_resp_123_0",
-				content: JSON.stringify({
-					status: "completed",
-					sources: [{ type: "url", url: "https://example.com/bun" }],
-				}),
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "ws_resp_123_0",
+						content: JSON.stringify({
+							status: "completed",
+							sources: [{ type: "url", url: "https://example.com/bun" }],
+						}),
+					},
+				],
 			},
-			{ role: "assistant", content: "Earlier answer." },
-			{ role: "user", content: "Continue." },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "Earlier answer." }],
+			},
+			{
+				role: "user",
+				content: [{ type: "text", text: "Continue." }],
+			},
 		]);
 	});
 
@@ -1187,33 +1211,39 @@ describe("normalizeCurrentInput", () => {
 		expect(normalized).toEqual([
 			expect.objectContaining({
 				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
+				content: [
+					{
+						type: "tool_use",
 						id: "ts_call_1",
-						type: "function",
-						function: {
-							name: "tool_search",
-							arguments: '{"query":"weather"}',
-						},
-					}),
+						name: "tool_search",
+						input: { query: "weather" },
+					},
 				],
 			}),
 			{
-				role: "tool",
-				tool_call_id: "ts_out_1",
-				content: JSON.stringify({
-					status: "completed",
-					tools: [
-						{
-							type: "function",
-							name: "lookup_weather",
-							parameters: { type: "object", properties: {} },
-							strict: true,
-						},
-					],
-				}),
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "ts_out_1",
+						content: JSON.stringify({
+							status: "completed",
+							tools: [
+								{
+									type: "function",
+									name: "lookup_weather",
+									parameters: { type: "object", properties: {} },
+									strict: true,
+								},
+							],
+						}),
+					},
+				],
 			},
-			{ role: "user", content: "Thanks." },
+			{
+				role: "user",
+				content: [{ type: "text", text: "Thanks." }],
+			},
 		]);
 	});
 
@@ -1253,24 +1283,18 @@ describe("normalizeCurrentInput", () => {
 				content: [
 					{ type: "text", text: "Inspect these." },
 					{
-						type: "image_url",
-						image_url: {
-							url: "https://example.com/image.png",
-							detail: "high",
-						},
+						type: "image",
+						url: "https://example.com/image.png",
+						detail: "high",
 					},
 					{
-						type: "image_url",
-						image_url: {
-							url: "https://example.com/thumbnail.png",
-						},
+						type: "image",
+						url: "https://example.com/thumbnail.png",
 					},
 					{
-						type: "video_url",
-						video_url: {
-							url: "https://example.com/demo.mp4?token=1",
-							detail: "low",
-						},
+						type: "video",
+						url: "https://example.com/demo.mp4?token=1",
+						detail: "low",
 					},
 				],
 			},
@@ -1301,11 +1325,9 @@ describe("normalizeCurrentInput", () => {
 				role: "user",
 				content: [
 					{
-						type: "video_url",
-						video_url: {
-							url: "data:video/mp4;base64,AAAA",
-							detail: "high",
-						},
+						type: "video",
+						url: "data:video/mp4;base64,AAAA",
+						detail: "high",
 					},
 				],
 			},
@@ -1336,11 +1358,9 @@ describe("normalizeCurrentInput", () => {
 				role: "user",
 				content: [
 					{
-						type: "video_url",
-						video_url: {
-							url: "https://cdn.example.com/signed-video?token=abc",
-							detail: "low",
-						},
+						type: "video",
+						url: "https://cdn.example.com/signed-video?token=abc",
+						detail: "low",
 					},
 				],
 			},
@@ -1371,10 +1391,8 @@ describe("normalizeCurrentInput", () => {
 				role: "user",
 				content: [
 					{
-						type: "video_url",
-						video_url: {
-							url: "data:video/mp4;base64,AAAA",
-						},
+						type: "video",
+						url: "data:video/mp4;base64,AAAA",
 					},
 				],
 			},
@@ -1600,7 +1618,10 @@ describe("normalizeCurrentInput", () => {
 		);
 
 		expect(normalized).toEqual([
-			{ role: "assistant", content: "Earlier answer." },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "Earlier answer." }],
+			},
 		]);
 	});
 
@@ -1689,84 +1710,118 @@ describe("normalizeCurrentInput", () => {
 		);
 
 		expect(normalized).toEqual([
-			expect.objectContaining({
-				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
-						id: "call_fn",
-						function: {
-							name: "lookup.weather",
-							arguments: '{"city":"Hangzhou"}',
-						},
-					}),
-				],
-			}),
-			{ role: "tool", tool_call_id: "call_fn", content: "Sunny." },
-			expect.objectContaining({
-				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
-						id: "call_shell",
-						function: {
-							name: "shell",
-							arguments: JSON.stringify({ commands: ["bun test"] }),
-						},
-					}),
-				],
-			}),
 			{
-				role: "tool",
-				tool_call_id: "call_shell",
-				content:
-					"[exit 0]\nstdout:\nok\nstderr:\n\n[timeout]\nstdout:\n\nstderr:\nslow",
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "call_fn",
+						name: "lookup.weather",
+						input: { city: "Hangzhou" },
+					},
+				],
 			},
-			expect.objectContaining({
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_fn",
+						content: "Sunny.",
+					},
+				],
+			},
+			{
 				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
+				content: [
+					{
+						type: "tool_use",
+						id: "call_shell",
+						name: "shell",
+						input: { commands: ["bun test"] },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_shell",
+						content:
+							"[exit 0]\nstdout:\nok\nstderr:\n\n[timeout]\nstdout:\n\nstderr:\nslow",
+					},
+				],
+			},
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
 						id: "call_local",
-						function: {
-							name: "local_shell",
-							arguments: JSON.stringify({
-								command: ["pwd"],
-								env: { CI: "true" },
-								timeout_ms: 1000,
-								user: "runner",
-								working_directory: "/repo",
-							}),
+						name: "local_shell",
+						input: {
+							command: ["pwd"],
+							env: { CI: "true" },
+							timeout_ms: 1000,
+							user: "runner",
+							working_directory: "/repo",
 						},
-					}),
+					},
 				],
-			}),
-			{ role: "tool", tool_call_id: "call_local", content: "/repo" },
-			expect.objectContaining({
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_local",
+						content: "/repo",
+					},
+				],
+			},
+			{
 				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
+				content: [
+					{
+						type: "tool_use",
 						id: "call_patch",
-						function: {
-							name: "apply_patch",
-							arguments: JSON.stringify({
-								operation: { type: "delete_file", path: "tmp.txt" },
-							}),
-						},
-					}),
+						name: "apply_patch",
+						input: { operation: { type: "delete_file", path: "tmp.txt" } },
+					},
 				],
-			}),
-			{ role: "tool", tool_call_id: "call_patch", content: "completed:" },
-			expect.objectContaining({
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_patch",
+						content: "completed:",
+					},
+				],
+			},
+			{
 				role: "assistant",
-				tool_calls: [
-					expect.objectContaining({
+				content: [
+					{
+						type: "tool_use",
 						id: "call_custom",
-						function: {
-							name: "workspace__search",
-							arguments: JSON.stringify({ input: "src" }),
-						},
-					}),
+						name: "workspace__search",
+						input: { input: "src" },
+					},
 				],
-			}),
-			{ role: "tool", tool_call_id: "call_custom", content: "src/index.ts" },
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "call_custom",
+						content: "src/index.ts",
+					},
+				],
+			},
 		]);
 	});
 
