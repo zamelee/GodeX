@@ -1,0 +1,17 @@
+=== MiniMax-M3 ===
+  status: 200
+  stop_reason: end_turn
+  usage: input=62 output=19
+  TEXT: ����ͼ��������� "Hello"��
+
+������ɫ�ǵ���ɫ��ǳ��ɫ����
+=== MiniMax-M2.7 ===
+  status: 200
+  stop_reason: max_tokens
+  usage: input=41 output=200
+  THINKING: The user asks: "����ͼ��д��ʲô����?������ʲô��ɫ?" The user is presumably asking about some image that is not provided. The user says "����ͼ��д��ʲô����?������ʲô��ɫ?" which translates to "What text is written in this picture? What is the background color?" So presumably there is an image attached, but the conversation has n
+=== MiniMax-M2.7-highspeed ===
+  status: 200
+  stop_reason: max_tokens
+  usage: input=52 output=200
+  THINKING: The user asks in Chinese: "����ͼ��д��ʲô����?������ʲô��ɫ?" which translates to "What text is written in this picture? What is the background color?" The user likely has posted an image. The user is asking about the content of the image. As an AI text model, I do not have direct access to images unless provided

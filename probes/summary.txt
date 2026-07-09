@@ -1,0 +1,24 @@
+
+=== MiniMax-M3 ===
+  plain_chat: OK text:'OK'
+  tool_call: OK 1tools
+  tool_result_feedback: OK text:'东京现在的天气情况如下：\n\n- **温度**：22°C\n- **天气**：晴\n- **湿度**：60%\n\n天气晴朗，温度'
+  parallel_tools: OK 4tools
+  image_input: HTTP500 err:input new_sensitive, messages[0]'s content[0] imag
+  streaming: OK FULL_JSON
+
+=== MiniMax-M2.7 ===
+  plain_chat: 
+  tool_call: OK 1tools
+  tool_result_feedback: OK text:'\n东京现在的天气情况如下：\n\n- 🌡️ **温度**：22°C\n- ☀️ **天气**：晴天\n- 💧 **湿度**：60'
+  parallel_tools: OK 4tools
+  image_input: OK text:'\n您好！我'
+  streaming: OK FULL_JSON
+
+=== MiniMax-M2.7-highspeed ===
+  plain_chat: 
+  tool_call: OK 1tools
+  tool_result_feedback: OK text:'东京现在的天气情况如下：\n\n🌡️ **温度：** 22°C  \n☀️ **天气：** 晴天  \n💧 **湿度：** 60'
+  parallel_tools: OK 4tools
+  image_input: 
+  streaming: OK FULL_JSON

@@ -1,0 +1,16 @@
+PNG bytes decoded: 464, header: b'\x89PNG\r\n\x1a\n'
+
+=== MiniMax-M3 ===
+  status: 200
+  content types: ['text']
+  TEXT: ����ͼ��������� "Hello"��
+
+������ɫ�ǵ���ɫ��ǳ��ɫ����
+=== MiniMax-M2.7 ===
+  status: 200
+  content types: ['thinking']
+  THINKING: The user asks: "����ͼ��д��ʲô����?������ʲô��ɫ?" The user is presumably asking about some image that is not provided. The user says "����ͼ��д��ʲô����?������ʲô��ɫ?" which translates to "What text is written in this picture?
+=== MiniMax-M2.7-highspeed ===
+  status: 200
+  content types: ['thinking']
+  THINKING: The user asks in Chinese: "����ͼ��д��ʲô����?������ʲô��ɫ?" which translates to "What text is written in this picture? What is the background color?" The user likely has posted an image. The user is asking about 

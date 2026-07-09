@@ -1,0 +1,28 @@
+Traceback (most recent call last):
+=== plain_chat (status=200) ===
+CONTENT TYPES: ['thinking']
+  THINKING: The user writes in Chinese: "�ظ� OK ����". This translates to "Just reply OK".
+
+=== tool_call (status=200) ===
+CONTENT TYPES: ['thinking', 'text', 'tool_use']
+  THINKING: �û���֪���������ڵ��������������Ҫʹ��get_weather��������ȡ������������Ϣ��
+
+  TEXT: 
+����������ѯ�������ڵ����������
+
+  TOOL_USE: get_weather input={'location': '����'}
+
+=== tool_result_feedback (status=200) ===
+CONTENT TYPES: ['thinking', 'text']
+  THINKING: �û�ѯ�ʶ��������������Ѿ������˹��߻�ȡ��������Ϣ����������Ҫ�����Ļظ��û����������Ƕ��������������
+
+������Ϣ��ʾ��
+- �¶ȣ�22��C
+- ����״������
+- ʪ�ȣ�60%
+
+��Ӧ�ü�����˵ظ����û���Щ��Ϣ��
+
+  File "D:\Documents\VibeCoding\GodeX\bin\check-probe.js", line 10, in <module>
+    print(f"  TEXT: {c.get('text','')[:200]}")
+UnicodeEncodeError: 'gbk' codec can't encode character '\U0001f321' in position 28: illegal multibyte sequence
