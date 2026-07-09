@@ -3,10 +3,7 @@ import {
 	BRIDGE_REQUEST_UNSUPPORTED_INPUT_ITEM,
 	BridgeError,
 } from "../../error";
-import type {
-	ChatCompletionContentPart,
-	ChatCompletionMessageParam,
-} from "../../protocol/openai/completions";
+import type { ChatCompletionContentPart } from "../../protocol/openai/completions";
 import type {
 	ResponseCreateRequest,
 	ResponseItem,
@@ -15,9 +12,8 @@ import {
 	canonicalizeFunctionArguments,
 	isValidFunctionArguments,
 } from "../../providers/shared/tool-arguments";
+import type { BridgeMessage, BridgeRole } from "../bridge-types";
 import type { ToolPlan } from "../tools";
-
-export type NormalizedChatMessage = ChatCompletionMessageParam;
 
 interface NormalizedToolOutput {
 	readonly text: string;
@@ -40,8 +36,8 @@ type TextOnlyInputNormalizerContext = InputNormalizerContext & {
 export function normalizeCurrentInput(
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext = {},
-): NormalizedChatMessage[] {
-	const messages: NormalizedChatMessage[] = [];
+): BridgeMessage[] {
+	const messages: BridgeMessage[] = [];
 	if (request.instructions) {
 		messages.push({ role: "system", content: request.instructions });
 	}
@@ -60,7 +56,7 @@ export function normalizeResponseItems(
 	items: readonly ResponseItem[],
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext = {},
-): NormalizedChatMessage[] {
+): BridgeMessage[] {
 	return normalizeInputItems(dropUnpairedToolCalls(items), request, context);
 }
 
@@ -131,8 +127,8 @@ function normalizeInputItems(
 	items: readonly ResponseItem[],
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): NormalizedChatMessage[] {
-	const messages: NormalizedChatMessage[] = [];
+): BridgeMessage[] {
+	const messages: BridgeMessage[] = [];
 	let pendingReasoning: string | undefined;
 	for (const item of items) {
 		if (item.type === "reasoning") {
@@ -156,15 +152,15 @@ function normalizeInputItems(
 }
 
 function reorderToolMediaMessages(
-	messages: readonly NormalizedChatMessage[],
-): NormalizedChatMessage[] {
+	messages: readonly BridgeMessage[],
+): BridgeMessage[] {
 	// Move any user messages that carry tool media (inserted by tool-output
 	// splitting) out of the middle of a consecutive tool message run so that
 	// Chat Completions providers see assistant → tool → tool → ... before any
 	// user turn. Some upstreams (e.g. minimax) reject sequences where a tool
 	// result is followed by a non-tool message and then another tool result.
-	const result: NormalizedChatMessage[] = [];
-	const deferred: NormalizedChatMessage[] = [];
+	const result: BridgeMessage[] = [];
+	const deferred: BridgeMessage[] = [];
 	let inToolRun = false;
 	for (const msg of messages) {
 		if (msg.role === "tool") {
@@ -187,7 +183,7 @@ function reorderToolMediaMessages(
 	return result;
 }
 
-function isMediaUserMessage(msg: NormalizedChatMessage): boolean {
+function isMediaUserMessage(msg: BridgeMessage): boolean {
 	if (msg.role !== "user") return false;
 	if (typeof msg.content === "string" || !Array.isArray(msg.content)) {
 		return false;
@@ -209,14 +205,14 @@ function normalizeInputItem(
 	item: ResponseItem,
 	request: ResponseCreateRequest,
 	context: InputNormalizerContext,
-): NormalizedChatMessage[] {
+): BridgeMessage[] {
 	if (isSimpleMessageItem(item)) {
 		const role = item.role === "developer" ? "system" : item.role;
 		return [
 			{
 				role,
 				content: normalizeMessageContent(item.content, request, context),
-			} as NormalizedChatMessage,
+			} as BridgeMessage,
 		];
 	}
 	if (item.type === "function_call") {
@@ -229,9 +225,7 @@ function normalizeInputItem(
 	}
 	if (item.type === "function_call_output") {
 		const { text, extras } = outputText(item.output, request, context);
-		const messages: NormalizedChatMessage[] = [
-			toolOutputMessage(item.call_id, text),
-		];
+		const messages: BridgeMessage[] = [toolOutputMessage(item.call_id, text)];
 		if (extras.length > 0) {
 			messages.push(toolExtrasUserMessage(extras, item.call_id));
 		}
@@ -317,9 +311,7 @@ function normalizeInputItem(
 	}
 	if (item.type === "custom_tool_call_output") {
 		const { text, extras } = outputText(item.output, request, context);
-		const messages: NormalizedChatMessage[] = [
-			toolOutputMessage(item.call_id, text),
-		];
+		const messages: BridgeMessage[] = [toolOutputMessage(item.call_id, text)];
 		if (extras.length > 0) {
 			messages.push(toolExtrasUserMessage(extras, item.call_id));
 		}
@@ -343,7 +335,7 @@ function webSearchCallToFunctionMessages(
 		status: string;
 	},
 	context: InputNormalizerContext,
-): NormalizedChatMessage[] {
+): BridgeMessage[] {
 	if (!item.id) return [];
 	let args: Record<string, unknown>;
 	let output: Record<string, unknown>;
@@ -380,7 +372,7 @@ function toolSearchCallToFunctionMessages(
 		arguments: unknown;
 	},
 	context: InputNormalizerContext,
-): NormalizedChatMessage[] {
+): BridgeMessage[] {
 	const callId = item.id ?? item.call_id;
 	if (!callId) return [];
 	const call = assistantToolCallMessage(
@@ -396,7 +388,7 @@ function toolSearchOutputToFunctionMessages(item: {
 	call_id?: string;
 	tools: unknown;
 	status?: string;
-}): NormalizedChatMessage[] {
+}): BridgeMessage[] {
 	const callId = item.call_id ?? item.id;
 	if (!callId) return [];
 	return [
@@ -414,7 +406,7 @@ function assistantToolCallMessage(
 	callId: string,
 	name: string,
 	argumentsValue: string,
-): NormalizedChatMessage | undefined {
+): BridgeMessage | undefined {
 	if (!isValidFunctionArguments(argumentsValue)) return undefined;
 	return {
 		role: "assistant",
@@ -432,17 +424,14 @@ function assistantToolCallMessage(
 	};
 }
 
-function toolOutputMessage(
-	callId: string,
-	content: string,
-): NormalizedChatMessage {
+function toolOutputMessage(callId: string, content: string): BridgeMessage {
 	return { role: "tool", tool_call_id: callId, content };
 }
 
 function toolExtrasUserMessage(
 	extras: readonly ChatCompletionContentPart[],
 	callId: string,
-): NormalizedChatMessage {
+): BridgeMessage {
 	return {
 		role: "user",
 		content: [

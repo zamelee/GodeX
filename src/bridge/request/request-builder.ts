@@ -14,6 +14,7 @@ import type {
 } from "../../protocol/openai/responses";
 import type { ReasoningEffort } from "../../protocol/openai/shared";
 import type { ResponseSessionSnapshot } from "../../session";
+import type { BridgeMessage } from "../bridge-types";
 import {
 	type ProviderCapabilities,
 	planBridgeCompatibility,
@@ -33,7 +34,6 @@ import {
 } from "../tools";
 import {
 	type InputNormalizerContext,
-	type NormalizedChatMessage,
 	normalizeCurrentInput,
 	normalizeResponseItems,
 } from "./input-normalizer";
@@ -57,7 +57,7 @@ export interface BuildChatCompletionRequestResult {
 	readonly output: OutputContractPlan;
 }
 
-export { buildChatMessages, type NormalizedChatMessage, normalizeCurrentInput };
+export { type BridgeMessage, buildChatMessages, normalizeCurrentInput };
 
 export async function buildChatCompletionRequest(
 	input: BuildChatCompletionRequestInput,
@@ -136,8 +136,8 @@ function chatMessages(
 }
 
 function dropOrphanToolOutputs(
-	messages: readonly NormalizedChatMessage[],
-): NormalizedChatMessage[] {
+	messages: readonly BridgeMessage[],
+): BridgeMessage[] {
 	const knownCallIds = new Set<string>();
 	for (const message of messages) {
 		if (message.role !== "assistant") continue;
@@ -153,7 +153,7 @@ function dropOrphanToolOutputs(
 }
 
 function appendFinalInstruction(
-	messages: NormalizedChatMessage[],
+	messages: BridgeMessage[],
 	instruction: string,
 ): void {
 	for (let index = messages.length - 1; index >= 0; index--) {
@@ -170,8 +170,8 @@ function appendFinalInstruction(
 }
 
 function isFinalInstructionTarget(
-	message: NormalizedChatMessage,
-): message is NormalizedChatMessage & {
+	message: BridgeMessage,
+): message is BridgeMessage & {
 	readonly role: "developer" | "system" | "user";
 	readonly content: string;
 } {
@@ -183,9 +183,7 @@ function isFinalInstructionTarget(
 	);
 }
 
-function systemPrefixLength(
-	messages: readonly NormalizedChatMessage[],
-): number {
+function systemPrefixLength(messages: readonly BridgeMessage[]): number {
 	const firstNonSystem = messages.findIndex(
 		(message) => message.role !== "system",
 	);

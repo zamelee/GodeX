@@ -2,10 +2,10 @@ import type {
 	ChatCompletionAssistantMessageParam,
 	ChatCompletionMessageParam,
 } from "../../protocol/openai/completions";
-import type { NormalizedChatMessage } from "./input-normalizer";
+import type { BridgeMessage } from "../bridge-types";
 
 export function buildChatMessages(
-	normalized: readonly NormalizedChatMessage[],
+	normalized: readonly BridgeMessage[],
 ): ChatCompletionMessageParam[] {
 	const messages: ChatCompletionMessageParam[] = [];
 	for (const message of normalized) {
@@ -55,9 +55,7 @@ export function buildChatMessages(
 	return messages;
 }
 
-function cloneMessage(
-	message: NormalizedChatMessage,
-): ChatCompletionMessageParam {
+function cloneMessage(message: BridgeMessage): ChatCompletionMessageParam {
 	if (isAssistantToolCallMessage(message)) {
 		return { ...message, tool_calls: [...message.tool_calls] };
 	}
