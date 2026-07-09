@@ -3,7 +3,7 @@ import type { JsonServerSentEvent } from "@ahoo-wang/fetcher-eventstream";
 import type { CompatibilityDiagnostic } from "../bridge/compatibility";
 import { planOutputContract } from "../bridge/output";
 import type { ProviderEdge } from "../bridge/provider-spec";
-import { buildChatCompletionRequest } from "../bridge/request";
+import { buildBridgeRequest } from "../bridge/request";
 import { createToolPlanningProfile } from "../bridge/tools";
 import { DEFAULT_WEB_SEARCH_CONFIG } from "../config/sections/web-search";
 import { OutputContractSlot } from "../context/output-contract-slot";
@@ -150,11 +150,11 @@ function createExchange(
 		): Promise<ProviderStreamExchangeResult> => ({
 			providerStream,
 			upstreamLatencyMillis,
-			built: await buildChatCompletionRequest({
+			built: await buildBridgeRequest({
 				request: { ...ctx.request, stream: true },
 				provider: ctx.provider.name,
 				model: ctx.resolved.model,
-				capabilities: ctx.provider.spec.capabilities,
+				spec: ctx.provider.spec,
 				profile: createToolPlanningProfile({
 					provider: ctx.provider.name,
 					capabilities: ctx.provider.spec.capabilities,
@@ -170,11 +170,11 @@ async function buildManagedSearchRequest(
 	ctx: ResponsesContext,
 	request: ResponseCreateRequest,
 ) {
-	return await buildChatCompletionRequest({
+	return await buildBridgeRequest({
 		request: { ...request, stream: true },
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
-		capabilities: ctx.provider.spec.capabilities,
+		spec: ctx.provider.spec,
 		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
 			capabilities: ctx.provider.spec.capabilities,

@@ -5,8 +5,8 @@ import type {
 	ProviderSpec,
 } from "../bridge/provider-spec/contract";
 import {
-	type BuildChatCompletionRequestResult,
-	buildChatCompletionRequest,
+	type BuildBridgeRequestResult,
+	buildBridgeRequest,
 } from "../bridge/request";
 import { createToolPlanningProfile } from "../bridge/tools";
 import { OutputContractSlot } from "../context/output-contract-slot";
@@ -99,19 +99,18 @@ async function createExchangeResult(
 	ctx: ResponsesContext,
 	providerResponse: TestChatResponse,
 ): Promise<ProviderRequestExchangeResult> {
-	const built: BuildChatCompletionRequestResult =
-		await buildChatCompletionRequest({
-			request: ctx.request,
+	const built: BuildBridgeRequestResult = await buildBridgeRequest({
+		request: ctx.request,
+		provider: ctx.provider.name,
+		model: ctx.resolved.model,
+		spec: specOf(ctx.provider),
+		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
-			model: ctx.resolved.model,
 			capabilities: specOf(ctx.provider).capabilities,
-			profile: createToolPlanningProfile({
-				provider: ctx.provider.name,
-				capabilities: specOf(ctx.provider).capabilities,
-				toProviderName: ctx.provider.spec.toolName.toProviderName,
-			}),
-			session: ctx.session,
-		});
+			toProviderName: ctx.provider.spec.toolName.toProviderName,
+		}),
+		session: ctx.session,
+	});
 	ctx.outputContract.set(built.output);
 	return { providerResponse, built };
 }

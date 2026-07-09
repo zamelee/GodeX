@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { JsonServerSentEvent } from "@ahoo-wang/fetcher-eventstream";
 import type { CompatibilityDiagnostic } from "../../bridge/compatibility";
 import {
-	type BuildChatCompletionRequestResult,
-	buildChatCompletionRequest,
+	type BuildBridgeRequestResult,
+	buildBridgeRequest,
 } from "../../bridge/request";
 import { createToolPlanningProfile } from "../../bridge/tools";
 import { DEFAULT_WEB_SEARCH_CONFIG } from "../../config/sections/web-search";
@@ -202,12 +202,12 @@ describe("HostedWebSearchStreamRunner", () => {
 async function buildManagedSearchRequest(
 	ctx: ResponsesContext,
 	request: ResponseCreateRequest,
-): Promise<BuildChatCompletionRequestResult> {
-	const built = await buildChatCompletionRequest({
+): Promise<BuildBridgeRequestResult> {
+	const built = await buildBridgeRequest({
 		request,
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
-		capabilities: ctx.provider.spec.capabilities,
+		spec: ctx.provider.spec,
 		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
 			capabilities: ctx.provider.spec.capabilities,

@@ -5,8 +5,8 @@ import type {
 	ProviderSpec,
 } from "../bridge/provider-spec/contract";
 import {
-	type BuildChatCompletionRequestResult,
-	buildChatCompletionRequest,
+	type BuildBridgeRequestResult,
+	buildBridgeRequest,
 } from "../bridge/request";
 import { createToolPlanningProfile } from "../bridge/tools";
 import { DEFAULT_WEB_SEARCH_CONFIG } from "../config/sections/web-search";
@@ -118,12 +118,12 @@ async function createExchangeResult(
 
 async function buildRequest(
 	ctx: ResponsesContext,
-): Promise<BuildChatCompletionRequestResult> {
-	return await buildChatCompletionRequest({
+): Promise<BuildBridgeRequestResult> {
+	return await buildBridgeRequest({
 		request: ctx.request,
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
-		capabilities: specOf(ctx.provider).capabilities,
+		spec: specOf(ctx.provider),
 		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
 			capabilities: specOf(ctx.provider).capabilities,

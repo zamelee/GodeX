@@ -1,8 +1,8 @@
 import type { JsonServerSentEvent } from "@ahoo-wang/fetcher-eventstream";
 import type { CompatibilityDiagnostic } from "../bridge/compatibility";
 import {
-	type BuildChatCompletionRequestResult,
-	buildChatCompletionRequest,
+	type BuildBridgeRequestResult,
+	buildBridgeRequest,
 } from "../bridge/request";
 import {
 	createToolPlanningProfile,
@@ -17,13 +17,13 @@ import { recordTraceEvent, recordTraceRequest } from "../trace";
 
 export interface ProviderRequestExchangeResult<ProviderResponse = unknown> {
 	providerResponse: ProviderResponse;
-	built: BuildChatCompletionRequestResult;
+	built: BuildBridgeRequestResult;
 }
 
 export interface ProviderStreamExchangeResult {
 	providerStream: ReadableStream<JsonServerSentEvent<unknown>>;
 	upstreamLatencyMillis: number;
-	built: BuildChatCompletionRequestResult;
+	built: BuildBridgeRequestResult;
 }
 
 export interface ProviderExchangeRequestOptions {
@@ -104,13 +104,13 @@ async function buildProviderRequest(
 	ctx: ResponsesContext,
 	stream: boolean,
 	options: ProviderExchangeRequestOptions = {},
-): Promise<BuildChatCompletionRequestResult> {
+): Promise<BuildBridgeRequestResult> {
 	const request = options.request ?? ctx.request;
-	const built = await buildChatCompletionRequest({
+	const built = await buildBridgeRequest({
 		request: stream ? { ...request, stream: true } : request,
 		provider: ctx.provider.name,
 		model: ctx.resolved.model,
-		capabilities: ctx.provider.spec.capabilities,
+		spec: ctx.provider.spec,
 		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
 			capabilities: ctx.provider.spec.capabilities,

@@ -78,10 +78,20 @@ export interface ProviderSpec<
 	TProviderRequest = TBridgeRequest,
 > {
 	readonly name: string;
-	readonly protocol: ProviderProtocol;
+	/**
+	 * Provider wire protocol. Defaults to `CHAT_COMPLETIONS_PROTOCOL`
+	 * when absent; explicit setting is preferred.
+	 */
+	readonly protocol?: ProviderProtocol;
 	readonly capabilities: ProviderCapabilities;
 	readonly endpoint: ProviderEndpointSpec;
 	readonly auth: ProviderAuthSpec;
+	/**
+	 * Stream mode preference for this provider. Defaults to per-protocol
+	 * default at runtime when absent (`wrap` for chat_completions,
+	 * `passthrough` for messages). Env var `GODEX_STREAM_MODE` overrides.
+	 */
+	readonly streamMode?: "passthrough" | "wrap";
 	readonly toolName: ToolNameCodec;
 	readonly response: BridgeResponseAccessor<TResponse>;
 	readonly stream: BridgeStreamAccessor<TChunk>;
