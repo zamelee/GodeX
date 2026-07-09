@@ -4,6 +4,7 @@ import {
 	BridgeError,
 } from "../../error";
 import type {
+	ChatCompletionAssistantMessageParam,
 	ChatCompletionCreateRequest,
 	ChatCompletionMessageParam,
 	ChatCompletionToolChoiceOption,
@@ -37,7 +38,6 @@ import {
 	normalizeCurrentInput,
 	normalizeResponseItems,
 } from "./input-normalizer";
-import { buildChatMessages } from "./message-builder";
 
 export interface BuildChatCompletionRequestInput {
 	readonly request: ResponseCreateRequest;
@@ -57,82 +57,186 @@ export interface BuildChatCompletionRequestResult {
 	readonly output: OutputContractPlan;
 }
 
-export { type BridgeMessage, buildChatMessages, normalizeCurrentInput };
+export { type BridgeMessage, normalizeCurrentInput };
 
-export async function buildChatCompletionRequest(
-	input: BuildChatCompletionRequestInput,
-): Promise<BuildChatCompletionRequestResult> {
-	const compatibility = planBridgeCompatibility({
-		provider: input.provider,
-		model: input.model,
-		request: input.request,
-		capabilities: input.capabilities,
-	});
-	const tools = planTools({
-		tools: input.request.tools,
-		toolChoice: input.request.tool_choice,
-		profile: {
-			...input.profile,
-			webSearch: input.webSearch,
-		},
-	});
-	assertNoRejectedCompatibility(input, compatibility);
-	const output = planOutputContract({
-		format: input.request.text?.format,
-		responseFormatDecision: compatibility.responseFormat,
-	});
-	const request: ChatCompletionCreateRequest = {
-		model: input.model,
-		messages: chatMessages(input, output, tools),
-	};
+// ============================================================
+// Message-merge layer
+// ============================================================
 
-	applyTools(request, input, tools);
-	if (output.providerResponseFormat !== undefined) {
-		request.response_format =
-			output.providerResponseFormat as ChatCompletionCreateRequest["response_format"];
+export function buildChatCompletionsMessages(
+	normalized: readonly BridgeMessage[],
+): ChatCompletionMessageParam[] {
+	const messages: ChatCompletionMessageParam[] = [];
+	for (const message of normalized) {
+		const next = cloneMessage(message);
+		const previous = messages.at(-1);
+		if (
+			isAssistantToolCallMessage(previous) &&
+			isAssistantToolCallMessage(next)
+		) {
+			previous.tool_calls = [...previous.tool_calls, ...next.tool_calls];
+			const reasoningContent = mergeReasoningContent(
+				previous.reasoning_content,
+				next.reasoning_content,
+			);
+			if (reasoningContent) previous.reasoning_content = reasoningContent;
+			continue;
+		}
+		if (
+			isAssistantTurnPrefixMessage(previous) &&
+			isAssistantTurnPrefixMessage(next)
+		) {
+			messages[messages.length - 1] = mergeAssistantTextMessages(
+				previous,
+				next,
+			);
+			continue;
+		}
+		if (
+			isAssistantTurnPrefixMessage(previous) &&
+			isAssistantToolCallMessage(next)
+		) {
+			messages[messages.length - 1] = mergeAssistantTurnPrefix(previous, next);
+			continue;
+		}
+		if (
+			isAssistantToolCallMessage(previous) &&
+			isAssistantTurnPrefixMessage(next)
+		) {
+			messages[messages.length - 1] = mergeAssistantToolCallSuffix(
+				previous,
+				next,
+			);
+			continue;
+		}
+		messages.push(next);
 	}
-	const pluginCtx: GodexPluginContext = {
-		model: input.model,
-		provider: input.provider,
-	};
-	const plugins = input.plugins ?? [];
-	request.messages = await applyPluginChatMessagesHooks(
-		plugins,
-		request.messages,
-		pluginCtx,
-	);
-
-	applyRequestOptions(
-		request,
-		input.request,
-		input.capabilities,
-		input.provider,
-		input.model,
-	);
-	return { request, compatibility, tools, output };
+	return messages;
 }
 
-function chatMessages(
-	input: BuildChatCompletionRequestInput,
-	output: OutputContractPlan,
-	tools: ToolPlan,
-): ChatCompletionMessageParam[] {
-	const context = normalizerContext(input, tools);
-	const history = input.session?.input_items
-		? normalizeResponseItems(input.session.input_items, input.request, context)
-		: [];
-	const current = normalizeCurrentInput(input.request, context);
-	const currentPrefixLength = systemPrefixLength(current);
-	const preamble = current.slice(0, currentPrefixLength);
-	const messages = [
-		...preamble,
-		...history,
-		...current.slice(currentPrefixLength),
-	];
-	if (output.jsonSchemaInstruction) {
-		appendFinalInstruction(messages, output.jsonSchemaInstruction);
+function cloneMessage(message: BridgeMessage): ChatCompletionMessageParam {
+	if (isAssistantToolCallMessage(message)) {
+		return { ...message, tool_calls: [...message.tool_calls] };
 	}
-	return buildChatMessages(dropOrphanToolOutputs(messages));
+	return { ...message };
+}
+
+function mergeAssistantTextMessages(
+	left: ChatCompletionAssistantMessageParam,
+	right: ChatCompletionAssistantMessageParam,
+): ChatCompletionAssistantMessageParam {
+	const reasoningContent = mergeReasoningContent(
+		left.reasoning_content,
+		right.reasoning_content,
+	);
+	return {
+		...left,
+		content: mergeAssistantContent(left.content, right.content),
+		...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+	};
+}
+
+function mergeAssistantTurnPrefix(
+	prefix: ChatCompletionAssistantMessageParam,
+	toolCallMessage: ChatCompletionAssistantMessageParam & {
+		tool_calls: NonNullable<ChatCompletionAssistantMessageParam["tool_calls"]>;
+	},
+): ChatCompletionAssistantMessageParam {
+	const reasoningContent = mergeReasoningContent(
+		prefix.reasoning_content,
+		toolCallMessage.reasoning_content,
+	);
+	return {
+		...prefix,
+		content: mergeAssistantContent(prefix.content, toolCallMessage.content),
+		...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+		tool_calls: [...toolCallMessage.tool_calls],
+	};
+}
+
+function mergeAssistantToolCallSuffix(
+	toolCallMessage: ChatCompletionAssistantMessageParam & {
+		tool_calls: NonNullable<ChatCompletionAssistantMessageParam["tool_calls"]>;
+	},
+	suffix: ChatCompletionAssistantMessageParam,
+): ChatCompletionAssistantMessageParam {
+	const reasoningContent = mergeReasoningContent(
+		toolCallMessage.reasoning_content,
+		suffix.reasoning_content,
+	);
+	return {
+		...toolCallMessage,
+		content: mergeAssistantContent(toolCallMessage.content, suffix.content),
+		...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+		tool_calls: [...toolCallMessage.tool_calls],
+	};
+}
+
+function isAssistantTurnPrefixMessage(
+	message: ChatCompletionMessageParam | undefined,
+): message is ChatCompletionAssistantMessageParam {
+	return (
+		message?.role === "assistant" &&
+		!message.audio &&
+		!message.function_call &&
+		!message.refusal &&
+		(!Array.isArray(message.tool_calls) || message.tool_calls.length === 0)
+	);
+}
+
+function isAssistantToolCallMessage(
+	message: ChatCompletionMessageParam | undefined,
+): message is ChatCompletionAssistantMessageParam & {
+	tool_calls: NonNullable<ChatCompletionAssistantMessageParam["tool_calls"]>;
+} {
+	return (
+		message?.role === "assistant" &&
+		Array.isArray(message.tool_calls) &&
+		message.tool_calls.length > 0
+	);
+}
+
+function mergeAssistantContent(
+	left: ChatCompletionAssistantMessageParam["content"],
+	right: ChatCompletionAssistantMessageParam["content"],
+): ChatCompletionAssistantMessageParam["content"] {
+	if (!left || (Array.isArray(left) && left.length === 0)) return right;
+	if (!right || (Array.isArray(right) && right.length === 0)) return left;
+	if (typeof left === "string" && typeof right === "string") {
+		return `${left}
+${right}`;
+	}
+	if (Array.isArray(left) && Array.isArray(right)) return [...left, ...right];
+	return left;
+}
+
+function mergeReasoningContent(
+	left: string | null | undefined,
+	right: string | null | undefined,
+): string | null | undefined {
+	if (!left) return right;
+	if (!right) return left;
+	return `${left}
+${right}`;
+}
+
+// ============================================================
+// Request-construction layer
+// ============================================================
+
+const REASONING_EFFORTS = new Set<ReasoningEffort>([
+	"none",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+]);
+
+function isReasoningEffort(value: unknown): value is ReasoningEffort {
+	return (
+		typeof value === "string" && REASONING_EFFORTS.has(value as ReasoningEffort)
+	);
 }
 
 function dropOrphanToolOutputs(
@@ -161,7 +265,9 @@ function appendFinalInstruction(
 		if (message && isFinalInstructionTarget(message)) {
 			messages[index] = {
 				...message,
-				content: `${message.content}\n\n${instruction}`,
+				content: `${message.content}
+
+${instruction}`,
 			};
 			return;
 		}
@@ -342,21 +448,6 @@ function unsupportedReasoningCapabilityMode(
 	);
 }
 
-const REASONING_EFFORTS = new Set<ReasoningEffort>([
-	"none",
-	"minimal",
-	"low",
-	"medium",
-	"high",
-	"xhigh",
-]);
-
-function isReasoningEffort(value: unknown): value is ReasoningEffort {
-	return (
-		typeof value === "string" && REASONING_EFFORTS.has(value as ReasoningEffort)
-	);
-}
-
 function chatToolChoice(
 	toolChoice: ResponseToolChoice | undefined,
 ): ChatCompletionToolChoiceOption | undefined {
@@ -394,4 +485,78 @@ function normalizerContext(
 		supportsVideoInput:
 			input.capabilities.parameters.supported.has("input.video"),
 	};
+}
+
+function chatMessages(
+	input: BuildChatCompletionRequestInput,
+	output: OutputContractPlan,
+	tools: ToolPlan,
+): ChatCompletionMessageParam[] {
+	const context = normalizerContext(input, tools);
+	const history = input.session?.input_items
+		? normalizeResponseItems(input.session.input_items, input.request, context)
+		: [];
+	const current = normalizeCurrentInput(input.request, context);
+	const currentPrefixLength = systemPrefixLength(current);
+	const preamble = current.slice(0, currentPrefixLength);
+	const messages = [
+		...preamble,
+		...history,
+		...current.slice(currentPrefixLength),
+	];
+	if (output.jsonSchemaInstruction) {
+		appendFinalInstruction(messages, output.jsonSchemaInstruction);
+	}
+	return buildChatCompletionsMessages(dropOrphanToolOutputs(messages));
+}
+
+export async function buildChatCompletionRequest(
+	input: BuildChatCompletionRequestInput,
+): Promise<BuildChatCompletionRequestResult> {
+	const compatibility = planBridgeCompatibility({
+		provider: input.provider,
+		model: input.model,
+		request: input.request,
+		capabilities: input.capabilities,
+	});
+	const tools = planTools({
+		tools: input.request.tools,
+		toolChoice: input.request.tool_choice,
+		profile: {
+			...input.profile,
+			webSearch: input.webSearch,
+		},
+	});
+	assertNoRejectedCompatibility(input, compatibility);
+	const output = planOutputContract({
+		format: input.request.text?.format,
+		responseFormatDecision: compatibility.responseFormat,
+	});
+	const request: ChatCompletionCreateRequest = {
+		model: input.model,
+		messages: chatMessages(input, output, tools),
+	};
+	applyTools(request, input, tools);
+	if (output.providerResponseFormat !== undefined) {
+		request.response_format =
+			output.providerResponseFormat as ChatCompletionCreateRequest["response_format"];
+	}
+	const pluginCtx: GodexPluginContext = {
+		model: input.model,
+		provider: input.provider,
+	};
+	const plugins = input.plugins ?? [];
+	request.messages = await applyPluginChatMessagesHooks(
+		plugins,
+		request.messages,
+		pluginCtx,
+	);
+	applyRequestOptions(
+		request,
+		input.request,
+		input.capabilities,
+		input.provider,
+		input.model,
+	);
+	return { request, compatibility, tools, output };
 }

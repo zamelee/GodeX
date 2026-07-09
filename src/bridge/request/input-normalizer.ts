@@ -12,7 +12,7 @@ import {
 	canonicalizeFunctionArguments,
 	isValidFunctionArguments,
 } from "../../providers/shared/tool-arguments";
-import type { BridgeMessage, BridgeRole } from "../bridge-types";
+import type { BridgeMessage } from "../bridge-types";
 import type { ToolPlan } from "../tools";
 
 interface NormalizedToolOutput {

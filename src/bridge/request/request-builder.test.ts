@@ -12,9 +12,9 @@ import type { ProviderCapabilities } from "../compatibility";
 import { createToolPlanningProfile, type ToolPlanningProfile } from "../tools";
 import {
 	buildChatCompletionRequest,
-	buildChatMessages,
+	buildChatCompletionsMessages,
 	normalizeCurrentInput,
-} from "./request-builder";
+} from "./chat-completions-builder";
 
 const capabilities: ProviderCapabilities = {
 	parameters: { supported: new Set(["text.format"]) },
@@ -968,7 +968,7 @@ describe("buildChatCompletionRequest", () => {
 	});
 
 	test("merges consecutive assistant text messages", async () => {
-		const messages = buildChatMessages([
+		const messages = buildChatCompletionsMessages([
 			{
 				role: "assistant",
 				content: "Earlier answer.",
@@ -1011,7 +1011,7 @@ describe("normalizeCurrentInput", () => {
 			{ role: "system", content: "Use strict tone." },
 			{ role: "user", content: "Hello." },
 		]);
-		expect(buildChatMessages(normalized)).toEqual([
+		expect(buildChatCompletionsMessages(normalized)).toEqual([
 			{ role: "system", content: "Global rules." },
 			{ role: "system", content: "Use strict tone." },
 			{ role: "user", content: "Hello." },
