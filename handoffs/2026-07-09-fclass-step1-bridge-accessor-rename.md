@@ -288,3 +288,126 @@ Note: godex4 (pid 3756) no longer running. godex6 is the current keepalive per u
 Total to Codex++ uses Anthropic: ~6 hours from now. If we skip option 1 and go straight to Phase A step 2, we will still hit this stream bug at Phase B end-to-end smoke test, so the 1-2 h is unavoidable.
 
 If user explicitly wants to defer the bug fix to maximize parallel exploration, document the bug in commit message of the next change so future agents know where to find it.
+
+## Round 6 (2026-07-09 evening) - 7 e2e fails fixed
+
+placeholder
+
+## Round 6 (2026-07-09 evening) - 7 e2e fails fixed: test-expectation drift, not a bug
+
+User direction: proceed with recommended plan (fix stream bug first, frequent testing, frequent handoff updates).
+
+### Investigation recap
+
+Drilled down with file-based debug (console.error swallowed by bun test):
+
+1. bin/_cap.log showed cap_type=object has_params=true has_stream=true - capabilities correct
+2. applyRequestOptions logged SKIPPED: source.stream=false has_stream=true - source flag is false
+3. dispatcher logged DISPATCHER: ctx.request.stream=true - dispatcher sees true
+4. So request stream flips true to false between dispatcher and applyRequestOptions
+
+### Root cause: Path D wrap-mode is doing the flip on purpose
+
+src/responses/runtime.ts:66-78 (introduced by commit d6622ca, hardened by b37e737):
+
+```ts
+const mutableCtx = ctx as unknown as { request: ResponseCreateRequest };
+const wasStream = mutableCtx.request.stream;
+mutableCtx.request = { ...mutableCtx.request, stream: false };  // force false
+try {
+    const finalResponse = await this.syncPipeline.request(mutableCtx as ResponsesContext);
+    return wrapResponseObjectAsSseStream(finalResponse, ctx);
+} finally {
+    mutableCtx.request = { ...mutableCtx.request, stream: wasStream };
+}
+```
+
+b37e737 commit message (zamelee, 2026-07-09 15:43):
+> The upstream Chat Completions API returns SSE when stream:true is set, which the sync JSON parser cannot consume and produced a 502 Failed to parse JSON on every Codex++ stream request. Force ctx.request.stream to false for the duration of the sync call and restore the client original flag afterwards.
+
+So this is intentional design: wrap-mode converts client stream requests into a server-side sync loop (to absorb godex_chrome_* function calls), then re-wraps the final ResponseObject as a synthetic SSE stream for the client. The upstream Chat Completions provider never sees stream: true because it is consumed by the sync loop.
+
+The 7 e2e tests were written before wrap-mode existed and expected the upstream mock to receive body.stream === true. That assumption became false at commit d6622ca and never got updated.
+
+### Fix
+
+bun test with GODEX_STREAM_MODE=passthrough in shell env made all 7 tests pass (65/0/9). Fix:
+
+- Set process.env.GODEX_STREAM_MODE = passthrough at top of src/e2e/e2e.test.ts and src/e2e/trace.test.ts
+- E2E now exercises the real stream path (upstream mock sees body.stream === true)
+- wrap-mode fully covered by src/responses/runtime.test.ts (4 unit tests pass, including L140 wrap-mode stream forces upstream to non-streaming and restores the flag)
+
+### Verification
+
+After fix:
+- bun run check -> 862 pass / 0 fail / 2032 expect() / 139 files
+- bun run test:e2e -> 65 pass / 0 fail / 9 skip / 301 expect() / 11 files
+- 9 skipped = live e2e (need real API keys)
+
+### What the user asked
+
+User: 已经有 7 个 pre-existing fail，会埋下多大的坑？
+
+Answer: not deep. Fix was one-line env var per test file, no source code changes. The pre-existing 7 fails were test-expectation drift after a behavior change (Path D wrap-mode), not a functional bug. Phase B (Anthropic) is not blocked.
+
+### Commit
+
+- ebce510 on fork/main (pushed to zamelee/GodeX)
+- branch ref: 0f9a2ce -> ebce510
+- 2 files, +8 lines
+
+## Round 7 (2026-07-09 evening) - decision: continue with Phase A step 2
+
+User said 按你的建议干 (go with your recommendation) after I presented the original 3 options.
+
+After Round 6 cleared the test-expectation block, the recommended path is unchanged:
+1. ~~Fix stream bug~~ DONE (it was just test-expectation drift, fixed in ebce510)
+2. Phase A step 2: input-normalizer neutral types - 1.5 h
+3. Phase A step 3: message-builder neutral signature - 1.5 h
+4. Phase A step 4: split request-builder.ts into request-dispatcher + chat-completions-builder + anthropic-messages-builder stub - 1.5 h
+5. Phase A step 5-6: response-reconstructor + provider-exchange dispatcher swap - 0.5 h
+6. Phase A step 7: update 12 test files - 3-4 h
+7. Phase A step 8: full bun run check + bun run test:e2e iterate - 1 h
+8. Phase B: Anthropic pipeline implementation - 3 h
+
+User: 注意经常更新handoff，经常性的测试，前进得更稳一些 (frequently update handoff, frequently test, advance more steadily).
+
+So: small commits, handoff update after each commit, run bun run check and bun run test:e2e before each commit.
+
+## Live process state - UPDATED 2026-07-09 evening (after Round 6/7)
+
+| pid | process | port | role |
+|---|---|---|---|
+| 16976 | godex5 | 5679 | LLM gateway (long-running) |
+| 15124 | godex6 | 5680 | user primary LLM keepalive for Codex++ |
+| 2568 | godex7 | 5681 | Path D test gateway (auto-inject + wrap-mode + stream=false fix) |
+| 14412 | node | - | chrome-browser-mcp (CDP backend on 9224) |
+| 6800 | chrome | 9222 | user Chrome debug |
+
+Note: godex4 not running. godex6 is the current keepalive per user direction.
+
+## Recommended next actions (resume posture)
+
+1. Phase A step 2: input-normalizer emits neutral BridgeMessage[] instead of ChatCompletionMessageParam[] - 1.5 h
+2. bun run check
+3. Update handoff, commit
+4. Phase A step 3: message-builder neutral signature - 1.5 h
+5. ... and so on
+6. After each step, commit and update handoff. Do not batch.
+
+## Continuation commands
+
+```powershell
+# Verify clean state
+cd D:\Documents\VibeCoding\GodeX
+git log --oneline -5
+git status --short
+bun run check 2>&1 | tail -3
+bun run test:e2e 2>&1 | tail -3
+
+# Start Phase A step 2
+# File: src/bridge/request/input-normalizer.ts
+# Goal: change return type from ChatCompletionMessageParam[] to a neutral BridgeMessage[]
+# Files to touch: input-normalizer.ts + 1 test file
+# Estimate: 1.5 h
+```
