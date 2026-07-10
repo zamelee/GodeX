@@ -17,6 +17,11 @@ import {
 	MINIMAX_PROVIDER_NAME,
 	MINIMAX_PROVIDER_SPEC,
 } from "./minimax";
+import {
+	createMiniMaxAnthropicProviderEdge,
+	MINIMAX_ANTHROPIC_PROVIDER_NAME,
+	MINIMAX_ANTHROPIC_SPEC,
+} from "./minimax-anthropic";
 import { Registrar } from "./registrar";
 import {
 	createXiaomiProviderEdge,
@@ -54,12 +59,18 @@ export const ANTHROPIC_PROVIDER_DEFINITION = createProviderDefinition(
 	createAnthropicProviderEdge,
 );
 
+export const MINIMAX_ANTHROPIC_PROVIDER_DEFINITION = createProviderDefinition(
+	MINIMAX_ANTHROPIC_PROVIDER_NAME,
+	createMiniMaxAnthropicProviderEdge,
+);
+
 export const BUILTIN_PROVIDER_DEFINITIONS = [
 	DEEPSEEK_PROVIDER_DEFINITION,
 	ZHIPU_PROVIDER_DEFINITION,
 	MINIMAX_PROVIDER_DEFINITION,
 	XIAOMI_PROVIDER_DEFINITION,
 	ANTHROPIC_PROVIDER_DEFINITION,
+	MINIMAX_ANTHROPIC_PROVIDER_DEFINITION,
 ] as const satisfies readonly ProviderDefinition[];
 
 export const BUILTIN_PROVIDER_SPECS = [
@@ -68,6 +79,7 @@ export const BUILTIN_PROVIDER_SPECS = [
 	MINIMAX_PROVIDER_SPEC,
 	XIAOMI_PROVIDER_SPEC,
 	ANTHROPIC_MESSAGES_SPEC,
+	MINIMAX_ANTHROPIC_SPEC,
 ] as const;
 
 export function createBuiltinRegistrar(): Registrar {

@@ -33,7 +33,13 @@ function listProviderFiles(provider: string): string[] {
 
 describe("ProviderSpec runtime conformance", () => {
 	test("built-in providers use ProviderSpec package shape", () => {
-		for (const provider of ["deepseek", "minimax", "zhipu", "xiaomi"]) {
+		for (const provider of [
+			"deepseek",
+			"minimax",
+			"minimax-anthropic",
+			"zhipu",
+			"xiaomi",
+		]) {
 			expect(
 				validateProviderPackageShape(provider, listProviderFiles(provider)),
 			).toEqual([]);
@@ -49,6 +55,7 @@ describe("ProviderSpec runtime conformance", () => {
 			"minimax",
 			"xiaomi",
 			"anthropic",
+			"minimax-anthropic",
 		]);
 		expect(new Set(names).size).toBe(names.length);
 	});

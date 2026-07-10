@@ -1647,3 +1647,180 @@ M  `src/e2e/e2e.test.ts` + `src/e2e/trace.test.ts`
 - `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
 - `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
 - Studio.exe deferred per user directive.
+
+### Round 21 - 2026-07-10: Eliminate the 4 pre-existing test isolation failures
+
+__Status__: B4 stable on fork/main (`1d5f2af`). The 4 pre-existing fails are now gone. Baseline numbers updated to 1025 pass / 9 skip / 0 fail (was 1021 / 9 / 4).
+
+#### Diagnosis (from Round 20 handoff)
+
+The 4 fails were not production bugs and not regressions from any Phase B work. They were a **test isolation bug** in the harness:
+
+- `src/e2e/trace.test.ts:1` and `src/e2e/e2e.test.ts:12` write `process.env.GODEX_STREAM_MODE = "passthrough"` at module-load time (before any test runs).
+- `src/responses/runtime.ts:45` read `process.env.GODEX_STREAM_MODE` inside `ResponsesBridgeRuntime`'s constructor, every time it ran.
+- When bun:test loaded `e2e/trace.test.ts` and `src/responses/runtime.test.ts` in parallel (the default), the env mutation leaked into the runtime tests, flipping their assumption from "wrap" to "passthrough" and breaking 3 wrap-mode assertions.
+- A 4th test in `src/server/routes/responses/handler.test.ts:85` failed the same way because `createTestApp` routed through `new ResponsesBridgeRuntime()` (no env isolation).
+
+Single-file runs all passed. The flakiness was 100% parallel-only.
+
+#### Fix (Option B from the previous discussion)
+
+Move from "env read at construction time" to "constructor accepts explicit options, env only as fallback default":
+
+M  `src/responses/runtime.ts`
+  Exports new types `ResponsesStreamMode` and `ResponsesBridgeRuntimeOptions`. Constructor gains a 3rd parameter `options?: ResponsesBridgeRuntimeOptions` with fields `streamMode?` and `disableBrowserFunctionLoop?`. When the option is provided it takes precedence; when it is `undefined` the existing env-var fallback is used (production behavior unchanged).
+
+M  `src/context/application-services.ts`
+  `createApplicationServices` gains a 4th parameter `responsesOptions` that is forwarded to `new ResponsesBridgeRuntime(undefined, undefined, responsesOptions)`. Production callers still pass nothing and resolve from env.
+
+M  `src/context/application-context.ts`
+  `ApplicationContext` constructor gains a 5th parameter `responsesOptions` that is forwarded to `createApplicationServices`. Production and existing tests are unaffected (positional arg with default `{}`).
+
+M  `src/server/routes/responses/test-fixtures.ts`
+  `createTestApp` accepts a new `CreateTestAppOptions extends CreateTestProviderEdgeOptions` interface that adds `streamMode?`. The options are destructured, the `streamMode` is forwarded to `new ApplicationContext(...).`, and provider-edge options continue to work unchanged.
+
+M  `src/responses/runtime.test.ts`
+  The 3 failing wrap-mode tests now construct `new ResponsesBridgeRuntime(undefined, undefined, { streamMode: "wrap" })` (or pass `{ streamMode: "wrap" }` as the 3rd positional argument for the variants that already inject custom sync/stream pipelines). They no longer rely on env.
+
+M  `src/server/routes/responses/handler.test.ts`
+  The 4th failing test (`returns provider errors as HTTP status before SSE starts`) now constructs `createTestApp({ streamMode: "wrap", async request() { ... } })`. The rest of `createTestApp` callers are unaffected because the option is optional.
+
+M  `src/e2e/e2e.test.ts` + `src/e2e/trace.test.ts`
+  Both files removed the module-top `process.env.GODEX_STREAM_MODE = "passthrough"` line. `new ApplicationContext(config, registrar)` is now `new ApplicationContext(config, registrar, [], undefined, { streamMode: "passthrough" })`. The env antipattern is fully eliminated; passthrough mode is selected explicitly.
+
+#### Verification
+
+`bun test src/` -> 1025 pass / 9 skip / 0 fail / 1034 tests. Was 1021 / 9 / 4. All 4 previously-flaky tests now pass deterministically even when run alongside the e2e files in the same Bun process.
+
+`bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+
+`bun run check` -> 960 pass / 0 fail (was 960 / 4 fail).
+
+`bun run typecheck` -> clean.
+
+`bun run lint` -> 0 errors, 3 pre-existing warnings (anthropic-messages-builder.ts:108 + 2 messages-provider-client.ts, all unchanged from B3.4 baseline).
+
+#### Why this matters beyond fixing 4 fails
+
+- The env-mutation antipattern is gone. No future test file can accidentally inherit `GODEX_STREAM_MODE` from another file running in parallel.
+- The runtime is now properly **pure**: same inputs -> same behaviour, regardless of `process.env`. That makes it easier to test exhaustively without subprocess tricks.
+- Adding more runtime modes (e.g. a future `strict` or `debug` stream mode) is now a one-line change in `runtime.ts` plus tests that pass the option explicitly.
+- Production callers do not need to change. `new ResponsesBridgeRuntime()` with no options still resolves from env exactly as before.
+
+#### Files changed
+
+- 8 source files, +59 / -16 lines.
+- No `bin/` touched.
+- No `handoffs/` structure change.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| **B4.5 (eliminate test isolation fails)** | **DONE** | **this round** |
+| B5 (minimax-anthropic thin wrapper) | next | reuses B3 spec with `endpoint.defaultBaseURL = https://minnimax.chat` |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures (was 4; now fixed by this round).
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.
+
+### Round 22 - 2026-07-10: B5 - minimax-anthropic thin wrapper (6th builtin)
+
+__Status__: B4.5 stable on fork/main (`d610f9c`). B5 implementation complete; minimax-anthropic is now a registered 6th builtin provider, ready for B6 live E2E.
+
+#### Why this provider exists
+
+minnimax.chat exposes BOTH a Chat Completions endpoint (`/v1/chat/completions`) AND an Anthropic-protocol endpoint (`/v1/messages`). B3 registered the former as `minimax`. B5 registers the latter as `minimax-anthropic` so Codex++ can target minnimax.chat via either protocol depending on which model and which tool/calling path the user wants to exercise.
+
+#### Design: thin wrapper, zero duplicated logic
+
+minimax-anthropic does NOT duplicate the Anthropic spec. It reuses every accessor, stream delta, hook, capability map, tool-name codec, and protocol DTO from `src/providers/anthropic`. The only differences are:
+- name: `minimax-anthropic` (so Codex++ disambiguates from the OpenAI-protocol `minimax` provider)
+- endpoint.defaultBaseURL: `https://minnimax.chat` (overrides `https://api.anthropic.com`)
+- default model: `claude-3-5-sonnet-20241022` (same as upstream anthropic; minnimax.chat accepts the standard claude model ids)
+
+#### Files added
+
++ `src/providers/minimax-anthropic/spec.ts` (~85 lines)
+  Exports `MINIMAX_ANTHROPIC_BASE_URL`, `MINIMAX_ANTHROPIC_DEFAULT_BASE_URL`, `MINIMAX_ANTHROPIC_DEFAULT_MODEL`, `MINIMAX_ANTHROPIC_PROVIDER_NAME`, `createMiniMaxAnthropicSpec()` (factory form) and `MINIMAX_ANTHROPIC_SPEC` (singleton). Re-imports the Anthropic accessors, hooks, capabilities, codec, and protocol DTOs by reference.
+
++ `src/providers/minimax-anthropic/client.ts` (~40 lines)
+  `createMiniMaxAnthropicProviderEdge(config, plugins?)` mirrors anthropic/client.ts exactly: it builds a fresh spec, instantiates `MessagesProviderClient` pointing at the resolved base URL, and forwards `request` and `stream` to `createProviderEdge`. The HTTP transport is shared with the upstream anthropic provider because minnimax.chat is wire-compatible.
+
++ `src/providers/minimax-anthropic/index.ts` (~24 lines)
+  Barrel that re-exports the local factory + names. It deliberately does NOT re-export `AnthropicToolNameCodec` or the Anthropic protocol DTOs because the `src/module-boundaries` contract forbids cross-directory re-exports from an index.ts. Consumers that need the protocol types should import them from `../anthropic/protocol` or rely on the generic `ProviderSpec<AnthropicMessagesRequest, ...>` typing on the spec itself.
+
++ `src/providers/minimax-anthropic/spec.test.ts` (5 tests, 34 expect)
+  Validates identity (name, protocol, auth, base URL, default model, streamMode), codec isolation between factory calls, capability parity with anthropic, and that response accessors produce the same Anthropic-compatible shapes.
+
+#### Files modified
+
+M  `src/providers/builtin.ts`
+  Adds the minimax-anthropic import block, `MINIMAX_ANTHROPIC_PROVIDER_DEFINITION`, and appends the new entry to both `BUILTIN_PROVIDER_DEFINITIONS` and `BUILTIN_PROVIDER_SPECS`. Order is deterministic: deepseek, zhipu, minimax, xiaomi, anthropic, minimax-anthropic.
+
+M  `src/providers/provider-conformance.test.ts`
+  Adds `minimax-anthropic` to both the package-shape list and the expected-name list so the conformance loop covers the 6th builtin.
+
+#### Bugs / regressions caught during B5
+
+1. **Duplicate deepseek import** in builtin.ts after the first insertion: my initial patch inserted a deepseek import block before the existing one rather than alongside. Detected by `tsc --noEmit` reporting duplicate identifiers. Fixed by deduping the import block; left a single alphabetised set.
+2. **Cross-directory re-export violation** in index.ts: `src/module-boundaries.test.ts > subdirectory index.ts files only re-export modules from their own directory` caught `export { AnthropicToolNameCodec } from "../anthropic/..."` as a violation. Removed the cross-directory re-exports and replaced them with a comment pointing consumers at `../anthropic/protocol` for the protocol types. The factory spec still exposes the protocol types through its generic `ProviderSpec<AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicStreamEvent>` signature.
+3. **biome organizeImports** auto-fix on the four new/touched files (spec.ts, spec.test.ts, index.ts, builtin.ts). All four were alphabetised by biome `check --write`. No semantic change.
+4. **Python heredoc here-string apostrophe** in the PS7 write step: the literal 'apostrophe in a Python comment terminated the PS here-string early. Fixed by regenerating the spec.test.ts via a Python generator script written to bin/, which sidesteps PS quoting entirely.
+
+#### Test results
+
+`bun test src/providers/minimax-anthropic/` -> 5 pass / 0 fail / 34 expect.
+
+`bun test src/providers/provider-conformance.test.ts` -> 16 pass / 0 fail / 98 expect (covers 6 providers: deepseek, zhipu, minimax, xiaomi, anthropic, minimax-anthropic).
+
+`bun test src/` -> 1031 pass / 9 skip / 0 fail / 1040 tests. Was 1025 / 9 / 0 in R21. +6 tests, 0 regressions.
+
+`bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+
+`bun run check` -> 966 pass / 0 fail. Was 960 / 0 in R21. +6 tests, 0 regressions.
+
+`bun run typecheck` -> clean.
+
+`bun run lint` -> 0 errors, 3 pre-existing warnings (anthropic-messages-builder.ts:108 + 2 messages-provider-client.ts). Same 3 as the B3.4 baseline.
+
+#### Why B5 matters for the original Codex pain point
+
+User original issue: Codex++ was using a Chat Completions shim against minnimax.chat (the `minimax` provider). Chat Completions has known tool-call streaming limitations (no interleaved thinking, weaker tool_choice negotiation, etc.). The Anthropic Messages protocol gives Codex++ the native `tool_use` / thinking blocks / stop_reason semantics it actually expects. By registering a 6th builtin that points the SAME upstream at the Anthropic protocol instead of the Chat protocol, Codex++ can now pick the right wire format per model per task without any godex-side config change beyond choosing the provider name.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| B4.5 (eliminate test isolation fails) | DONE | commit `d610f9c` |
+| **B5 (minimax-anthropic thin wrapper)** | **DONE** | **this round** |
+| B6 (live E2E + Codex++ smoke) | next | `bun run build` -> `bin/godex-b5.exe` on a free port, then exercise /v1/responses sync + stream + tools with minimax-anthropic in the godex.yaml |
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures.
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.
