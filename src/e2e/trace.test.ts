@@ -1,5 +1,3 @@
-process.env.GODEX_STREAM_MODE = "passthrough";
-
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -394,7 +392,9 @@ async function startGodex(
 			endpoint: { base_url: mockBase },
 		}),
 	);
-	app = new ApplicationContext(config, registrar);
+	app = new ApplicationContext(config, registrar, [], undefined, {
+		streamMode: "passthrough",
+	});
 	godexServer = startServer({
 		config,
 		configPath: "trace-e2e-test",

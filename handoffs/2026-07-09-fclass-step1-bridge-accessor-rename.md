@@ -1558,3 +1558,92 @@ User original issue: `mcp__node_repl__js` returned `unsupported call` for every 
 - `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
 - `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
 - Studio.exe deferred per user directive (先把godex调好了来).
+
+### Round 21 - 2026-07-10: Eliminate the 4 pre-existing test isolation failures
+
+__Status__: B4 stable on fork/main (`1d5f2af`). The 4 pre-existing fails are now gone. Baseline numbers updated to 1025 pass / 9 skip / 0 fail (was 1021 / 9 / 4).
+
+#### Diagnosis (from Round 20 handoff)
+
+The 4 fails were not production bugs and not regressions from any Phase B work. They were a **test isolation bug** in the harness:
+
+- `src/e2e/trace.test.ts:1` and `src/e2e/e2e.test.ts:12` write `process.env.GODEX_STREAM_MODE = "passthrough"` at module-load time (before any test runs).
+- `src/responses/runtime.ts:45` read `process.env.GODEX_STREAM_MODE` inside `ResponsesBridgeRuntime`'s constructor, every time it ran.
+- When bun:test loaded `e2e/trace.test.ts` and `src/responses/runtime.test.ts` in parallel (the default), the env mutation leaked into the runtime tests, flipping their assumption from "wrap" to "passthrough" and breaking 3 wrap-mode assertions.
+- A 4th test in `src/server/routes/responses/handler.test.ts:85` failed the same way because `createTestApp` routed through `new ResponsesBridgeRuntime()` (no env isolation).
+
+Single-file runs all passed. The flakiness was 100% parallel-only.
+
+#### Fix (Option B from the previous discussion)
+
+Move from "env read at construction time" to "constructor accepts explicit options, env only as fallback default":
+
+M  `src/responses/runtime.ts`
+  Exports new types `ResponsesStreamMode` and `ResponsesBridgeRuntimeOptions`. Constructor gains a 3rd parameter `options?: ResponsesBridgeRuntimeOptions` with fields `streamMode?` and `disableBrowserFunctionLoop?`. When the option is provided it takes precedence; when it is `undefined` the existing env-var fallback is used (production behavior unchanged).
+
+M  `src/context/application-services.ts`
+  `createApplicationServices` gains a 4th parameter `responsesOptions` that is forwarded to `new ResponsesBridgeRuntime(undefined, undefined, responsesOptions)`. Production callers still pass nothing and resolve from env.
+
+M  `src/context/application-context.ts`
+  `ApplicationContext` constructor gains a 5th parameter `responsesOptions` that is forwarded to `createApplicationServices`. Production and existing tests are unaffected (positional arg with default `{}`).
+
+M  `src/server/routes/responses/test-fixtures.ts`
+  `createTestApp` accepts a new `CreateTestAppOptions extends CreateTestProviderEdgeOptions` interface that adds `streamMode?`. The options are destructured, the `streamMode` is forwarded to `new ApplicationContext(...).`, and provider-edge options continue to work unchanged.
+
+M  `src/responses/runtime.test.ts`
+  The 3 failing wrap-mode tests now construct `new ResponsesBridgeRuntime(undefined, undefined, { streamMode: "wrap" })` (or pass `{ streamMode: "wrap" }` as the 3rd positional argument for the variants that already inject custom sync/stream pipelines). They no longer rely on env.
+
+M  `src/server/routes/responses/handler.test.ts`
+  The 4th failing test (`returns provider errors as HTTP status before SSE starts`) now constructs `createTestApp({ streamMode: "wrap", async request() { ... } })`. The rest of `createTestApp` callers are unaffected because the option is optional.
+
+M  `src/e2e/e2e.test.ts` + `src/e2e/trace.test.ts`
+  Both files removed the module-top `process.env.GODEX_STREAM_MODE = "passthrough"` line. `new ApplicationContext(config, registrar)` is now `new ApplicationContext(config, registrar, [], undefined, { streamMode: "passthrough" })`. The env antipattern is fully eliminated; passthrough mode is selected explicitly.
+
+#### Verification
+
+`bun test src/` -> 1025 pass / 9 skip / 0 fail / 1034 tests. Was 1021 / 9 / 4. All 4 previously-flaky tests now pass deterministically even when run alongside the e2e files in the same Bun process.
+
+`bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+
+`bun run check` -> 960 pass / 0 fail (was 960 / 4 fail).
+
+`bun run typecheck` -> clean.
+
+`bun run lint` -> 0 errors, 3 pre-existing warnings (anthropic-messages-builder.ts:108 + 2 messages-provider-client.ts, all unchanged from B3.4 baseline).
+
+#### Why this matters beyond fixing 4 fails
+
+- The env-mutation antipattern is gone. No future test file can accidentally inherit `GODEX_STREAM_MODE` from another file running in parallel.
+- The runtime is now properly **pure**: same inputs -> same behaviour, regardless of `process.env`. That makes it easier to test exhaustively without subprocess tricks.
+- Adding more runtime modes (e.g. a future `strict` or `debug` stream mode) is now a one-line change in `runtime.ts` plus tests that pass the option explicitly.
+- Production callers do not need to change. `new ResponsesBridgeRuntime()` with no options still resolves from env exactly as before.
+
+#### Files changed
+
+- 8 source files, +59 / -16 lines.
+- No `bin/` touched.
+- No `handoffs/` structure change.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| **B4.5 (eliminate test isolation fails)** | **DONE** | **this round** |
+| B5 (minimax-anthropic thin wrapper) | next | reuses B3 spec with `endpoint.defaultBaseURL = https://minnimax.chat` |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures (was 4; now fixed by this round).
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.

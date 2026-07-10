@@ -9,8 +9,6 @@
 // default in production, which absorbs tool calls into a server-side sync
 // loop) is tested separately by src/responses/runtime.test.ts.
 
-process.env.GODEX_STREAM_MODE = "passthrough";
-
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { GodeXConfig } from "../config";
 import { ApplicationContext } from "../context/application-context";
@@ -573,7 +571,9 @@ beforeAll(async () => {
 		}),
 	);
 
-	const app = new ApplicationContext(config, registrar);
+	const app = new ApplicationContext(config, registrar, [], undefined, {
+		streamMode: "passthrough",
+	});
 
 	godexServer = startServer({
 		config,

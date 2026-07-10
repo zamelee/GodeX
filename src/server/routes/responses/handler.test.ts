@@ -88,6 +88,7 @@ describe("handleResponses", () => {
 		// the sync path. The HTTP-status mapping still applies.
 		const logs: CapturedLog[] = [];
 		const app = createTestApp({
+			streamMode: "wrap",
 			async request() {
 				throw new ProviderError(
 					"provider.upstream.rate_limit",

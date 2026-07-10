@@ -7,6 +7,7 @@ import type {
 	ResponseObject,
 } from "../../../protocol/openai/responses";
 import { Registrar } from "../../../providers/registrar";
+import type { ResponsesStreamMode } from "../../../responses/runtime";
 import {
 	type CreateTestProviderEdgeOptions,
 	createTestProviderEdge,
@@ -46,14 +47,25 @@ export function responseObject(ctx: ResponsesContext): ResponseObject {
 	};
 }
 
+export interface CreateTestAppOptions extends CreateTestProviderEdgeOptions {
+	streamMode?: ResponsesStreamMode;
+}
+
 export function createTestApp(
-	options: CreateTestProviderEdgeOptions = {},
+	options: CreateTestAppOptions = {},
 ): ApplicationContext {
+	const { streamMode, ...edgeOptions } = options;
 	const registrar = new Registrar();
 	registrar.registerFactory("zhipu", () =>
-		createTestProviderEdge({ name: "zhipu", ...options }),
+		createTestProviderEdge({ name: "zhipu", ...edgeOptions }),
 	);
-	return new ApplicationContext(testConfig, registrar);
+	return new ApplicationContext(
+		testConfig,
+		registrar,
+		[],
+		undefined,
+		streamMode ? { streamMode } : {},
+	);
 }
 
 export type CapturedLog = {

@@ -4,6 +4,7 @@ import { createLogger, type Logger } from "../logger";
 import type { Registrar } from "../providers/registrar";
 import { ModelResolver } from "../resolver";
 import type { ResponsesBridge } from "../responses/bridge";
+import type { ResponsesBridgeRuntimeOptions } from "../responses/runtime";
 import { ResponsesBridgeRuntime } from "../responses/runtime";
 import { createSearchService, type SearchService } from "../search";
 import type { ResponseSessionStore } from "../session";
@@ -27,6 +28,7 @@ export function createApplicationServices(
 	config: GodeXConfig,
 	registrar?: Registrar,
 	plugins: readonly GodexPlugin[] = [],
+	responsesOptions: ResponsesBridgeRuntimeOptions = {},
 ): ApplicationServices {
 	const logger = createLogger(config.logging);
 	const resolver = new ModelResolver({
@@ -46,7 +48,11 @@ export function createApplicationServices(
 		logger,
 		resolver,
 		registrar: configuredRegistrar,
-		responses: new ResponsesBridgeRuntime(),
+		responses: new ResponsesBridgeRuntime(
+			undefined,
+			undefined,
+			responsesOptions,
+		),
 		sessionStore: createResponseSessionStore(config.session),
 		search: createSearchService(config),
 		traceRecorder: trace.traceRecorder,

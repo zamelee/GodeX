@@ -19,21 +19,36 @@ export interface ResponsesStreamPipeline {
 	stream(ctx: ResponsesContext): Promise<ReadableStream<ResponseStreamEvent>>;
 }
 
+export type ResponsesStreamMode = "passthrough" | "wrap";
+
+export interface ResponsesBridgeRuntimeOptions {
+	streamMode?: ResponsesStreamMode;
+	disableBrowserFunctionLoop?: boolean;
+}
+
 export class ResponsesBridgeRuntime implements ResponsesBridge {
 	private readonly syncPipeline: ResponsesSyncPipeline;
 	private readonly streamPipeline: ResponsesStreamPipeline;
-	private readonly streamMode: "passthrough" | "wrap";
+	private readonly streamMode: ResponsesStreamMode;
 
 	constructor(
 		syncPipeline?: ResponsesSyncPipeline,
 		streamPipeline?: ResponsesStreamPipeline,
+		options: ResponsesBridgeRuntimeOptions = {},
 	) {
 		const exchange = new ProviderExchange();
 		const baseSync = syncPipeline ?? new SyncRequestPipeline(exchange);
-		this.syncPipeline =
-			process.env.GODEX_DISABLE_BROWSER_FUNCTION_LOOP === "1"
-				? baseSync
-				: new BrowserFunctionLoop(baseSync);
+		// Options take precedence over env so tests can pin behaviour
+		// without polluting process.env. Production callers (which pass
+		// no options) still resolve from env: GODEX_DISABLE_BROWSER_FUNCTION_LOOP=1
+		// short-circuits the BrowserFunctionLoop wrapper, and
+		// GODEX_STREAM_MODE=passthrough skips the wrap-mode SSE synthesis.
+		const disableBrowserLoop =
+			options.disableBrowserFunctionLoop ??
+			process.env.GODEX_DISABLE_BROWSER_FUNCTION_LOOP === "1";
+		this.syncPipeline = disableBrowserLoop
+			? baseSync
+			: new BrowserFunctionLoop(baseSync);
 		this.streamPipeline = streamPipeline ?? new StreamPipeline(exchange);
 		// Path D, plan D: stream mode absorbs function calls server-side via
 		// the sync loop, then re-emits the final ResponseObject as a synthetic
@@ -42,7 +57,10 @@ export class ResponsesBridgeRuntime implements ResponsesBridge {
 		// to fall back to the original behavior (function calls delivered to
 		// the client; useful for clients that execute them locally).
 		this.streamMode =
-			process.env.GODEX_STREAM_MODE === "passthrough" ? "passthrough" : "wrap";
+			options.streamMode ??
+			(process.env.GODEX_STREAM_MODE === "passthrough"
+				? "passthrough"
+				: "wrap");
 	}
 
 	async request(ctx: ResponsesContext): Promise<ResponseObject> {

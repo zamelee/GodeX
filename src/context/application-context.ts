@@ -4,6 +4,7 @@ import type { Logger } from "../logger";
 import type { Registrar } from "../providers/registrar";
 import type { ModelResolver } from "../resolver";
 import type { ResponsesBridge } from "../responses/bridge";
+import type { ResponsesBridgeRuntimeOptions } from "../responses/runtime";
 import type { SearchService } from "../search";
 import type { ResponseSessionStore } from "../session";
 import type { TraceRecorder } from "../trace";
@@ -27,8 +28,14 @@ export class ApplicationContext {
 		registrar?: Registrar,
 		plugins: readonly GodexPlugin[] = [],
 		configPath?: string,
+		responsesOptions: ResponsesBridgeRuntimeOptions = {},
 	) {
-		const services = createApplicationServices(config, registrar);
+		const services = createApplicationServices(
+			config,
+			registrar,
+			plugins,
+			responsesOptions,
+		);
 		this.config = config;
 		this.logger = services.logger;
 		this.resolver = services.resolver;

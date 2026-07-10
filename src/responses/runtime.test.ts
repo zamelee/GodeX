@@ -124,7 +124,9 @@ describe("ResponsesBridgeRuntime", () => {
 		const ctx = createMockCtx(provider, sessionStore);
 
 		const events = await readStream(
-			await new ResponsesBridgeRuntime().stream(ctx),
+			await new ResponsesBridgeRuntime(undefined, undefined, {
+				streamMode: "wrap",
+			}).stream(ctx),
 		);
 
 		expect(events.at(-1)).toMatchObject({
@@ -159,6 +161,7 @@ describe("ResponsesBridgeRuntime", () => {
 				},
 			},
 			undefined,
+			{ streamMode: "wrap" },
 		);
 
 		await bridge.stream(ctx);
@@ -196,6 +199,7 @@ describe("ResponsesBridgeRuntime", () => {
 					return stream;
 				},
 			},
+			{ streamMode: "wrap" },
 		);
 
 		const responseResult = await bridge.request(ctx);
