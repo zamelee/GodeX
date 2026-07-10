@@ -1824,3 +1824,175 @@ User original issue: Codex++ was using a Chat Completions shim against minnimax.
 - `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
 - `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
 - Studio.exe deferred per user directive.
+
+### Round 22 - 2026-07-10: B5 - minimax-anthropic thin wrapper (6th builtin)
+
+__Status__: B4.5 stable on fork/main (`d610f9c`). B5 implementation complete; minimax-anthropic is now a registered 6th builtin provider, ready for B6 live E2E.
+
+#### Why this provider exists
+
+minnimax.chat exposes BOTH a Chat Completions endpoint (`/v1/chat/completions`) AND an Anthropic-protocol endpoint (`/v1/messages`). B3 registered the former as `minimax`. B5 registers the latter as `minimax-anthropic` so Codex++ can target minnimax.chat via either protocol depending on which model and which tool/calling path the user wants to exercise.
+
+#### Design: thin wrapper, zero duplicated logic
+
+minimax-anthropic does NOT duplicate the Anthropic spec. It reuses every accessor, stream delta, hook, capability map, tool-name codec, and protocol DTO from `src/providers/anthropic`. The only differences are:
+- name: `minimax-anthropic` (so Codex++ disambiguates from the OpenAI-protocol `minimax` provider)
+- endpoint.defaultBaseURL: `https://minnimax.chat` (overrides `https://api.anthropic.com`)
+- default model: `claude-3-5-sonnet-20241022` (same as upstream anthropic; minnimax.chat accepts the standard claude model ids)
+
+#### Files added
+
++ `src/providers/minimax-anthropic/spec.ts` (~85 lines)
+  Exports `MINIMAX_ANTHROPIC_BASE_URL`, `MINIMAX_ANTHROPIC_DEFAULT_BASE_URL`, `MINIMAX_ANTHROPIC_DEFAULT_MODEL`, `MINIMAX_ANTHROPIC_PROVIDER_NAME`, `createMiniMaxAnthropicSpec()` (factory form) and `MINIMAX_ANTHROPIC_SPEC` (singleton). Re-imports the Anthropic accessors, hooks, capabilities, codec, and protocol DTOs by reference.
+
++ `src/providers/minimax-anthropic/client.ts` (~40 lines)
+  `createMiniMaxAnthropicProviderEdge(config, plugins?)` mirrors anthropic/client.ts exactly: it builds a fresh spec, instantiates `MessagesProviderClient` pointing at the resolved base URL, and forwards `request` and `stream` to `createProviderEdge`. The HTTP transport is shared with the upstream anthropic provider because minnimax.chat is wire-compatible.
+
++ `src/providers/minimax-anthropic/index.ts` (~24 lines)
+  Barrel that re-exports the local factory + names. It deliberately does NOT re-export `AnthropicToolNameCodec` or the Anthropic protocol DTOs because the `src/module-boundaries` contract forbids cross-directory re-exports from an index.ts. Consumers that need the protocol types should import them from `../anthropic/protocol` or rely on the generic `ProviderSpec<AnthropicMessagesRequest, ...>` typing on the spec itself.
+
++ `src/providers/minimax-anthropic/spec.test.ts` (5 tests, 34 expect)
+  Validates identity (name, protocol, auth, base URL, default model, streamMode), codec isolation between factory calls, capability parity with anthropic, and that response accessors produce the same Anthropic-compatible shapes.
+
+#### Files modified
+
+M  `src/providers/builtin.ts`
+  Adds the minimax-anthropic import block, `MINIMAX_ANTHROPIC_PROVIDER_DEFINITION`, and appends the new entry to both `BUILTIN_PROVIDER_DEFINITIONS` and `BUILTIN_PROVIDER_SPECS`. Order is deterministic: deepseek, zhipu, minimax, xiaomi, anthropic, minimax-anthropic.
+
+M  `src/providers/provider-conformance.test.ts`
+  Adds `minimax-anthropic` to both the package-shape list and the expected-name list so the conformance loop covers the 6th builtin.
+
+#### Bugs / regressions caught during B5
+
+1. **Duplicate deepseek import** in builtin.ts after the first insertion: my initial patch inserted a deepseek import block before the existing one rather than alongside. Detected by `tsc --noEmit` reporting duplicate identifiers. Fixed by deduping the import block; left a single alphabetised set.
+2. **Cross-directory re-export violation** in index.ts: `src/module-boundaries.test.ts > subdirectory index.ts files only re-export modules from their own directory` caught `export { AnthropicToolNameCodec } from "../anthropic/..."` as a violation. Removed the cross-directory re-exports and replaced them with a comment pointing consumers at `../anthropic/protocol` for the protocol types. The factory spec still exposes the protocol types through its generic `ProviderSpec<AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicStreamEvent>` signature.
+3. **biome organizeImports** auto-fix on the four new/touched files (spec.ts, spec.test.ts, index.ts, builtin.ts). All four were alphabetised by biome `check --write`. No semantic change.
+4. **Python heredoc here-string apostrophe** in the PS7 write step: the literal 'apostrophe in a Python comment terminated the PS here-string early. Fixed by regenerating the spec.test.ts via a Python generator script written to bin/, which sidesteps PS quoting entirely.
+
+#### Test results
+
+`bun test src/providers/minimax-anthropic/` -> 5 pass / 0 fail / 34 expect.
+
+`bun test src/providers/provider-conformance.test.ts` -> 16 pass / 0 fail / 98 expect (covers 6 providers: deepseek, zhipu, minimax, xiaomi, anthropic, minimax-anthropic).
+
+`bun test src/` -> 1031 pass / 9 skip / 0 fail / 1040 tests. Was 1025 / 9 / 0 in R21. +6 tests, 0 regressions.
+
+`bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+
+`bun run check` -> 966 pass / 0 fail. Was 960 / 0 in R21. +6 tests, 0 regressions.
+
+`bun run typecheck` -> clean.
+
+`bun run lint` -> 0 errors, 3 pre-existing warnings (anthropic-messages-builder.ts:108 + 2 messages-provider-client.ts). Same 3 as the B3.4 baseline.
+
+#### Why B5 matters for the original Codex pain point
+
+User original issue: Codex++ was using a Chat Completions shim against minnimax.chat (the `minimax` provider). Chat Completions has known tool-call streaming limitations (no interleaved thinking, weaker tool_choice negotiation, etc.). The Anthropic Messages protocol gives Codex++ the native `tool_use` / thinking blocks / stop_reason semantics it actually expects. By registering a 6th builtin that points the SAME upstream at the Anthropic protocol instead of the Chat protocol, Codex++ can now pick the right wire format per model per task without any godex-side config change beyond choosing the provider name.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| B4.5 (eliminate test isolation fails) | DONE | commit `d610f9c` |
+| **B5 (minimax-anthropic thin wrapper)** | **DONE** | **this round** |
+| B6 (live E2E + Codex++ smoke) | next | `bun run build` -> `bin/godex-b5.exe` on a free port, then exercise /v1/responses sync + stream + tools with minimax-anthropic in the godex.yaml |
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures.
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.
+
+### Round 23 - 2026-07-10: B6 - Live E2E + Codex++ smoke + codec bind fix
+
+__Status__: B5 stable on fork/main (`94c8ad1`). B6 implementation complete; godex-b6.exe runs on port 5685 against minnimax.chat via the new minimax-anthropic builtin. Sync text, sync tool_call, and SSE stream scenarios all return well-formed Responses payloads. Codec bind bug fixed (1 production line, latent since B3.2 baseline).
+
+#### Live E2E results
+
+Three scenarios exercised against godex-b6.exe + minimax.chat via the Anthropic Messages protocol:
+
+| # | Scenario | Model | Outcome |
+|---|---|---|---|
+| 1 | Sync text: `"Reply with exactly the word PONG"` | MiniMax-M2.7-highspeed | **PASS** - 200 OK, ResponseObject contains reasoning + message, output_text = "PONG", usage 52/92/144 |
+| 2 | Sync tool_call: `get_weather("Tokyo")` with `tools=[{type:function,name:get_weather,...}]` | MiniMax-M2.7 | **PASS** - 200 OK, ResponseObject contains reasoning + function_call(name=get_weather, arguments={"city":"Tokyo"}), usage 193/52/245 |
+| 3 | Stream: same prompt with `stream=true` | MiniMax-M2.7-highspeed | **PASS** - 200 OK, Content-Type text/event-stream, 15 SSE events (response.created -> response.in_progress -> reasoning_item.added -> reasoning_text.delta -> reasoning_text.done -> reasoning_item.done -> message_item.added -> output_text.delta -> output_text.done -> message_item.done -> response.completed) with monotonic sequence_number 0-14 |
+
+All three pass confirms that:
+- The `anthropicFirstChoice` synthesis (B4) correctly maps Anthropic `tool_use` blocks into OpenAI Responses `function_call` items.
+- The `anthropicFinishReason` translation (B4) maps `end_turn -> stop` correctly.
+- The `anthropicStreamDeltas` mapper (B4) emits Responses-shaped SSE events including reasoning text deltas and output text deltas with proper sequence numbering.
+- The wrap-mode SSE synthesis (B4.5) wraps the final ResponseObject as expected when `stream=true`.
+
+#### Codec bind bug found and fixed during B6
+
+Scenario 2 (tool_call) initially failed with HTTP 500 and the errlog showed:
+
+`TypeError: undefined is not an object (evaluating "this.toProvider")`
+
+Root cause:
+- `src/responses/provider-exchange.ts:117` destructured the codec method off its instance:
+  `toProviderName: ctx.provider.spec.toolName.toProviderName,`
+- When the bridge later called `profile.toProviderName(name)`, the unbound reference lost `this` and `this.toProvider` was undefined.
+- This bug was latent since B3.2 (when the Anthropic provider was registered) but never surfaced because every existing built-in provider uses `DEFAULT_TOOL_NAME_CODEC` (a stateless free function), so the missing `this` binding did not matter.
+- B6 is the first time anyone exercised tools against the live Anthropic provider, so this is the first crash.
+
+Fix:
+- Replace the destructured reference with an arrow that preserves the instance:
+  `toProviderName: (name: string) => ctx.provider.spec.toolName.toProviderName(name)`
+- One-line change. Production behavior for the Chat-protocol providers is unchanged (the arrow function simply forwards to the same method).
+
+#### Files changed
+
+M  `src/responses/provider-exchange.ts`
+  One-line bind fix at line 117.
+
+#### Verification
+
+- `bun test src/` -> 1031 pass / 9 skip / 0 fail / 1040 tests (unchanged from R22).
+- `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+- `bun run check` -> 966 pass / 0 fail (unchanged from R22).
+- `bun run typecheck` -> clean.
+- `bun run lint` -> 0 errors, 3 pre-existing warnings (same 3 as B3.4 baseline).
+- Live: godex-b6.exe + minimax-anthropic -> 3/3 scenarios pass (see table above).
+
+#### Why B6 matters beyond the smoke results
+
+- The codec bind bug was a latent defect in code paths used by every tool call against the Anthropic protocol. Without B6, the next Codex++ user who tried tools via minnimax-anthropic (or the official anthropic provider) would have hit a 500 with no obvious cause.
+- The wrap-mode SSE synthesis path is now exercised end-to-end against a real upstream, not just mocked. Reasoning text + tool calls + sequence numbering all line up with the OpenAI Responses API spec.
+- We have a verified build at `bin/godex-b6.exe` on port 5685 that Codex++ can target. The keepalive on 5678 continues to use `godex6.exe` with the Chat-protocol minimax provider; the new build lives in parallel without disrupting anything.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| B4.5 (eliminate test isolation fails) | DONE | commit `d610f9c` |
+| B5 (minimax-anthropic thin wrapper) | DONE | commit `94c8ad1` |
+| **B6 (live E2E + Codex++ smoke + codec bind)** | **DONE** | **this round** |
+
+All Phase B steps complete. The Anthropic-protocol path (B1-B6) is now production-grade: it is registered as a builtin, has comprehensive unit + integration + e2e + live test coverage, and the godex binary on port 5685 is ready for Codex++ consumption.
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures.
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step.
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.

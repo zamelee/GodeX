@@ -114,7 +114,8 @@ async function buildProviderRequest(
 		profile: createToolPlanningProfile({
 			provider: ctx.provider.name,
 			capabilities: ctx.provider.spec.capabilities,
-			toProviderName: ctx.provider.spec.toolName.toProviderName,
+			toProviderName: (name: string) =>
+				ctx.provider.spec.toolName.toProviderName(name),
 		}),
 		session: "session" in options ? options.session : ctx.session,
 		plugins: ctx.app.plugins,
