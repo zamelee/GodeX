@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ANTHROPIC_PROVIDER_NAME } from "./anthropic";
 import { createBuiltinRegistrar } from "./builtin";
 import { DEEPSEEK_PROVIDER_NAME } from "./deepseek";
 import { MINIMAX_PROVIDER_NAME } from "./minimax";
@@ -30,6 +31,11 @@ describe("createBuiltinRegistrar", () => {
 				credentials: { api_key: "xiaomi-key" },
 				endpoint: { base_url: "https://xiaomi.example.test" },
 			},
+			[ANTHROPIC_PROVIDER_NAME]: {
+				spec: ANTHROPIC_PROVIDER_NAME,
+				credentials: { api_key: "anthropic-key" },
+				endpoint: { base_url: "https://anthropic.example.test" },
+			},
 		});
 
 		expect(registrar.list()).toEqual([
@@ -37,6 +43,7 @@ describe("createBuiltinRegistrar", () => {
 			MINIMAX_PROVIDER_NAME,
 			ZHIPU_PROVIDER_NAME,
 			XIAOMI_PROVIDER_NAME,
+			ANTHROPIC_PROVIDER_NAME,
 		]);
 		expect(registrar.resolve(DEEPSEEK_PROVIDER_NAME).name).toBe(
 			DEEPSEEK_PROVIDER_NAME,

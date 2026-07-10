@@ -1216,3 +1216,97 @@ None. No runtime code added beyond accessor stubs (which return safe defaults). 
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
 - Provider minimax upstream 422 on function parameters (external, not bridge regression).
 - Studio.exe improvements deferred per user request.
+
+
+### Round 17 - 2026-07-10: Phase B3.3 (Anthropic client + index + register) Complete
+
+__Status__: Phase B3.3 in production. `bun run check` shows **893 pass / 0 fail / 2145 expect()** (baseline 882 + 11 new B3.3 tests). `bun run test:e2e` shows **65 pass / 9 skip / 0 fail / 301 expect()** — exact baseline. `bun run typecheck` clean.
+
+#### B3.3 deliverables
+
+8 files changed (4 new, 4 modified):
+
+| File | Status | Purpose |
+|---|---|---|
+| `anthropic/messages-api.ts` | NEW | `MessagesApi` class + `messagesApi()` factory (Anthropic-specific HTTP client) |
+| `anthropic/messages-provider-client.ts` | NEW | `MessagesProviderClient` (mirrors ChatProviderClient, uses MessagesApi) |
+| `anthropic/client.ts` | NEW | `createAnthropicProviderEdge(config, plugins?)` (ProviderEdge factory) |
+| `anthropic/client.test.ts` | NEW | 6 unit tests covering edge construction, spec isolation, endpoint semantics |
+| `anthropic/index.ts` | MODIFIED | expanded barrel to include spec/hooks/codec/client |
+| `providers/builtin.ts` | MODIFIED | registered Anthropic as 5th builtin provider |
+| `providers/builtin.test.ts` | MODIFIED | expects 5 providers in registrar list (was 4) |
+| `providers/provider-conformance.test.ts` | MODIFIED | split generic spec assertions from Chat-specific assertions so Anthropic passes |
+
+#### Design choices (locked)
+
+**Additive posture**: zero changes to existing Chat provider code (`chat-api.ts`, `chat-provider-client.ts`, `chat-completions-builder.ts` all untouched). Anthropic is a parallel implementation that mirrors the pattern.
+
+**MessagesApi (decorator-based HTTP client)**:
+- Endpoint: `v1/messages` (relative to baseURL — `createAnthropicProviderEdge` resolves to `https://api.anthropic.com/v1/messages` by default).
+- Headers: `x-api-key: <key>` + `anthropic-version: 2023-06-01` (the version Anthropic pins at).
+- Two decorator methods: `messages(request)` → sync `AnthropicMessagesResponse`, `streamMessages(request)` → `JsonServerSentEventStream<AnthropicStreamEvent>`.
+- `JsonStreamResultExtractor` reused from shared (Bun SSE parser, protocol-agnostic).
+
+**MessagesProviderClient (error wrapping + timeout handling)**:
+- Mirrors `ChatProviderClient.request()` / `.stream()` structure exactly.
+- Error wrapping helper functions (`wrapMessagesProviderError`, `providerErrorCode`, `extractErrorMessage`, `safeResponseJson`) are **duplicated from chat-provider-client.ts**. A TODO is left in the file: `Phase B4 will extract wrapProviderError to src/providers/shared/provider-error.ts so both clients (and any future protocol) can reuse it.`
+- Stream method forces `stream: true` on the request (Anthropic's `messages()` endpoint serves both; the upstream behavior changes when stream is true).
+
+**createAnthropicProviderEdge**:
+- Calls `createAnthropicSpec()` (B3.2) to get a fresh spec with its own codec instance.
+- Constructs `MessagesProviderClient` with resolved baseURL (`config.endpoint?.base_url ?? spec.endpoint.defaultBaseURL`).
+- Returns `createProviderEdge({spec, config, plugins, request, stream})` — standard edge shape.
+
+**Registry update**:
+- `builtin.ts` adds `ANTHROPIC_PROVIDER_DEFINITION = createProviderDefinition(ANTHROPIC_PROVIDER_NAME, createAnthropicProviderEdge)` and includes it in `BUILTIN_PROVIDER_DEFINITIONS` + `BUILTIN_PROVIDER_SPECS`.
+- Anthropic is the **5th** registered provider after deepseek/zhipu/minimax/xiaomi.
+
+**Barrel expansion**:
+- `src/providers/anthropic/index.ts` now re-exports:
+  - `protocol/*` (B3.1)
+  - `AnthropicToolNameCodec` + constants (B3.2)
+  - `anthropicPatchRequest`, `ANTHROPIC_SPEC_CAPABILITIES` (B3.2)
+  - `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_BASE_URL`, `ANTHROPIC_DEFAULT_MODEL`, `ANTHROPIC_MESSAGES_SPEC`, `ANTHROPIC_PROVIDER_NAME`, `createAnthropicSpec` (B3.2)
+  - `createAnthropicProviderEdge` (B3.3)
+
+#### Test coverage (6 client tests + 5 conformance split = 11 new)
+
+`client.test.ts`:
+1. `createAnthropicProviderEdge` returns a ProviderEdge bound to anthropic with correct identity.
+2. Uses default base URL when no override provided.
+3. Spec keeps its default base URL regardless of config override (override is applied inside the client, not on the spec).
+4. Provider edge exposes `request` + `stream` functions.
+5. Factory uses fresh spec instance with independent codec (3 edges = 3 distinct codecs).
+6. Provider edge stream method is bound to client (callable multiple times).
+
+`provider-conformance.test.ts`:
+- Split into two loops:
+  - **Generic** (runs for every provider including Anthropic): capabilities, endpoint URL prefix, toolName returns string, response/stream accessors are functions.
+  - **Chat-specific** (only when `protocol === CHAT_COMPLETIONS_PROTOCOL`): bearer auth + stateless codec identity pass-through.
+
+#### Bugs / regressions caught during B3.3
+
+1. **`Biome import order`**: alphabetically sorted imports triggered lint:fix on 7 files. Cosmetic, no behavior change.
+2. **`provider-conformance.test.ts` Chat-specific assumptions**: the original loop asserted `protocol === CHAT_COMPLETIONS_PROTOCOL`, `auth === BEARER_AUTH`, and `fromProviderName("provider_name") === "provider_name"` for every builtin. Anthropic violates all three. Split into generic + Chat-specific loops (the Chat-specific loop now skips non-Chat specs via `if (spec.protocol !== CHAT_COMPLETIONS_PROTOCOL) continue`).
+3. **`builtin.test.ts`**: previously expected exactly 4 registered providers. Updated to 5.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit b9b00ee |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user "好" |
+| B3.1 (DTOs) | DONE | commit 9a90c3c |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit 81fdcac |
+| B3.3 (client + index + register) | DONE | this round; 4 new + 4 modified / 11 new tests |
+| B3.4 (fill anthropic-messages-builder.ts, OQ3 fold-in) | next | translates ResponseCreateRequest → AnthropicMessagesRequest using BridgeMessage[].content blocks |
+| B3.5 (comprehensive builder tests) | next | |
+| B4 (stream transformer + sync reconstructor) | pending | fills the response/stream accessor stubs from B3.2 |
+| B5 (minimax-anthropic thin wrapper + register) | pending | reuses B3 spec with `endpoint.defaultBaseURL = https://minnimax.chat` |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
+- Provider minimax upstream 422 on function parameters (external, not bridge regression).
+- Studio.exe improvements deferred per user request.

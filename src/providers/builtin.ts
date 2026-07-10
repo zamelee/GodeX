@@ -1,4 +1,9 @@
 import {
+	ANTHROPIC_MESSAGES_SPEC,
+	ANTHROPIC_PROVIDER_NAME,
+	createAnthropicProviderEdge,
+} from "./anthropic";
+import {
 	createDeepSeekProviderEdge,
 	DEEPSEEK_PROVIDER_NAME,
 	DEEPSEEK_PROVIDER_SPEC,
@@ -44,11 +49,17 @@ export const XIAOMI_PROVIDER_DEFINITION = createProviderDefinition(
 	createXiaomiProviderEdge,
 );
 
+export const ANTHROPIC_PROVIDER_DEFINITION = createProviderDefinition(
+	ANTHROPIC_PROVIDER_NAME,
+	createAnthropicProviderEdge,
+);
+
 export const BUILTIN_PROVIDER_DEFINITIONS = [
 	DEEPSEEK_PROVIDER_DEFINITION,
 	ZHIPU_PROVIDER_DEFINITION,
 	MINIMAX_PROVIDER_DEFINITION,
 	XIAOMI_PROVIDER_DEFINITION,
+	ANTHROPIC_PROVIDER_DEFINITION,
 ] as const satisfies readonly ProviderDefinition[];
 
 export const BUILTIN_PROVIDER_SPECS = [
@@ -56,6 +67,7 @@ export const BUILTIN_PROVIDER_SPECS = [
 	ZHIPU_PROVIDER_SPEC,
 	MINIMAX_PROVIDER_SPEC,
 	XIAOMI_PROVIDER_SPEC,
+	ANTHROPIC_MESSAGES_SPEC,
 ] as const;
 
 export function createBuiltinRegistrar(): Registrar {

@@ -40,31 +40,45 @@ describe("ProviderSpec runtime conformance", () => {
 		}
 	});
 
-	test("built-in provider specs include deepseek, zhipu, minimax, and xiaomi with unique names", () => {
+	test("built-in provider specs include deepseek, zhipu, minimax, xiaomi, and anthropic with unique names", () => {
 		const names = BUILTIN_PROVIDER_SPECS.map((spec) => spec.name);
 
-		expect(names).toEqual(["deepseek", "zhipu", "minimax", "xiaomi"]);
+		expect(names).toEqual([
+			"deepseek",
+			"zhipu",
+			"minimax",
+			"xiaomi",
+			"anthropic",
+		]);
 		expect(new Set(names).size).toBe(names.length);
 	});
 
 	for (const spec of BUILTIN_PROVIDER_SPECS) {
-		test(`${spec.name} spec exposes protocol, capabilities, accessors, and toolName`, () => {
-			expect(spec.protocol).toBe(CHAT_COMPLETIONS_PROTOCOL);
+		test(`${spec.name} spec exposes generic ProviderSpec shape`, () => {
+			// Generic shape applies to every protocol: parameters, response formats,
+			// endpoint URL, and the four required accessors + toolName codec.
 			expect(spec.capabilities.parameters.supported.size).toBeGreaterThan(0);
 			expect(spec.capabilities.responseFormats.supported.size).toBeGreaterThan(
 				0,
 			);
 			expect(spec.endpoint.defaultBaseURL).toStartWith("https://");
-			expect(spec.auth).toBe(BEARER_AUTH);
 			expect(spec.toolName.toProviderName("local.shell")).toBeString();
-			expect(spec.toolName.fromProviderName("provider_name")).toBe(
-				"provider_name",
-			);
 			expect(spec.response.firstChoice).toBeFunction();
 			expect(spec.response.finishReason).toBeFunction();
 			expect(spec.response.outputText).toBeFunction();
 			expect(spec.response.usage).toBeFunction();
 			expect(spec.stream.deltas).toBeFunction();
+		});
+	}
+
+	for (const spec of BUILTIN_PROVIDER_SPECS) {
+		if (spec.protocol !== CHAT_COMPLETIONS_PROTOCOL) continue;
+		test(`${spec.name} Chat-spec assertions: bearer auth + stateless codec`, () => {
+			expect(spec.protocol).toBe(CHAT_COMPLETIONS_PROTOCOL);
+			expect(spec.auth).toBe(BEARER_AUTH);
+			expect(spec.toolName.fromProviderName("provider_name")).toBe(
+				"provider_name",
+			);
 		});
 	}
 
