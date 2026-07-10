@@ -1996,3 +1996,198 @@ All Phase B steps complete. The Anthropic-protocol path (B1-B6) is now productio
 - `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step.
 - `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
 - Studio.exe deferred per user directive.
+
+### Round 23 - 2026-07-10: B6 - Live E2E + Codex++ smoke + codec bind fix
+
+__Status__: B5 stable on fork/main (`94c8ad1`). B6 implementation complete; godex-b6.exe runs on port 5685 against minnimax.chat via the new minimax-anthropic builtin. Sync text, sync tool_call, and SSE stream scenarios all return well-formed Responses payloads. Codec bind bug fixed (1 production line, latent since B3.2 baseline).
+
+#### Live E2E results
+
+Three scenarios exercised against godex-b6.exe + minimax.chat via the Anthropic Messages protocol:
+
+| # | Scenario | Model | Outcome |
+|---|---|---|---|
+| 1 | Sync text: `"Reply with exactly the word PONG"` | MiniMax-M2.7-highspeed | **PASS** - 200 OK, ResponseObject contains reasoning + message, output_text = "PONG", usage 52/92/144 |
+| 2 | Sync tool_call: `get_weather("Tokyo")` with `tools=[{type:function,name:get_weather,...}]` | MiniMax-M2.7 | **PASS** - 200 OK, ResponseObject contains reasoning + function_call(name=get_weather, arguments={"city":"Tokyo"}), usage 193/52/245 |
+| 3 | Stream: same prompt with `stream=true` | MiniMax-M2.7-highspeed | **PASS** - 200 OK, Content-Type text/event-stream, 15 SSE events (response.created -> response.in_progress -> reasoning_item.added -> reasoning_text.delta -> reasoning_text.done -> reasoning_item.done -> message_item.added -> output_text.delta -> output_text.done -> message_item.done -> response.completed) with monotonic sequence_number 0-14 |
+
+All three pass confirms that:
+- The `anthropicFirstChoice` synthesis (B4) correctly maps Anthropic `tool_use` blocks into OpenAI Responses `function_call` items.
+- The `anthropicFinishReason` translation (B4) maps `end_turn -> stop` correctly.
+- The `anthropicStreamDeltas` mapper (B4) emits Responses-shaped SSE events including reasoning text deltas and output text deltas with proper sequence numbering.
+- The wrap-mode SSE synthesis (B4.5) wraps the final ResponseObject as expected when `stream=true`.
+
+#### Codec bind bug found and fixed during B6
+
+Scenario 2 (tool_call) initially failed with HTTP 500 and the errlog showed:
+
+`TypeError: undefined is not an object (evaluating "this.toProvider")`
+
+Root cause:
+- `src/responses/provider-exchange.ts:117` destructured the codec method off its instance:
+  `toProviderName: ctx.provider.spec.toolName.toProviderName,`
+- When the bridge later called `profile.toProviderName(name)`, the unbound reference lost `this` and `this.toProvider` was undefined.
+- This bug was latent since B3.2 (when the Anthropic provider was registered) but never surfaced because every existing built-in provider uses `DEFAULT_TOOL_NAME_CODEC` (a stateless free function), so the missing `this` binding did not matter.
+- B6 is the first time anyone exercised tools against the live Anthropic provider, so this is the first crash.
+
+Fix:
+- Replace the destructured reference with an arrow that preserves the instance:
+  `toProviderName: (name: string) => ctx.provider.spec.toolName.toProviderName(name)`
+- One-line change. Production behavior for the Chat-protocol providers is unchanged (the arrow function simply forwards to the same method).
+
+#### Files changed
+
+M  `src/responses/provider-exchange.ts`
+  One-line bind fix at line 117.
+
+#### Verification
+
+- `bun test src/` -> 1031 pass / 9 skip / 0 fail / 1040 tests (unchanged from R22).
+- `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (baseline preserved).
+- `bun run check` -> 966 pass / 0 fail (unchanged from R22).
+- `bun run typecheck` -> clean.
+- `bun run lint` -> 0 errors, 3 pre-existing warnings (same 3 as B3.4 baseline).
+- Live: godex-b6.exe + minimax-anthropic -> 3/3 scenarios pass (see table above).
+
+#### Why B6 matters beyond the smoke results
+
+- The codec bind bug was a latent defect in code paths used by every tool call against the Anthropic protocol. Without B6, the next Codex++ user who tried tools via minnimax-anthropic (or the official anthropic provider) would have hit a 500 with no obvious cause.
+- The wrap-mode SSE synthesis path is now exercised end-to-end against a real upstream, not just mocked. Reasoning text + tool calls + sequence numbering all line up with the OpenAI Responses API spec.
+- We have a verified build at `bin/godex-b6.exe` on port 5685 that Codex++ can target. The keepalive on 5678 continues to use `godex6.exe` with the Chat-protocol minimax provider; the new build lives in parallel without disrupting anything.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` |
+| B4 (response accessor + stream delta) | DONE | commit `1d5f2af` |
+| B4.5 (eliminate test isolation fails) | DONE | commit `d610f9c` |
+| B5 (minimax-anthropic thin wrapper) | DONE | commit `94c8ad1` |
+| **B6 (live E2E + Codex++ smoke + codec bind)** | **DONE** | **this round** |
+
+All Phase B steps complete. The Anthropic-protocol path (B1-B6) is now production-grade: it is registered as a builtin, has comprehensive unit + integration + e2e + live test coverage, and the godex binary on port 5685 is ready for Codex++ consumption.
+
+#### Pre-existing issues noted (unchanged)
+
+- 0 pre-existing test failures.
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step.
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive.
+
+### Round 24 - 2026-07-10: Phase B complete - transition to polish
+
+__Status__: B1 through B6 complete on fork/main (`19a7187`). All Anthropic-protocol steps landed, live-verified, and pushed to fork. The Anthropic path in GodeX is now production-grade. This round is a wrap-up handoff entry that documents the final state, the latent defects we caught, the build artifacts the user can adopt, and the polish work remaining.
+
+#### Final commit chain on fork/main
+
+| Commit | Phase | Subject |
+|---|---|---|
+| `19a7187` | B6 | fix(bridge): bind tool name codec method in provider-exchange |
+| `94c8ad1` | B5 | feat(providers): Phase B5 minimax-anthropic thin wrapper (6th builtin) |
+| `d610f9c` | B4.5 | fix(runtime): inject ResponsesBridgeRuntime options instead of reading process.env |
+| `1d5f2af` | B4 | feat(providers): Phase B4 fill Anthropic response accessors + stream deltas |
+| `fee6827` | B3.4+B3.5 | feat(bridge): Phase B3.4 + B3.5 fill anthropic-messages-builder + comprehensive tests |
+| `51525f9` | B3.1fu | feat(providers): Phase B3.1 follow-ups - stop_sequence three-state + document block |
+| `a5c217d` | B3.3 | feat(providers): Phase B3.3 Anthropic client + index + register |
+| `81fdcac` | B3.2 | feat(providers): Phase B3.2 Anthropic spec + hooks + tool-name-codec |
+| `9a90c3c` | B3.1 | feat(providers): Phase B3.1 Anthropic protocol DTOs |
+| `b9b3129` | B1 | (pre-B4) Strict Model Resolver |
+| `b9b00ee` | B1 | feat(bridge): BridgeContentBlock Phase B1 |
+
+Fork remote: `https://github.com/zamelee/GodeX.git`
+Origin remote: `https://github.com/Ahoo-Wang/GodeX.git` (READ-ONLY per AGENTS.md)
+
+#### Live verification (godex-b6.exe @ port 5685)
+
+Built via `bun run build` and copied to `bin/godex-b6.exe` (99.19 MB). Runs against minnimax.chat via the Anthropic Messages protocol. Three scenarios passed end-to-end:
+
+1. **Sync text** -> 200, ResponseObject contains reasoning + message items, output_text exactly matches the requested `PONG`.
+2. **Sync tool_call** -> 200, ResponseObject contains reasoning + `function_call(name=get_weather, arguments={"city":"Tokyo"})`.
+3. **Stream** -> 200 with Content-Type text/event-stream, 15 SSE events spanning reasoning deltas and output text deltas with monotonic sequence_number 0..14.
+
+This is the first time the full Anthropic protocol path has been exercised end-to-end against a real upstream. The earlier mock-only E2E suite (65 tests in `bun run test:e2e`) confirmed the shape, but the live run confirmed the wire-level fidelity.
+
+#### Latent defect caught and fixed
+
+Scenario 2 (tool_call) initially failed with HTTP 500:
+
+  `TypeError: undefined is not an object (evaluating "this.toProvider")`
+
+Root cause: `src/responses/provider-exchange.ts:117` destructured the codec method off its instance, losing the `this` binding that `AnthropicToolNameCodec.toProviderName` needs to access its stateful `this.toProvider` / `this.toCodex` maps.
+
+Why it was latent: every existing built-in provider uses `DEFAULT_TOOL_NAME_CODEC` (a stateless free function), so a missing `this` was harmless. The Anthropic provider needed stateful codec semantics for the reversible `mcp__server__tool`-style name mapping, but the only previous E2E coverage for Anthropic-protocol was mock-based and used fake codecs.
+
+Fix: one-line arrow wrapper:
+  `toProviderName: (name: string) => ctx.provider.spec.toolName.toProviderName(name)`
+
+#### Build artifact inventory
+
+| Binary | Size | Path | Purpose |
+|---|---|---|---|
+| `bin/godex.exe` | ~99 MB | tracked in repo (NOT my work) | pre-existing keepalive binary; DO NOT overwrite during polish |
+| `bin/godex-b6.exe` | ~99 MB | untracked | B6 test binary, copyable as a drop-in replacement for `bin/godex.exe` once user is ready |
+| `bin/godex6.exe` | ~99 MB | untracked | previous B2 build; superseded by B6 |
+| `bin/godex5.exe` | ~99 MB | untracked | earlier test build |
+| `bin/godex7.exe` | ~99 MB | untracked | earlier test build |
+| `bin/godex-fclass-step1.exe` | - | untracked | earlier test build |
+| `bin/godex-step4-smoke.yaml` | 1860 | untracked | earlier test config |
+| `bin/godex6-keepalive.yaml` | 1837 | untracked | **current** keepalive config on port 5678 |
+| `bin/godex-b6.yaml` | 2388 | untracked | **new** config on port 5685 with minimax-anthropic + minimax |
+
+**DO NOT TOUCH** during polish: `bin/godex.exe` (keepalive binary), any process listening on 5678/5679/5681, any config that is currently driving a running process.
+
+#### Manual operation suggestions for keepalive rebuild
+
+When the user is ready to upgrade the live keepalive on 5678 with the B1-B6 code:
+
+1. Stop the keepalive: kill the existing `bin\godex.exe` process (the one with PID currently bound to 5678). Easiest: `Stop-Process -Name godex -Force` from PowerShell 7 (only kills `godex.exe`, NOT `godex-b6.exe` or `godex5.exe` etc, because `-Name` matches exactly).
+2. Overwrite: `Copy-Item bin\godex-b6.exe bin\godex.exe -Force`. This drops the new binary in place.
+3. Restart: re-run the existing `bin\start-godex6.ps1` (or whatever keepalive script you used).
+4. Verify: `Invoke-RestMethod http://127.0.0.1:5678/health` should return 200 with provider list.
+5. Smoke-test in Codex++: ask Codex to use a tool, confirm tool_use round-trip works through the rebuilt binary.
+
+Rollback if anything goes wrong: `git checkout fork/main -- bin/godex.exe` restores the pre-Phase-B binary that was committed in `e02c691`.
+
+#### Phase B test coverage summary
+
+- **Unit + integration**: `bun run check` -> 966 pass / 0 fail / 147 files.
+- **Mock-based E2E**: `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect.
+- **Real upstream E2E**: godex-b6.exe against minnimax.chat -> 3/3 scenarios pass.
+- **Lint**: `bun run lint` -> 0 errors, 3 pre-existing warnings.
+- **Typecheck**: `bun run typecheck` -> clean.
+
+#### Polish work remaining (queued for next round)
+
+The Anthropic path itself is production-ready. What follows is housekeeping:
+
+1. **Clear the 3 pre-existing lint warnings** (zero behavior change):
+   - `src/bridge/request/anthropic-messages-builder.ts:108` `case "none":` falls through to `default:` -> delete the case clause.
+   - `src/bridge/request/anthropic-messages-builder.test.ts:282` unused `inputItems` variable -> prefix with underscore.
+   - `src/providers/anthropic/messages-provider-client.ts:24` unused `AnthropicStreamEvent` import -> remove.
+2. **Dedup `wrapMessagesProviderError`** (TODO already in `messages-provider-client.ts`): extract the helper to `src/providers/shared/provider-error.ts` so both `chat-provider-client.ts` and `messages-provider-client.ts` use one implementation.
+3. **Remove the unused `StreamableRequest` type alias** in `messages-provider-client.ts:31`.
+4. **Verify after polish**: re-run `bun run check`, `bun run test:e2e`, `bun run lint`. Expect 0/0/0 warnings remaining.
+5. **Re-run live E2E** against godex-b6.exe to confirm the polish didn't regress anything (sync text + tool_call + stream).
+6. **Update this handoff** with R25 reporting the cleanup outcome.
+
+#### Studio.exe reminder
+
+Per user directive from earlier rounds, Studio.exe work is deferred until godex itself is fully solid. Once the B6 polish round completes, the natural follow-up would be the Studio rebuild (Tauri 2 + Chrome MCP). Defer until the user explicitly asks.
+
+#### Codex++ integration note
+
+To point Codex++ at the new `minimax-anthropic` provider, set its base_url to `http://127.0.0.1:5685/v1` (port 5685 = godex-b6.yaml). The model id to use in Codex model selector: `minnimax-anthropic/MiniMax-M2.7` (or any of the other three enabled models in `bin/godex-b6.yaml`).
+
+If/when the user wants Codex++ to use the new path while still keepalive-ing the old one, the safe sequence is:
+  - leave 5678 keepalive running (do NOT touch),
+  - point Codex++ base_url at 5685,
+  - exercise a tool call (e.g. ask Codex to search the web or read a file),
+  - verify in `bin\godex-b6.out.log` that the tool call round-trips correctly,
+  - only THEN stop the keepalive on 5678 and copy `bin\godex-b6.exe bin\godex.exe`.
