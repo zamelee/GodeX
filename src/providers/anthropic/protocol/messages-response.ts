@@ -27,6 +27,9 @@ export interface AnthropicMessagesResponse {
 	content: AnthropicContentBlock[];
 	model: AnthropicModel;
 	stop_reason: AnthropicStopReason | null;
-	stop_sequence: string | null;
+	// Defensive three-state: Anthropic always returns this in practice, but some
+	// upstream proxies (notably minnimax.chat) may omit the field entirely. Allow
+	// undefined so a missing field never crashes the response reconstructor.
+	stop_sequence?: string | null;
 	usage: AnthropicUsage;
 }

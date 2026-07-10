@@ -1310,3 +1310,52 @@ __Status__: Phase B3.3 in production. `bun run check` shows **893 pass / 0 fail 
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
 - Provider minimax upstream 422 on function parameters (external, not bridge regression).
 - Studio.exe improvements deferred per user request.
+
+
+### Round 18 - 2026-07-10: B3.1 DTO follow-ups (⑤ three-state + ⑦ document block)
+
+__Status__: Two user-requested additions to the Anthropic DTO. `bun run check` shows **895 pass / 0 fail / 2149 expect()** (baseline 893 + 2 new tests). `bun run test:e2e` shows **65 pass / 9 skip / 0 fail / 301 expect()** — exact baseline.
+
+#### Background clarification
+
+User clarified their earlier "A" pick: "我的意思 你按你的建议" — they had picked option A (apply all my recommendations) and the seven-item reaffirmation was point-by-point. Two of those recommendations (⑤ and ⑦) had been offered as optional defensive enhancements. User explicitly asked to land both: "补".
+
+#### Deliverables
+
+**⑤ `stop_sequence` three-state**:
+- `src/providers/anthropic/protocol/messages-response.ts`:
+  - Changed `stop_sequence: string | null` → `stop_sequence?: string | null` (i.e. `string | null | undefined`).
+  - Comment explains the rationale: Anthropic always returns this, but `minnimax.chat` proxy may omit it; the response reconstructor should never crash on a missing field.
+
+**⑦ PDF / text file document block**:
+- `src/providers/anthropic/protocol/messages-request.ts`:
+  - Added `AnthropicDocumentMediaType` literal union (`application/pdf | text/plain | text/csv | text/html | text/markdown | application/json | application/vnd.openxmlformats-officedocument.wordprocessingml.document`).
+  - Added `AnthropicDocumentBlock` interface (`type: "document"`, source base64/url, optional title/context/citations/cache_control).
+  - Extended `AnthropicContentBlock` union to include the new variant.
+- Response side inherits the new variant via the same union (over-permissive but harmless — runtime builder will never emit documents in response.content).
+
+#### Test additions
+
+`src/providers/anthropic/protocol/messages.test.ts`:
+1. Extended "request body accepts every content-block variant" from 4 → 5 blocks (added document variant with base64 PDF).
+2. New test: "document block accepts URL source + alternate media types" — URL-sourced document with citations enabled + base64-sourced `text/plain` document.
+3. New test: "response stop_sequence accepts string, null, and undefined" — three states compile and the field behaves correctly.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 | DONE | commit b9b00ee |
+| B2 | SKIPPED | folded into B3 builder |
+| B3.1 | DONE | commit 9a90c3c + R18 followup |
+| B3.2 | DONE | commit 81fdcac |
+| B3.3 | DONE | commit a5c217d |
+| B3.4 (fill anthropic-messages-builder.ts, OQ3 fold-in) | next | |
+| B3.5 | pending | |
+| B4-B6 | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict.
+- Provider minimax upstream 422 on function parameters.
+- Studio.exe deferred.

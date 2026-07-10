@@ -34,6 +34,14 @@ describe("Anthropic protocol DTOs (Phase B3.1)", () => {
 				input: { city: "Tokyo" },
 			},
 			{
+				type: "document",
+				source: {
+					type: "base64",
+					media_type: "application/pdf",
+					data: "JVBERi0xLjQKJ...",
+				},
+			},
+			{
 				type: "tool_result",
 				tool_use_id: "toolu_01",
 				content: "sunny",
@@ -58,7 +66,7 @@ describe("Anthropic protocol DTOs (Phase B3.1)", () => {
 			],
 			tool_choice: { type: "auto" },
 		};
-		expect(request.messages[0]?.content).toHaveLength(4);
+		expect(request.messages[0]?.content).toHaveLength(5);
 	});
 
 	test("tool_choice accepts all four variants", () => {
@@ -127,6 +135,63 @@ describe("Anthropic protocol DTOs (Phase B3.1)", () => {
 				expect(parsed.delta.text).toBe("x");
 			}
 		}
+	});
+
+	test("document block accepts URL source + alternate media types", () => {
+		const fromUrl: AnthropicContentBlock = {
+			type: "document",
+			source: { type: "url", url: "https://example.com/spec.pdf" },
+			title: "API Specification",
+			context: "Refer to this for endpoint details.",
+			citations: { enabled: true },
+		};
+		const fromText: AnthropicContentBlock = {
+			type: "document",
+			source: {
+				type: "base64",
+				media_type: "text/plain",
+				data: "SGVsbG8gd29ybGQ=",
+			},
+		};
+		const arr: AnthropicContentBlock[] = [fromUrl, fromText];
+		expect(arr).toHaveLength(2);
+	});
+
+	test("response stop_sequence accepts string, null, and undefined", () => {
+		// Three-state: Anthropic usually returns it but proxies (notably minnimax.chat)
+		// may omit it entirely. Verify all three states compile.
+		const withNull: AnthropicMessagesResponse = {
+			id: "msg_a",
+			type: "message",
+			role: "assistant",
+			content: [],
+			model: "claude-3-5-sonnet-20241022",
+			stop_reason: "end_turn",
+			stop_sequence: null,
+			usage: { input_tokens: 1, output_tokens: 1 },
+		};
+		const withoutField: AnthropicMessagesResponse = {
+			id: "msg_b",
+			type: "message",
+			role: "assistant",
+			content: [],
+			model: "claude-3-5-sonnet-20241022",
+			stop_reason: "end_turn",
+			usage: { input_tokens: 1, output_tokens: 1 },
+		};
+		const withString: AnthropicMessagesResponse = {
+			id: "msg_c",
+			type: "message",
+			role: "assistant",
+			content: [],
+			model: "claude-3-5-sonnet-20241022",
+			stop_reason: "stop_sequence",
+			stop_sequence: "STOP",
+			usage: { input_tokens: 1, output_tokens: 1 },
+		};
+		expect(withNull.stop_sequence).toBeNull();
+		expect(withoutField.stop_sequence).toBeUndefined();
+		expect(withString.stop_sequence).toBe("STOP");
 	});
 
 	test("tool name codec surface (placeholder for B3.2)", () => {

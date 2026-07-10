@@ -45,6 +45,34 @@ export interface AnthropicImageBlock {
 	cache_control?: AnthropicCacheControl;
 }
 
+// Anthropic-native document block (PDF / text file input).
+// Codex Responses API does not currently emit documents, but the DTO includes
+// the type for forward-compatibility; the B3.4 builder will translate Codex
+// `input_file` items into this shape when they show up.
+export type AnthropicDocumentMediaType =
+	| "application/pdf"
+	| "text/plain"
+	| "text/csv"
+	| "text/html"
+	| "text/markdown"
+	| "application/json"
+	| "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+export interface AnthropicDocumentBlock {
+	type: "document";
+	source:
+		| {
+				type: "base64";
+				media_type: AnthropicDocumentMediaType;
+				data: string;
+		  }
+		| { type: "url"; url: string };
+	title?: string;
+	context?: string;
+	citations?: { enabled: boolean };
+	cache_control?: AnthropicCacheControl;
+}
+
 export interface AnthropicToolUseBlock {
 	type: "tool_use";
 	id: string;
@@ -64,6 +92,7 @@ export interface AnthropicToolResultBlock {
 export type AnthropicContentBlock =
 	| AnthropicTextBlock
 	| AnthropicImageBlock
+	| AnthropicDocumentBlock
 	| AnthropicToolUseBlock
 	| AnthropicToolResultBlock;
 
