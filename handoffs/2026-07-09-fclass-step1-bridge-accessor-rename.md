@@ -2235,3 +2235,46 @@ When `biome check --write` produces a "found N errors" report with every single 
 - `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect().
 
 Anthropic path is unchanged from R24 (the lint fixes are zero-behavior-change), so live E2E that passed in R24 stays green.
+
+### Round 26 - 2026-07-10: Polish complete - dedup shared provider-error module
+
+__Status__: All planned polish work for the Anthropic path is now complete. Both Chat- and Messages-protocol clients use a single `wrapProviderError` implementation. Zero behavior change, lint/test/e2e green.
+
+__Commit__: `da4eea7` on `fork/main` (pushed to zamelee/GodeX)
+
+__Diff__: 3 files, +105/-182. Created `src/providers/shared/provider-error.ts` (~2.8 KB); shrank the two clients by a combined 174 lines.
+
+#### What changed
+
+1. New file `src/providers/shared/provider-error.ts` exports 4 helpers:
+   - `wrapProviderError(err, provider, model)`
+   - `providerErrorCode(status)`
+   - `extractErrorMessage(error)`
+   - `safeResponseJson(response)`
+2. `src/providers/shared/chat-provider-client.ts` - dropped from 112 -> 41 lines. Imports `wrapProviderError` from the new module; removed the 4 local helper functions and 6 now-unused imports (ExchangeError + 5 PROVIDER_UPSTREAM_* + ProviderError).
+3. `src/providers/anthropic/messages-provider-client.ts` - dropped from ~140 -> 48 lines. Same surgery + renamed `wrapMessagesProviderError` call sites to `wrapProviderError` (the two implementations were byte-identical except for the function name). Updated the top-of-file comment to reflect the new shape.
+
+#### Verification
+
+- `bun run lint` -> Checked 443 files in 323ms. No fixes applied. (0 errors, 0 warnings.)
+- `bun run typecheck` -> clean.
+- `bun run test` -> 966 pass / 0 fail / 2302 expect().
+- `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect().
+
+Same numbers as R25 baseline - the dedup is purely a structural refactor, no semantic change.
+
+#### Notes
+
+- `src/search/zhipu-provider.ts` was NOT touched, as called out in R25 (it has its own `providerErrorCode` / `safeResponseJson` duplicates but lives in web-search code, out of scope).
+- The import-sort lint warning that triggered on the first dedup attempt (organizeImports) was resolved by `npx @biomejs/biome check --write` on just the 3 affected files. The fix was trivial (alphabetize the imports); running the broader `bun run lint:fix` would have reformatted the entire repo which we explicitly avoid.
+- `bin\godex-b6.exe` still contains the pre-dedup code (built at 23:10, dedup landed at 23:44). A rebuild + live E2E is queued behind the user
+'
+s go-ahead. The mock-based `bun run test:e2e` stays green because the dedup only changes which file the helpers live in, not their behavior.
+
+#### Polish round summary (R24 -> R26)
+
+- R24: shipped Phase B1-B6 to fork/main (Anthropic protocol path).
+- R25: cleared 3 pre-existing lint warnings; recovered from a CRLF corruption caused by a prior biome auto-format pass.
+- R26: extracted the shared `provider-error` module.
+
+GodeX is now lint-clean, typecheck-clean, and e2e-clean with the Anthropic protocol path production-ready. Next logical follow-ups (only when the user asks): rebuild `bin\godex-b6.exe` + live E2E, or move on to Studio.exe rebuild (Tauri 2 + Chrome MCP, deferred per earlier rounds).
