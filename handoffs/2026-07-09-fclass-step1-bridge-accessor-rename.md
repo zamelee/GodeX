@@ -1080,3 +1080,139 @@ None. The DTOs are types-only; no runtime code added. The `anthropic-messages-bu
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
 - Provider minimax upstream 422 on function parameters (external, not bridge regression).
 - Studio.exe improvements deferred per user request.
+
+
+### Round 16 - 2026-07-10: Phase B3.2 (Anthropic spec + hooks + tool-name-codec) Complete
+
+__Status__: Phase B3.2 in production. `bun run check` shows **882 pass / 0 fail / 2116 expect()** (baseline 867 + 15 new B3.2 tests). `bun run test:e2e` shows **65 pass / 9 skip / 0 fail / 301 expect()** — exact baseline. `bun run typecheck` clean.
+
+User confirmed all 7 DTO design points and proceeded with B3.2.
+
+#### B3.1 carry-over (carried comment into B3.2)
+
+The user picked option A — apply all my recommendations. The only B3.1 follow-up that touched code was adding a note to `cache_control` documenting that `minnimax.chat` proxy support is unverified; the B3.4 builder will strip `cache_control` when the resolved provider is not canonical Anthropic.
+
+#### B3.2 deliverables
+
+Six files changed/added (1 modified, 5 new):
+
+| File | Status | Bytes | Purpose |
+|---|---|---|---|
+| `protocol/messages-request.ts` | MODIFIED | +~700 | added minimax proxy verification note to `cache_control` block |
+| `tool-name-codec.ts` | NEW | 3375 | stateful Codex ↔ Anthropic tool-name mapper |
+| `tool-name-codec.test.ts` | NEW | 3500+ | 10 unit tests (pass-through, sanitize, fallback, truncate, collisions, round-trip, regex compliance) |
+| `hooks.ts` | NEW | 2603 | `ANTHROPIC_SPEC_CAPABILITIES` + `anthropicPatchRequest` stub (identity for now) |
+| `spec.ts` | NEW | ~4400 | `ANTHROPIC_MESSAGES_SPEC` + `createAnthropicSpec()` factory + base URL/model/name constants |
+| `spec.test.ts` | NEW | 3000+ | 5 unit tests (identity, factory isolation, capabilities, accessor stubs, patch identity) |
+
+#### Tool name codec design (locked)
+
+**Class `AnthropicToolNameCodec implements ToolNameCodec`**:
+- Stateful bidirectional Map: `toProvider: Map<codexName, providerName>`, `toCodex: Map<providerName, codexName>`, plus a `usedProviderNames` Set for O(1) collision checks.
+- `toProviderName(codexName)`:
+  1. Cached lookup → return if already encoded.
+  2. Sanitize: replace `[^A-Za-z0-9_-]` with `_`.
+  3. Empty-after-sanitize → `"tool"`.
+  4. Too-long → truncate to `MAX_LENGTH - 8` (reserve 8 chars for collision suffix).
+  5. Collision: append `_2`, `_3`, ... until unique. Cap at 10,000 attempts.
+  6. Defensive final regex check before commit.
+- `fromProviderName(providerName)` → `string | undefined` (Map lookup).
+- `size()` helper for diagnostics (not part of the ToolNameCodec contract).
+
+**Why stateful vs default identity codec**:
+- Default `DEFAULT_TOOL_NAME_CODEC` is stateless and uses `fromProviderName = identity`, so round-trip loses the original name (Codex would see the sanitized form).
+- Anthropic needs a real reversible mapping because Codex may declare tools like `mcp__chrome_devtools__navigate_page` (valid name, but we want exact round-trip), `some.namespace/tool@v2` (sanitized to `some_namespace_tool_v2`), and tool_use blocks return the provider-side name.
+
+**Test coverage (10 tests)**:
+1. Pass-through valid names (no modification).
+2. Sanitize Codex namespace + dotted names.
+3. Fallback to `"tool"` only when input is empty; `///` → `___` (valid name).
+4. Truncate > 64 char names, round-trip preserved.
+5. Two-name collision resolves with `_2` suffix, both round-trip.
+6. Many-name collision determinism (5 colliding inputs → 5 distinct outputs).
+7. Unknown provider name → `undefined`.
+8. Repeat `toProviderName` returns cached result.
+9. `size()` reports current mapping cardinality.
+10. Encoded names always satisfy Anthropic regex `^[a-zA-Z0-9_-]{1,64}$` for 8 weird inputs.
+
+#### Spec design (locked)
+
+**Two export shapes**:
+- `ANTHROPIC_MESSAGES_SPEC`: singleton for places that need a static spec reference (e.g. provider registry in B3.3). Codec inside is shared, mapping accumulates monotonically.
+- `createAnthropicSpec()`: factory for client.ts (B3.3). Each call returns a fresh spec with its own `AnthropicToolNameCodec` instance so concurrent ProviderEdges do not share state.
+
+**Identity**:
+- `name: "anthropic"`, `protocol: MESSAGES_PROTOCOL`, `auth: X_API_KEY_AUTH` (x-api-key header scheme)
+- `endpoint.defaultBaseURL: "https://api.anthropic.com"`
+- `defaultModel: "claude-3-5-sonnet-20241022"` (exported constant, used by minimax-anthropic wrapper in B5)
+- `streamMode: "passthrough"` (Anthropic SSE → Codex SSE is direct mapping; no need to wrap)
+
+**Capabilities (`ANTHROPIC_SPEC_CAPABILITIES`)**:
+- `parameters.supported`: `stream | temperature | top_p | max_output_tokens | metadata | thinking`
+- `tools.supported`: `function | web_search`
+- `tools.degraded` (Codex type → wire type):
+  - `apply_patch → function`
+  - `local_shell → function`
+  - `shell → function`
+  - `file_search → function`
+  - `custom → function`
+  - `namespace → function`
+- `tools.maxTools: 32` (Anthropic API has no published limit; 32 is conservative)
+- `toolChoice.supported`: `auto | any | none | tool`
+- `responseFormats.supported`: `text` only (Anthropic has no native `json_object`; structured output must go through a tool)
+- `reasoning.effort: "native"` (Anthropic has native `thinking` param; OQ3 maps Codex `reasoning.effort` → `thinking.budget_tokens`)
+- `streaming.usage: true`
+
+**Accessor stubs (B4 fills these)**:
+- `firstChoice(response)` → `undefined` (Anthropic has no `choices` array)
+- `finishReason(response)` → `response.stop_reason ?? undefined`
+- `outputText(response)` → `""` (B4 fills by joining text blocks in `response.content`)
+- `reasoningText(response)` → `undefined` (B4 fills)
+- `usage(response)` → **already converts `AnthropicUsage` → `ResponseUsage`**:
+  - `total_tokens = input_tokens + output_tokens`
+  - `input_tokens_details.cached_tokens = cache_read_input_tokens` (if > 0)
+- `stream.deltas(chunk)` → `[]` (B4 fills with ProviderSpecStreamDelta[])
+
+**Hooks stub (B3.4 extends)**:
+- `anthropicPatchRequest(request)` → identity for now. B3.4 fills:
+  - inject `metadata.user_id` from Codex request headers
+  - strip `cache_control` when provider is not canonical Anthropic
+  - enforce `max_tokens >= 1`
+
+#### Test coverage (5 tests)**:
+1. Singleton spec identity: name, protocol, auth, endpoint, streamMode, default model.
+2. Factory isolation: `createAnthropicSpec()` × 3 yields 3 distinct codec instances; deterministic encoding still produces identical sanitized output for same input.
+3. Capabilities declaration: parameters, toolChoice, reasoning, streaming, supported/degraded tool types.
+4. Accessor stubs: finishReason returns stop_reason; usage maps AnthropicUsage → ResponseUsage with total_tokens and cached_tokens.
+5. PatchRequest identity: returns input unchanged.
+
+#### Boundary / lint compliance
+
+- `bun run lint:fix` cleaned 5 files (one per new module + spec.test.ts).
+- `bun run typecheck` clean.
+- No boundary test violations; spec lives under `src/providers/anthropic/{protocol, hooks, spec, tool-name-codec}.ts`, all of which are exported through `src/providers/anthropic/index.ts` (re-exports `protocol/*` from B3.1; spec/hooks/codec are referenced via the spec.test.ts import path, not the barrel — adding them to the barrel is a B3.3 concern when we wire the client).
+
+#### Bugs / regressions
+
+None. No runtime code added beyond accessor stubs (which return safe defaults). The `anthropic-messages-builder` stub from Phase A step 4 still throws `BRIDGE_REQUEST_UNSUPPORTED_PARAMETER` — B3.4 will fill it in.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit b9b00ee |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user "好" |
+| B3.1 (DTOs) | DONE | commit 9a90c3c; 5 files / ~10 KB / 5 tests |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | this round; 5 new files / 1 modified / 15 new tests |
+| B3.3 (client + index + register) | next | `src/providers/anthropic/client.ts` + register in `src/providers/registry.ts` |
+| B3.4 (fill anthropic-messages-builder.ts, OQ3 fold-in) | next | |
+| B3.5 (comprehensive builder tests) | next | |
+| B4 (stream transformer + sync reconstructor) | pending | |
+| B5 (minimax-anthropic thin wrapper + register) | pending | |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
+- Provider minimax upstream 422 on function parameters (external, not bridge regression).
+- Studio.exe improvements deferred per user request.

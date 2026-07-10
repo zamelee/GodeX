@@ -13,12 +13,24 @@
 export type AnthropicModel = string;
 
 // --- Cache control (prompt caching, optional) ---
+//
+// Note: Anthropic's native prompt caching. The minnimax.chat proxy's support
+// for this field is unverified as of Phase B3.1 — the B3.4 builder will default
+// to omitting cache_control unless the provider is canonical Anthropic. If a
+// request fails upstream because of cache_control, the B3.4 builder should
+// degrade-warn and retry without it.
+// NOTE: Anthropic supports prompt caching natively. Whether minnimax.chat proxy
+// forwards the cache_control field is TBD; B3.4 builder will omit it by default
+// for minimax targets and only set it for canonical api.anthropic.com.
 export interface AnthropicCacheControl {
 	type: "ephemeral";
 	ttl?: "5m" | "1h";
 }
 
 // --- Content blocks (messages[].content and system) ---
+// Image source supports both base64 and URL variants. B3.4 builder defaults to
+// base64 (most compatible with minnimax.chat-style proxies); URL pass-through
+// is opt-in via the bridge builder's image-source policy.
 export interface AnthropicTextBlock {
 	type: "text";
 	text: string;
