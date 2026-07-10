@@ -89,12 +89,26 @@ export interface AnthropicToolResultBlock {
 	cache_control?: AnthropicCacheControl;
 }
 
+// Anthropic extended-thinking block. Anthropic emits these inside response.content
+// when extended thinking is enabled. The visible thinking text is surfaced into the
+// Responses reasoning output; the encrypted signature is opaque on the wire and must
+// round-trip back to the model on subsequent turns. The request builder never emits
+// thinking blocks (Codex reasoning is dropped at the bridge boundary), so this variant
+// only affects response/stream consumers.
+export interface AnthropicThinkingBlock {
+	type: "thinking";
+	thinking: string;
+	signature?: string;
+	cache_control?: AnthropicCacheControl;
+}
+
 export type AnthropicContentBlock =
 	| AnthropicTextBlock
 	| AnthropicImageBlock
 	| AnthropicDocumentBlock
 	| AnthropicToolUseBlock
-	| AnthropicToolResultBlock;
+	| AnthropicToolResultBlock
+	| AnthropicThinkingBlock;
 
 // --- Messages ---
 export interface AnthropicUserMessage {

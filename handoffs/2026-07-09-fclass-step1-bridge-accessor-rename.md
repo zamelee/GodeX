@@ -1472,3 +1472,89 @@ The `AnthropicToolNameCodec` instance is created fresh per builder call so concu
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict.
 - Provider minimax upstream 422 on function parameters (external).
 - Studio.exe deferred.
+
+### Round 20 - 2026-07-10: B4 - Anthropic response accessors + stream deltas
+
+__Status__: B3.1 - B3.5 stable on fork/main (`fee6827`). B4 implementation complete, all new tests pass, E2E baseline preserved at `65 pass / 9 skip / 0 fail / 301 expect`.
+
+#### Background
+
+B3.2 left the `response.*` and `stream.deltas` accessor slots as stubs in `ANTHROPIC_MESSAGES_SPEC.response` / `.stream` so the spec could be registered and exercised by the conformance loop. B4 fills those stubs with real translations from the Anthropic wire shape into the bridge layer neutral view. Without these, even a successful upstream `/v1/messages` response would surface to Codex as `no choices` (failed) because `firstChoice` returned `undefined`, and stop_reasons would fall through `mapProviderFinishReason`
+
+#### Files
+
++ `src/providers/anthropic/accessors.ts` (NEW, ~140 lines)
+  Implements `anthropicFirstChoice`, `anthropicFinishReason`, `anthropicOutputText`, `anthropicReasoningText`, `anthropicResponseUsage`.
+  `firstChoice` synthesizes a Chat-shape `{message:{tool_calls:[]}}` object from `response.content` tool_use blocks. Each tool_call entry: `{id, type:"function", function:{name, arguments: JSON.stringify(input)}}`. This shape lets the existing `providerToolCalls(firstChoice)` extraction in `bridge/response/response-reconstructor.ts` find them.
+  `finishReason` translates Anthropic stop_reasons: `end_turn` -> `stop`, `tool_use` -> `tool_calls`, `max_tokens` -> `length`, `stop_sequence` -> `stop`. The translated values are what `mapProviderFinishReason` consumes to map onto Responses terminal states.
+  `outputText` joins text blocks; `reasoningText` joins thinking blocks and returns `undefined` when none present (bridge omits the reasoning output item).
+  `usage` normalizes to `ResponseUsage` with `total_tokens` and folds `cache_read_input_tokens` under `input_tokens_details.cached_tokens`.
+
++ `src/providers/anthropic/stream-deltas.ts` (NEW, ~170 lines)
+  `anthropicStreamDeltas(event: AnthropicStreamEvent): ProviderStreamDelta[]` is stateless and maps one event to zero-or-more deltas:
+    `message_start`             -> `[{usage: ...}]` (full input_tokens, output_tokens=1)
+    `content_block_start`       -> tool_use opens with `[{toolCall:{index, id, name}}]`; text/thinking/redacted_thinking open with `[]` (empty)
+    `content_block_delta`       -> `text_delta` -> `{text}`, `input_json_delta` -> `{toolCall:{index, arguments: partial_json}}`, `thinking_delta` -> `{reasoning}`, `signature_delta` -> `[]`
+    `content_block_stop`        -> `[]` (bookkeeping)
+    `message_delta.stop_reason` -> `[{finishReason: translated}]`
+    `message_stop` / `ping` -> `[]`
+    `error`                     -> `[{error: {code: `server_error`, message}}]`
+  Usage emission strategy: only on `message_start` because `message_delta.usage` is partial (only output_tokens) and overwriting would lose `input_tokens`. Final totals arrive via `response.usage` when the stream closes. Documented in the file header.
+
+M  `src/providers/anthropic/spec.ts`
+  Replaces the B3.2 stub accessor references with the real implementations imported from `./accessors` and `./stream-deltas`. The spec object shape is unchanged; only the function bodies behind each accessor slot differ.
+
+M  `src/providers/anthropic/protocol/messages-request.ts`
+  Adds `AnthropicThinkingBlock` to the `AnthropicContentBlock` union so `response.content` can carry Anthropic extended-thinking output. The block type lives in the shared union because Anthropic may echo thinking blocks back as conversation context; the request builder (B3.4) never emits them.
+
+M  `src/providers/anthropic/spec.test.ts`
+  Replaces the B3.2 `response accessor stubs return safe defaults` test with a comprehensive B4 test that exercises text-only, tool-use, thinking, four `stop_reason` values, empty content, `cache_read_input_tokens`.
+
++ `src/providers/anthropic/accessors.test.ts` (NEW, 23 tests, 24 expect)
++ `src/providers/anthropic/stream-deltas.test.ts` (NEW, 22 tests, 25 expect)
+
+#### Test results
+
+`bun test src/providers/anthropic/` -> 73 pass / 0 fail / 157 expect / 6 files.
+
+`bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect (EXACT baseline preserved).
+
+`bun run typecheck` -> clean.
+
+`bun run lint` -> 1 pre-existing error in `src/bridge/request/anthropic-messages-builder.ts:108` (`lint/complexity/noUselessSwitchCase` for `case "none":` falling through to `default:` in `thinkingBudgetTokensForEffort`). Present in the B3.4 baseline; not introduced by B4; left untouched per AGENTS.md "Do not attempt to fix unrelated bugs".
+
+#### Bugs / regressions caught during B4
+
+1. **Nested test describe indent off-by-one** in `spec.test.ts`: the original stub test was at 1 tab indent (inside the outer `describe`) but the replacement was generated at 2 tabs. Fixed by removing one TAB from the inserted block after spotting the extra indent via a Python line dump.
+2. **Nested string literal inside test assertion**: the JSON-stringified tool_call argument `{"city":"Tokyo"}` broke TypeScript parsing because the outer string used the same quote character. Switched to single quotes (single-quote JSON, double-quote TS) which TS accepts.
+3. **`firstChoice` returns `unknown` per bridge contract**: `BridgeResponseAccessor.firstChoice` is typed `unknown | undefined`, so the test assertion `fc?.message.tool_calls` required a cast. Added an inline `as { message: { tool_calls: ... } } | undefined` cast on the test side; the runtime shape is documented in the file header.
+4. **`reasoningText` optional in `BridgeResponseAccessor`**: the interface marks it `reasoningText?` even though every built-in spec (including ours) sets it. Tests use `!` non-null assertion since the spec always sets it. Could be tightened in a future refactor; left as-is to stay strictly additive.
+5. **`finishReason(base)` with `base.stop_reason = "end_turn"` translated to `stop` instead of `undefined`**: first test expected undefined but base carried `stop_reason`. Split into two base objects (one with, one without) so the four-value translation table and the undefined case are both covered.
+6. **Outer describe never closed** in `stream-deltas.test.ts`: a brace-counting script revealed 1 missing `});` at the file end. Appended the closing brace.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit `b9b00ee` |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user "okay" |
+| B3.1 (DTOs) | DONE | commit `9a90c3c` + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit `81fdcac` |
+| B3.3 (client + index + register) | DONE | commit `a5c217d` |
+| B3.4 (fill builder + OQ3) | DONE | commit `fee6827` |
+| B3.5 (comprehensive builder tests) | DONE | commit `fee6827` (20 tests) |
+| **B4 (response accessor + stream delta)** | **DONE** | **this round** |
+| B5 (minimax-anthropic thin wrapper) | next | reuses B3 spec with `endpoint.defaultBaseURL = https://minnimax.chat` |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Why B4 matters for the original Codex pain point
+
+User original issue: `mcp__node_repl__js` returned `unsupported call` for every tool call. Path: Codex emits tool calls via Responses API -> GodeX receives via `/v1/responses` -> forwards to upstream `/v1/messages` -> upstream responds with `tool_use` blocks -> GodeX reconstructs `ResponseObject` -> Codex tool dispatcher reads `function_call` items. B4 ensures step 5 (`anthropicFirstChoice` synthesis) and step 7 (`finishReason` translation) work end-to-end. Step 5 specifically synthesizes `message.tool_calls[]` from Anthropic `tool_use` blocks so the existing `providerToolCalls(firstChoice)` extraction in `bridge/response/response-reconstructor.ts` finds them. Without B4, even a correct upstream tool call would be invisible to Codex.
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream `73dc7f9` cherry-pick conflict (logged; not blocking).
+- Provider `minimax` upstream `422 on function parameters` (external, not bridge regression).
+- `messages-provider-client.ts` has an unused `StreamableRequest` type alias and the `wrapMessagesProviderError` helper duplicates `chat-provider-client.ts`; both deferred for the B6 polish step (TODO already in file).
+- `anthropic-messages-builder.ts:108` `noUselessSwitchCase` lint warning (pre-existing in B3.4).
+- Studio.exe deferred per user directive (先把godex调好了来).
