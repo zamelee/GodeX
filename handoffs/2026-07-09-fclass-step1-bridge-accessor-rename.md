@@ -2191,3 +2191,47 @@ If/when the user wants Codex++ to use the new path while still keepalive-ing the
   - exercise a tool call (e.g. ask Codex to search the web or read a file),
   - verify in `bin\godex-b6.out.log` that the tool call round-trips correctly,
   - only THEN stop the keepalive on 5678 and copy `bin\godex-b6.exe bin\godex.exe`.
+
+### Round 25 - 2026-07-10: Lint polish (3 fixes) - line-ending recovery + dedup next
+
+__Status__: All 3 pre-existing lint warnings cleared and pushed to fork. Anthropic path stays production-grade. One piece of polish remaining: dedup `wrapMessagesProviderError` into a shared module.
+
+__Commit__: `bb12bdd` on `fork/main` (pushed to zamelee/GodeX)
+
+__Diff__: 3 files, +1/-5
+
+#### What happened
+
+Mid-polish, the prior session hit a confusing state: every line of `anthropic-messages-builder.test.ts` showed up in the diff as changed, even though only one variable rename was intended. Root cause turned out to be a line-ending corruption: the working copy had CRLF endings where HEAD had LF only. The biome formatter apparently inserted CRLF in the prior session when writing back, and the result was 338 / 454 / 139 lines all flagged as modified by git purely on whitespace.
+
+Recovery was a one-shot script that converted CRLF -> LF on all three affected files. After that, the diff collapsed to the intended 3 surgical edits:
+
+1. `src/providers/anthropic/messages-provider-client.ts:24` - removed unused `AnthropicStreamEvent` import from `./protocol`.
+2. `src/providers/anthropic/messages-provider-client.ts:31` - deleted the never-referenced `type StreamableRequest = { model?: string; stream?: boolean };` alias.
+3. `src/bridge/request/anthropic-messages-builder.ts:108` - removed `case "none":` line that fell through to `default:` in the reasoning-effort budget switch (the early-return in `buildThinking` already handles `effort === "none"` before the switch is consulted).
+4. `src/bridge/request/anthropic-messages-builder.test.ts:282` - prefixed unused `inputItems` binding with underscore to satisfy the lint rule on type-annotated locals.
+
+#### Lesson learned (record so we do not repeat)
+
+When `biome check --write` produces a "found N errors" report with every single line marked, the first thing to check is line endings, not formatting drift. Running a quick byte count of CRLF vs LF on both the working copy and HEAD (via `git show HEAD:path | wc -l`) reveals the issue in seconds.
+
+#### Polish work still pending (queued for R26)
+
+1. Create `src/providers/shared/provider-error.ts` with the 4 canonical helpers:
+   - `wrapProviderError(err, provider, model)`
+   - `providerErrorCode(status)`
+   - `extractErrorMessage(error)`
+   - `safeResponseJson(response)`
+2. Update `src/providers/shared/chat-provider-client.ts` to import from the new module (delete its local copies of the 4 helpers).
+3. Update `src/providers/anthropic/messages-provider-client.ts` to import from the new module + rename call sites of `wrapMessagesProviderError` to `wrapProviderError` (function-name only was the delta; logic was identical).
+4. Do NOT touch `src/search/zhipu-provider.ts` - it has its own duplicates of `providerErrorCode` / `safeResponseJson` but that is web-search code, out of scope.
+5. Re-run `bun run check` + `bun run test:e2e` + live E2E on `bin\godex-b6.exe` -> expect 0/0/0 warnings remaining.
+
+#### Final verification
+
+- `bun run lint` -> Checked 442 files in 337ms. No fixes applied. (0 errors, 0 warnings.)
+- `bun run typecheck` -> clean.
+- `bun run test` -> 966 pass / 0 fail / 2302 expect().
+- `bun run test:e2e` -> 65 pass / 9 skip / 0 fail / 301 expect().
+
+Anthropic path is unchanged from R24 (the lint fixes are zero-behavior-change), so live E2E that passed in R24 stays green.
