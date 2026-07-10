@@ -1359,3 +1359,116 @@ User clarified their earlier "A" pick: "我的意思 你按你的建议" — the
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict.
 - Provider minimax upstream 422 on function parameters.
 - Studio.exe deferred.
+
+
+### Round 19 - 2026-07-10: Phase B3.4 + B3.5 (Builder + Comprehensive Tests) Complete
+
+__Status__: Phase B3.4 (fill `anthropic-messages-builder.ts` + OQ3 fold-in) and B3.5 (comprehensive builder tests) shipped. `bun run check` shows **915 pass / 0 fail / 2191 expect()** (baseline 895 + 20 new builder tests). `bun run test:e2e` shows **65 pass / 9 skip / 0 fail / 301 expect()** — exact baseline. `bun run typecheck` clean.
+
+#### B3.4 + B3.5 deliverables
+
+| File | Status | Lines | Purpose |
+|---|---|---|---|
+| `src/bridge/request/anthropic-messages-builder.ts` | REPLACED | ~410 | Real builder; replaces the 55-line Phase A step 4 stub |
+| `src/bridge/request/anthropic-messages-builder.test.ts` | NEW | ~290 | 20 unit tests covering every translation path |
+
+The builder is the core request translation for Phase B. It now converts Codex `ResponseCreateRequest` (with optional session snapshot) into an `AnthropicMessagesRequest` ready for the wire, while the response/stream reconstructor in B4 will do the reverse direction.
+
+#### Translation map (locked)
+
+| Codex Responses API field | Anthropic Messages API field | Notes |
+|---|---|---|
+| `instructions` (string) | `system` (top-level) | concatenated with any system/developer role messages from session history |
+| `BridgeMessage { role: "system" }` from history | folded into `system` | `bridgeToAnthropicMessages` drops system/developer roles |
+| `BridgeMessage { role: "developer" }` from history | folded into `system` | same |
+| `BridgeMessage { role: "user" }` | `{ role: "user", content: [...] }` | tool_result blocks kept inline as content blocks |
+| `BridgeMessage { role: "assistant" }` | `{ role: "assistant", content: [...] }` | tool_use blocks kept inline as content blocks |
+| `BridgeContentBlock { type: "text" }` | `{ type: "text", text }` | direct |
+| `BridgeContentBlock { type: "image" }` | `{ type: "image", source }` | data: URI → base64 source; HTTP URL → url source (no client-side fetch) |
+| `BridgeContentBlock { type: "video" }` | BRIDGE_REQUEST_UNSUPPORTED_PARAMETER | Anthropic has no video input |
+| `BridgeContentBlock { type: "tool_use" }` | `{ type: "tool_use", id, name: <sanitized>, input }` | name via `AnthropicToolNameCodec` |
+| `BridgeContentBlock { type: "tool_result" }` | `{ type: "tool_result", tool_use_id, content }` | nested blocks flattened |
+| `BridgeContentBlock { type: "reasoning" }` | dropped | reasoning surfaces in output via Anthropic thinking blocks |
+| `tools[i]` (function) | `tools[i]` (function) | name sanitized; `strict` dropped; `parameters` -> `input_schema` with extra JSON-Schema keys preserved |
+| `tool_choice = "auto"` | `{ type: "auto" }` | direct |
+| `tool_choice = "none"` | `{ type: "none" }` | direct |
+| `tool_choice = "required"` | `{ type: "any" }` | Anthropic's "any" = must call a tool |
+| `tool_choice = { type: "function", name }` | `{ type: "tool", name: <sanitized> }` | via codec |
+| `tool_choice = { type: "mcp"|"custom"|"apply_patch"|... }` | `{ type: "auto" }` | degrade to auto (no native equivalent) |
+| `reasoning.effort = "none"` | `{ type: "disabled" }` | OQ3 mapping |
+| `reasoning.effort = "minimal" \| "low" \| "medium"` | `{ type: "enabled", budget_tokens: 1024 }` | OQ3 |
+| `reasoning.effort = "high"` | `{ type: "enabled", budget_tokens: 4096 }` | OQ3 |
+| `reasoning.effort = "xhigh"` | `{ type: "enabled", budget_tokens: 16384 }` | OQ3 |
+| `max_output_tokens` | `max_tokens` | default 1024 if absent; clamped to >= 1 |
+| `metadata.user_id` | `metadata.user_id` | direct |
+| `stream` | `stream` | direct |
+| `temperature` / `top_p` | `temperature` / `top_p` | direct |
+
+#### Builder structure
+
+`buildAnthropicMessagesRequest(input)`:
+1. `planBridgeCompatibility` — reject unsupported features early.
+2. `planTools` — degrade Codex-specific tool types.
+3. `planOutputContract` — json_schema -> instruction suffix.
+4. Normalize session + current input into `BridgeMessage[]`.
+5. Extract `system` from `request.instructions` + session's system/developer role messages.
+6. Translate `BridgeMessage[]` to `AnthropicMessage[]` (drops system/developer roles, applies content-block translation).
+7. Compose `AnthropicMessagesRequest` with required + optional fields.
+
+The `AnthropicToolNameCodec` instance is created fresh per builder call so concurrent requests don't share state.
+
+#### Test coverage (20 tests)
+
+1. instructions extracted to top-level `system` field.
+2. max_tokens defaults to 1024.
+3. max_tokens clamped to >= 1 when caller passes 0.
+4. max_tokens honors positive caller value.
+5. temperature / top_p passthrough.
+6. stream flag passthrough (both true and false).
+7. metadata.user_id propagation.
+8. metadata omitted when user_id absent.
+9. thinking: none disables; high sets 4096; xhigh sets 16384.
+10. thinking: minimal/low/medium all use 1024 budget.
+11. thinking omitted when reasoning absent.
+12. Tool declaration: function tool sanitized name + input_schema (with extra JSON-Schema keys preserved).
+13. tool_choice: auto/none/required → Anthropic shapes.
+14. tool_choice: named function with sanitized name → `{type:"tool", name}`.
+15. session history: assistant tool_use + user tool_result preserved through normalization.
+16. Image input: data: URI → base64 source.
+17. Image input: HTTP URL → url source.
+18. Video input: builder test placeholder (rejection happens in input-normalizer; covered by input-normalizer tests).
+19. instructions + system/developer role messages concatenate into `system`.
+20. Result shape: returns `{request, compatibility, tools, output}`.
+
+#### Bugs / regressions caught during B3.4 + B3.5
+
+1. **Duplicate instructions in system field** — `normalizeCurrentInput` injects a `role: "system"` message containing `request.instructions`. If `buildSystemField` walked both history and current, the instructions text would appear twice. Fix: only pass `history` to `buildSystemField`; the auto-injected system message in `current` is silently dropped by `bridgeToAnthropicMessages` (which already excludes system/developer roles).
+
+2. **Image input shape**: initial test wrote `{type: "input_image", ...}` as a top-level input array element. The input-normalizer only accepts that shape inside a `ResponseInputMessage.content` list. Fixed test to wrap in `{type: "message", role: "user", content: [{type: "input_image", ...}]}`.
+
+3. **Tool name expectation**: test expected `godex_chrome_list_pages` from sanitizing `godex_chrome.list-pages`, but the Anthropic regex allows `-`, so the actual output is `godex_chrome_list-pages` (dot → underscore, hyphen preserved). Fixed test to match.
+
+4. **Type narrowing on message content**: `AnthropicMessage.content` is `string | AnthropicContentBlock[]`. Test's `.find()` call needed narrowing with `as AnthropicContentBlock[]`. Added explicit type import + cast.
+
+5. **BridgeErrorContext requires `model`**: `BridgeError` context requires both `provider` and `model`. Added `model: "anthropic"` placeholder in the video rejection throw.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit b9b00ee |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user "好" |
+| B3.1 (DTOs) | DONE | commit 9a90c3c + R18 followup |
+| B3.2 (spec + hooks + tool-name-codec) | DONE | commit 81fdcac |
+| B3.3 (client + index + register) | DONE | commit a5c217d |
+| B3.4 (fill builder + OQ3) | DONE | this round |
+| B3.5 (comprehensive builder tests) | DONE | this round; 20 tests |
+| B4 (stream transformer + sync reconstructor) | next | fills the response/stream accessor stubs from B3.2 |
+| B5 (minimax-anthropic thin wrapper) | pending | reuses B3 spec with `endpoint.defaultBaseURL = https://minnimax.chat` |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict.
+- Provider minimax upstream 422 on function parameters (external).
+- Studio.exe deferred.
