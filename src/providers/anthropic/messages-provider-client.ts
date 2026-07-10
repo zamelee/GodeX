@@ -21,14 +21,11 @@ import { messagesApi } from "./messages-api";
 import type {
 	AnthropicMessagesRequest,
 	AnthropicMessagesResponse,
-	AnthropicStreamEvent,
 } from "./protocol";
 
 export interface MessagesProviderClientOptions extends MessagesApiOptions {
 	provider: string;
 }
-
-type StreamableRequest = { model?: string; stream?: boolean };
 
 export class MessagesProviderClient {
 	private readonly api: ReturnType<typeof messagesApi>;

@@ -105,7 +105,6 @@ function thinkingBudgetTokensForEffort(effort: ReasoningEffort): number {
 		case "low":
 		case "medium":
 			return 1024;
-		case "none":
 		default:
 			return 0; // unused when type=disabled
 	}

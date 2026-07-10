@@ -279,7 +279,7 @@ describe("buildAnthropicMessagesRequest (Phase B3.4)", () => {
 	});
 
 	test("video input: surfaces BRIDGE_REQUEST_UNSUPPORTED_PARAMETER", async () => {
-		const inputItems: InputItemBase[] = [
+		const _inputItems: InputItemBase[] = [
 			{
 				type: "input_image",
 				detail: "auto",
