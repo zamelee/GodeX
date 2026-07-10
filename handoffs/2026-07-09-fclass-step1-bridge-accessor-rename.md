@@ -988,3 +988,95 @@ interface BridgeMessage { role: BridgeRole; content: readonly BridgeContentBlock
 - 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
 - Provider minimax upstream 422 on function parameters (external, not bridge regression).
 - Studio.exe improvements deferred per user request.
+
+
+### Round 15 - 2026-07-10: Phase B3.1 (Anthropic protocol DTOs) Complete
+
+__Status__: Phase B3.1 in production. `bun run check` shows **867 pass / 0 fail / 2044 expect()** (baseline 862 + 5 new DTO tests). `bun run test:e2e` shows **65 pass / 9 skip / 0 fail / 301 expect()** — exact baseline. `bun run typecheck` clean.
+
+User confirmed three open questions for Phase B3 with a single "好":
+1. B2 standalone skip — YES (fold OQ3 thinking mapping into B3 builder)
+2. ChatClient reuse — YES (reuse `ChatProviderClient`, swap headers/body serializer)
+3. Test target order — canonical api.anthropic.com first (contract validation), then minnimax.chat/v1/messages (real scenario)
+
+#### B3.1 deliverables
+
+Five new files under `src/providers/anthropic/`:
+
+| File | Bytes | Purpose |
+|---|---|---|
+| `protocol/messages-request.ts` | 2910 | `AnthropicMessagesRequest` + content blocks + tool/tool_choice/thinking/metadata |
+| `protocol/messages-response.ts` | 823 | `AnthropicMessagesResponse` + `AnthropicStopReason` + `AnthropicUsage` |
+| `protocol/messages-stream.ts` | 2673 | `AnthropicStreamEvent` discriminated union + delta + content-block-start shapes |
+| `protocol/index.ts` | 198 | barrel re-exporting all three |
+| `protocol/messages.test.ts` | 3916 | 5 unit tests covering barrel exports, request body, tool_choice, SSE events, tool type |
+| `index.ts` | (small) | stub barrel for `src/providers/anthropic/`, exports `protocol/*` |
+
+#### DTO design choices (locked)
+
+**Shared content blocks in `messages-request.ts`** (also re-imported by response + stream):
+- `AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock`
+- `AnthropicContentBlock` = discriminated union by `type`
+- Optional `cache_control?: AnthropicCacheControl` on every block (prompt caching for Phase B+)
+- Image source supports both base64 and url variants
+
+**Messages**:
+- `AnthropicUserMessage` and `AnthropicAssistantMessage`; content is `string | AnthropicContentBlock[]` (Anthropic allows plain string shorthand for text-only user messages)
+- No `system` role; system is a separate top-level field on the request
+
+**Tools**:
+- `AnthropicTool.input_schema` is REQUIRED (Anthropic API requirement; pass `{type:"object"}` for no-arg tools)
+- `cache_control` optional
+
+**Tool choice**: `{type:"auto"|"any"|"none"}` or `{type:"tool", name:"..."}`. Direct mapping to Codex Responses `auto|any|none|function(name)`.
+
+**Thinking (OQ3 fold-in)**: `AnthropicThinkingConfig = {type:"enabled", budget_tokens:number} | {type:"disabled"}`. The Phase B3 builder will map Codex `reasoning.effort` to this field.
+
+**Streaming**:
+- `AnthropicStreamEvent` union: message_start / content_block_start / content_block_delta / content_block_stop / message_delta / message_stop / ping / error
+- `AnthropicContentBlockStart` includes `text | tool_use | thinking | redacted_thinking` (thinking variants included so B3 builder can handle OQ3 reasoning surfacing without a type revision)
+- `AnthropicDelta` includes `text_delta | input_json_delta | thinking_delta | signature_delta`
+
+**Response**:
+- `AnthropicStopReason = "end_turn" | "max_tokens" | "stop_sequence" | "tool_use"`
+- `AnthropicUsage` includes cache_creation/cache_read/service_tier optional fields (future-proofing)
+- `AnthropicMessagesResponse.stop_sequence` is `string | null` (NOT optional) — Anthropic API always returns it
+
+#### Tests added
+
+5 tests in `protocol/messages.test.ts`:
+
+1. Barrel re-exports request/response/stream types — type-level compile check.
+2. Request body accepts every content-block variant — verifies union exhaustiveness.
+3. Tool choice accepts all four variants — auto/any/tool/none.
+4. Stream event payload discriminates by `type` field — constructs 10 sample events including all delta variants; round-trips a JSON payload through JSON.parse and narrows via the discriminated union.
+5. Tool name codec surface placeholder — pins the `AnthropicTool.name` field type (B3.2 will add `AnthropicToolNameCodec`).
+
+#### Boundary convention compliance
+
+`src/module-boundaries.test.ts` requires every `src/` subdirectory to have an `index.ts` barrel. The new `src/providers/anthropic/index.ts` stub re-exports `./protocol` so the directory passes the boundary test. B3.3 will expand this barrel to include `spec.ts`, `client.ts`, `hooks.ts`.
+
+#### Bugs / regressions
+
+None. The DTOs are types-only; no runtime code added. The `anthropic-messages-builder` stub from Phase A step 4 still throws `BRIDGE_REQUEST_UNSUPPORTED_PARAMETER` — B3.4 will fill it in.
+
+#### Phase B status update
+
+| Step | Status | Note |
+|---|---|---|
+| B1 (BridgeContentBlock) | DONE | commit b9b00ee |
+| B2 (thinking mapping standalone) | SKIPPED | folded into B3 builder per user "好" |
+| B3.1 (DTOs) | DONE | this round; 5 files / ~10 KB / 5 tests |
+| B3.2 (spec + hooks + tool-name-codec) | next | |
+| B3.3 (client + index + register) | next | |
+| B3.4 (fill anthropic-messages-builder.ts, OQ3 fold-in) | next | |
+| B3.5 (comprehensive builder tests) | next | |
+| B4 (stream transformer + sync reconstructor) | pending | |
+| B5 (minimax-anthropic thin wrapper + register) | pending | |
+| B6 (live E2E + Codex++ smoke) | pending | |
+
+#### Pre-existing issues noted (unchanged)
+
+- 7 pre-existing test failures from upstream 73dc7f9 cherry-pick conflict (logged; not blocking).
+- Provider minimax upstream 422 on function parameters (external, not bridge regression).
+- Studio.exe improvements deferred per user request.
