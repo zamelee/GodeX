@@ -257,10 +257,26 @@ function bridgeToAnthropicMessages(
 			if (Array.isArray(translated)) blocks.push(...translated);
 			else blocks.push(translated);
 		}
-		if (m.role === "user") {
-			out.push({ role: "user", content: blocks });
+		if (blocks.length === 0) continue;
+		const role: AnthropicMessage["role"] =
+			m.role === "user" ? "user" : "assistant";
+		// Anthropic requires strictly alternating user/assistant messages and
+		// a tool_result must immediately follow the assistant message that
+		// contained its tool_use. Coalesce consecutive ASSISTANT turns only
+		// (e.g. assistant tool_use followed by assistant text) so the merged
+		// message still contains the tool_use at a position where the next
+		// user message can supply a tool_result. We do NOT coalesce user
+		// messages because a tool_result must remain in the very next user
+		// message after the matching tool_use.
+		const last = out[out.length - 1];
+		if (role === "assistant" && last && last.role === "assistant") {
+			if (typeof last.content === "string") {
+				last.content = [{ type: "text", text: last.content }, ...blocks];
+			} else {
+				last.content.push(...blocks);
+			}
 		} else {
-			out.push({ role: "assistant", content: blocks });
+			out.push({ role, content: blocks });
 		}
 	}
 	return out;

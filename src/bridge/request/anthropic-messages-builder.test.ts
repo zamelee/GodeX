@@ -177,6 +177,57 @@ describe("buildAnthropicMessagesRequest (Phase B3.4)", () => {
 		});
 	});
 
+	test("session history: assistant text after tool_use is merged into the tool_use message", async () => {
+		// Anthropic requires tool_result to immediately follow the assistant
+		// message that contains its tool_use. If the conversation history has
+		// a separate assistant text message between a tool_use and the
+		// subsequent user tool_result, the wire payload becomes invalid
+		// (tool call result does not follow tool call, 400 (2013)). The
+		// builder must coalesce consecutive assistant turns into one wire
+		// message so the tool_result remains adjacent to the tool_use.
+		const sessionInputItems: ResponseItem[] = [
+			{
+				type: "function_call",
+				call_id: "toolu_01",
+				name: "get_weather",
+				arguments: '{"city":"Tokyo"}',
+			} as ResponseItem,
+			{
+				type: "message",
+				role: "assistant",
+				content: [{ type: "output_text", text: "checking now" }],
+			} as ResponseItem,
+			{
+				type: "function_call_output",
+				call_id: "toolu_01",
+				output: "sunny, 23C",
+			} as ResponseItem,
+		];
+		const session: ResponseSessionSnapshot = {
+			previous_response_id: "resp_previous",
+			turns: [],
+			input_items: sessionInputItems,
+		};
+		const result = await build({ input: "And tomorrow?" }, { session });
+		// Expected wire messages: [assistant tool_use+text merged, user tool_result, user text].
+		// User messages are NOT merged (would break tool_result adjacency).
+		expect(result.request.messages).toHaveLength(3);
+		expect(result.request.messages[0]?.role).toBe("assistant");
+		const assistantBlocks = result.request.messages[0]?.content;
+		expect(Array.isArray(assistantBlocks)).toBe(true);
+		expect(assistantBlocks).toEqual([
+			{
+				type: "tool_use",
+				id: "toolu_01",
+				name: "get_weather",
+				input: { city: "Tokyo" },
+			},
+			{ type: "text", text: "checking now" },
+		]);
+		expect(result.request.messages[1]?.role).toBe("user");
+		expect(result.request.messages[2]?.role).toBe("user");
+	});
+
 	test("session history: assistant tool_use + user tool_result are preserved", async () => {
 		const sessionInputItems: ResponseItem[] = [
 			{
