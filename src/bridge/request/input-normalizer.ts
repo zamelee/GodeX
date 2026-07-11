@@ -53,7 +53,13 @@ export function normalizeCurrentInput(
 		return messages;
 	}
 
-	messages.push(...normalizeInputItems(request.input, request, context));
+	messages.push(
+		...normalizeInputItems(
+			dropDuplicateToolResults(request.input),
+			request,
+			context,
+		),
+	);
 	return messages;
 }
 
@@ -68,21 +74,58 @@ export function normalizeResponseItems(
 function dropUnpairedToolCalls(
 	items: readonly ResponseItem[],
 ): readonly ResponseItem[] {
-	return items.filter((item) => !isOrphanToolOutput(item, items));
-}
-
-function isOrphanToolOutput(
-	item: ResponseItem,
-	items: readonly ResponseItem[],
-): boolean {
-	if (!isToolOutput(item)) return false;
-	const outputId = item.call_id;
-	for (const candidate of items) {
-		if (isToolCall(candidate) && candidate.call_id === outputId) {
-			return false;
+	// Session-history replay path. Anthropic is strict 1:1: a tool_result
+	// block must have a corresponding tool_use in the conversation and
+	// duplicates are rejected with 400 (2013). Drop both orphan outputs
+	// (no matching tool_use) and duplicates (more outputs than uses for the
+	// same call_id) to produce a wire-safe message stream.
+	const declared = new Map<string, number>();
+	for (const item of items) {
+		if (isToolCall(item)) {
+			declared.set(item.call_id, (declared.get(item.call_id) ?? 0) + 1);
 		}
 	}
-	return true;
+	const consumed = new Map<string, number>();
+	return items.filter((item) => {
+		if (!isToolOutput(item)) return true;
+		const id = item.call_id;
+		const total = declared.get(id) ?? 0;
+		if (total === 0) return false; // orphan
+		const used = consumed.get(id) ?? 0;
+		if (used < total) {
+			consumed.set(id, used + 1);
+			return true;
+		}
+		return false; // duplicate
+	});
+}
+
+function dropDuplicateToolResults(
+	items: readonly ResponseItem[],
+): readonly ResponseItem[] {
+	// Current-input path. Codex++ may legitimately send a tool_result in
+	// the same request as the orchestrator-side tool_use response, so we
+	// do not drop orphans here. We only drop duplicate tool_results
+	// because upstream Anthropic still rejects duplicates with 400 (2013).
+	const declared = new Map<string, number>();
+	for (const item of items) {
+		if (isToolCall(item)) {
+			declared.set(item.call_id, (declared.get(item.call_id) ?? 0) + 1);
+		}
+	}
+	const consumed = new Map<string, number>();
+	return items.filter((item) => {
+		if (!isToolOutput(item)) return true;
+		const id = item.call_id;
+		const total = declared.get(id) ?? 0;
+		if (total === 0) return true; // orphan: keep (current-input semantics)
+		const used = consumed.get(id) ?? 0;
+		if (used < total) {
+			consumed.set(id, used + 1);
+			return true;
+		}
+		return false; // duplicate
+	});
 }
 
 type ToolCallItem = Extract<

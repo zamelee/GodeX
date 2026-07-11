@@ -210,6 +210,54 @@ describe("normalizeResponseItems - session history pairing", () => {
 		});
 	});
 
+	test("drops duplicate function_call_output when matched by a single function_call", () => {
+		const messages = normalizeResponseItems(
+			[
+				{
+					type: "function_call",
+					call_id: "call_dup",
+					name: "lookup",
+					arguments: `{"city":"Hangzhou"}`,
+				} as never,
+				{
+					type: "function_call_output",
+					call_id: "call_dup",
+					output: "first result",
+				} as never,
+				{
+					type: "function_call_output",
+					call_id: "call_dup",
+					output: "duplicate result",
+				} as never,
+			],
+			request(),
+		);
+
+		// 1 assistant tool_use + 1 user tool_result (the second duplicate is dropped)
+		expect(messages).toHaveLength(2);
+		expect(messages[0]).toMatchObject({
+			role: "assistant",
+			content: [
+				{
+					type: "tool_use",
+					id: "call_dup",
+					name: "lookup",
+					input: { city: "Hangzhou" },
+				},
+			],
+		});
+		expect(messages[1]).toEqual({
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_dup",
+					content: "first result",
+				},
+			],
+		});
+	});
+
 	test("keeps function_call_output when matched by an earlier function_call", () => {
 		const messages = normalizeResponseItems(
 			[
