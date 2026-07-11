@@ -5,6 +5,7 @@ import type {
 	ResponseCreateRequest,
 	ResponseItem,
 } from "../../protocol/openai/responses";
+import type { FunctionTool } from "../../protocol/openai/responses/tools";
 import { ANTHROPIC_SPEC_CAPABILITIES } from "../../providers/anthropic/hooks";
 import type { AnthropicContentBlock } from "../../providers/anthropic/protocol";
 import type { ResponseSessionSnapshot } from "../../session";
@@ -334,5 +335,62 @@ describe("buildAnthropicMessagesRequest (Phase B3.4)", () => {
 		expect(result.tools).toBeDefined();
 		expect(result.output).toBeDefined();
 		expect(result.request.model).toBe("claude-3-5-sonnet-20241022");
+	});
+
+	test("tool declaration: Chat Completions nested tool shape (function:{...}) is normalized to Anthropic flat", async () => {
+		const result = await build({
+			tools: [
+				{
+					type: "function",
+					function: {
+						name: "godex_chrome.list-pages",
+						description: "List browser tabs",
+						parameters: {
+							type: "object",
+							properties: { url: { type: "string" } },
+							required: ["url"],
+						},
+						strict: true,
+					},
+				} as unknown as FunctionTool,
+				{
+					type: "function",
+					function: {
+						name: "function_0",
+					},
+				} as unknown as FunctionTool,
+			],
+		});
+		expect(result.request.tools).toEqual([
+			{
+				name: "godex_chrome_list-pages",
+				description: "List browser tabs",
+				input_schema: {
+					type: "object",
+					properties: { url: { type: "string" } },
+					required: ["url"],
+				},
+			},
+			{
+				name: "function_0",
+				description: undefined,
+				input_schema: {
+					type: "object",
+				},
+			},
+		]);
+	});
+
+	test("tool declaration: malformed nested tool with neither top-level nor nested name is dropped (not crash)", async () => {
+		const result = await build({
+			tools: [
+				{
+					type: "function",
+					// neither tool.name nor tool.function.name set
+					function: { description: "missing name" },
+				} as unknown as FunctionTool,
+			],
+		});
+		expect(result.request.tools).toBeUndefined();
 	});
 });

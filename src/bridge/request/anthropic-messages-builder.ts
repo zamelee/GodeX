@@ -276,8 +276,30 @@ function buildTools(
 	const out: AnthropicTool[] = [];
 	for (const tool of coxTools) {
 		if (tool.type === "function") {
-			const sanitizedName = codec.toProviderName(tool.name);
-			const params = tool.parameters ?? {};
+			// Some Codex clients send Chat Completions nested tool shape
+			// ({type:"function", function:{name, description, parameters}}) even when
+			// targeting /v1/responses. Resolve that to the Responses flat shape
+			// ({type:"function", name, description, parameters}) before sanitizing
+			// the name through the codec. Without this, tool.name is undefined
+			// and AnthropicToolNameCodec.sanitizeBase trips on name.replace.
+			const nested = (tool as unknown as { function?: Record<string, unknown> })
+				.function;
+			const flat = nested && typeof nested === "object" ? nested : null;
+			const rawName =
+				(typeof tool.name === "string" && tool.name) ||
+				(flat && typeof flat.name === "string" ? flat.name : "");
+			if (!rawName) continue;
+			const sanitizedName = codec.toProviderName(rawName);
+			const params =
+				(tool.parameters && typeof tool.parameters === "object"
+					? (tool.parameters as Record<string, unknown>)
+					: null) ??
+				(flat && flat.parameters && typeof flat.parameters === "object"
+					? (flat.parameters as Record<string, unknown>)
+					: {});
+			const description =
+				(typeof tool.description === "string" && tool.description) ||
+				(typeof flat?.description === "string" ? flat.description : undefined);
 			const inputSchema: AnthropicTool["input_schema"] = {
 				type: "object",
 				properties:
@@ -298,7 +320,7 @@ function buildTools(
 			}
 			out.push({
 				name: sanitizedName,
-				description: tool.description,
+				description,
 				input_schema: inputSchema,
 			});
 		}
