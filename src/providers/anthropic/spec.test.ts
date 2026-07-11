@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MESSAGES_PROTOCOL, X_API_KEY_AUTH } from "../../bridge/provider-spec";
+import { ANTHROPIC_MAX_TOOLS } from "./hooks";
 import type { AnthropicMessagesResponse } from "./protocol";
 import {
 	ANTHROPIC_DEFAULT_BASE_URL,
@@ -221,5 +222,30 @@ describe("Anthropic provider spec (Phase B3.2)", () => {
 		};
 		const patched = ANTHROPIC_MESSAGES_SPEC.hooks?.patchRequest?.(req);
 		expect(patched).toBe(req);
+	});
+
+	test("maxTools override flows into spec capabilities (per-provider override)", () => {
+		// Default spec still carries the bumped default (ANTHROPIC_MAX_TOOLS = 2048).
+		expect(ANTHROPIC_MESSAGES_SPEC.capabilities.tools.maxTools).toBe(
+			ANTHROPIC_MAX_TOOLS,
+		);
+
+		// Zero-arg factory mirrors the default (no surprises for existing callers).
+		const defaultFactory = createAnthropicSpec();
+		expect(defaultFactory.capabilities.tools.maxTools).toBe(
+			ANTHROPIC_MAX_TOOLS,
+		);
+
+		// Overriding lowers the cap (e.g. to fall back to upstream Anthropic 32).
+		const lowered = createAnthropicSpec({ maxTools: 32 });
+		expect(lowered.capabilities.tools.maxTools).toBe(32);
+
+		// Overriding raises the cap (e.g. for an unusually chatty client).
+		const raised = createAnthropicSpec({ maxTools: 4096 });
+		expect(raised.capabilities.tools.maxTools).toBe(4096);
+
+		// Override never leaks back to the singleton (capabilities object identity).
+		expect(ANTHROPIC_MESSAGES_SPEC.capabilities).not.toBe(raised.capabilities);
+		expect(lowered.capabilities).not.toBe(raised.capabilities);
 	});
 });

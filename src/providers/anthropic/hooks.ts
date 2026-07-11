@@ -14,12 +14,18 @@
 import type { ProviderCapabilities } from "../../bridge/compatibility";
 import type { AnthropicMessagesRequest } from "./protocol";
 
-export const ANTHROPIC_MAX_TOOLS = 32;
+export const ANTHROPIC_MAX_TOOLS = 2048;
 
 export const ANTHROPIC_SUPPORTED_TOOL_TYPES: ReadonlySet<string> = new Set([
 	"function",
 	"web_search",
 ]);
+
+// Default cap lifted from 32 to 2048 (empirically probed against minnimax.chat
+// on 2026-07-09: 128/512/2048 all 200 within ~3-14s for all three MiniMax-M*
+// models; 8192 OK for M3 only). Per-provider override via
+// ProviderRuntimeConfig.max_tools still raises it (or lowers it) without
+// touching the bridge.
 
 // Tools that Codex declares in Responses API but Anthropic cannot represent
 // natively — degrade to a generic function tool so the request still goes

@@ -26,11 +26,20 @@ export function parseProvidersConfig(
 		const timeout_ms =
 			typeof provider.timeout_ms === "number" ? provider.timeout_ms : undefined;
 
+		// Optional per-provider tool-cap override; falls through to provider defaults.
+		const max_tools =
+			typeof provider.max_tools === "number" &&
+			Number.isInteger(provider.max_tools) &&
+			provider.max_tools > 0
+				? provider.max_tools
+				: undefined;
+
 		result[name] = {
 			spec,
 			credentials: { api_key },
 			...(base_url ? { endpoint: { base_url } } : {}),
 			...(timeout_ms === undefined ? {} : { timeout_ms }),
+			...(max_tools === undefined ? {} : { max_tools }),
 		};
 	}
 	return result;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MESSAGES_PROTOCOL, X_API_KEY_AUTH } from "../../bridge/provider-spec";
+import { ANTHROPIC_MAX_TOOLS } from "../anthropic/hooks";
 import {
 	createMiniMaxAnthropicSpec,
 	MINIMAX_ANTHROPIC_DEFAULT_BASE_URL,
@@ -93,5 +94,29 @@ describe("minimax-anthropic provider spec (Phase B5)", () => {
 		expect(typeof fromA).toBe("string");
 		expect(typeof fromB).toBe("string");
 		expect(a.toolName).not.toBe(b.toolName);
+	});
+
+	test("maxTools override flows into spec capabilities (per-provider override)", () => {
+		// Default spec mirrors the bumped ANTHROPIC default.
+		expect(MINIMAX_ANTHROPIC_SPEC.capabilities.tools.maxTools).toBe(
+			ANTHROPIC_MAX_TOOLS,
+		);
+
+		// Override raises the cap so Codex++ can pass through >32 tools.
+		const raised = createMiniMaxAnthropicSpec({ maxTools: 4096 });
+		expect(raised.capabilities.tools.maxTools).toBe(4096);
+
+		// Override does not leak back to the singleton.
+		expect(MINIMAX_ANTHROPIC_SPEC.capabilities).not.toBe(raised.capabilities);
+		expect(MINIMAX_ANTHROPIC_SPEC.capabilities.tools.maxTools).toBe(
+			ANTHROPIC_MAX_TOOLS,
+		);
+	});
+
+	test("zero-arg factory mirrors the default cap", () => {
+		const s1 = createMiniMaxAnthropicSpec();
+		const s2 = createMiniMaxAnthropicSpec();
+		expect(s1.capabilities.tools.maxTools).toBe(ANTHROPIC_MAX_TOOLS);
+		expect(s2.capabilities.tools.maxTools).toBe(ANTHROPIC_MAX_TOOLS);
 	});
 });

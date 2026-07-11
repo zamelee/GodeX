@@ -25,7 +25,7 @@ export function createMiniMaxAnthropicProviderEdge(
 	config: ProviderRuntimeConfig,
 	plugins?: readonly GodexPlugin[],
 ) {
-	const spec = createMiniMaxAnthropicSpec();
+	const spec = createMiniMaxAnthropicSpec({ maxTools: config.max_tools });
 	const client = new MessagesProviderClient({
 		provider: MINIMAX_ANTHROPIC_PROVIDER_NAME,
 		baseURL: config.endpoint?.base_url ?? spec.endpoint.defaultBaseURL,

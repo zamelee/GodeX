@@ -20,7 +20,7 @@ export function createAnthropicProviderEdge(
 	config: ProviderRuntimeConfig,
 	plugins?: readonly GodexPlugin[],
 ) {
-	const spec = createAnthropicSpec();
+	const spec = createAnthropicSpec({ maxTools: config.max_tools });
 	const client = new MessagesProviderClient({
 		provider: ANTHROPIC_PROVIDER_NAME,
 		baseURL: config.endpoint?.base_url ?? spec.endpoint.defaultBaseURL,

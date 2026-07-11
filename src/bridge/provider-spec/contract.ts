@@ -22,6 +22,13 @@ export interface ProviderRuntimeConfig {
 	readonly credentials: { readonly api_key: string };
 	readonly endpoint?: { readonly base_url?: string };
 	readonly timeout_ms?: number;
+	/**
+	 * Optional override for provider capabilities.tools.maxTools. When set,
+	 * the spec factory passes it into capabilities.tools.maxTools instead of
+	 * the provider default. Lets us relax a too-strict limit per-provider
+	 * without lifting the global default (which should track upstream reality).
+	 */
+	readonly max_tools?: number;
 }
 
 export interface ProviderEndpointSpec {

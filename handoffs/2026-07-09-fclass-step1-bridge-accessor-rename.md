@@ -2278,3 +2278,73 @@ s go-ahead. The mock-based `bun run test:e2e` stays green because the dedup only
 - R26: extracted the shared `provider-error` module.
 
 GodeX is now lint-clean, typecheck-clean, and e2e-clean with the Anthropic protocol path production-ready. Next logical follow-ups (only when the user asks): rebuild `bin\godex-b6.exe` + live E2E, or move on to Studio.exe rebuild (Tauri 2 + Chrome MCP, deferred per earlier rounds).
+
+
+## Round 27 - maxTools per-provider override + default bump
+
+### Why
+Codex++ sends ~34 tools in a default session. GodeX Anthropic spec hard-codes
+ANTHROPIC_MAX_TOOLS = 32 (added in commit 81fdcac with no probe or comment),
+and assertMaxTools in src/bridge/tools/tool-plan.ts:444 THROWS on cap overflow
+with 400. Result: Claude mode on minnimax.chat 400s every turn.
+
+User chose option (c): keep the throw (so any future upstream cap still surfaces
+immediately), but make the cap configurable per-provider via yaml.
+
+### Empirical probe (2026-07-09)
+Live probes against https://minnimax.chat/v1/messages (Anthropic protocol):
+
+| model | 128 | 512 | 2048 | 8192 |
+|---|---|---|---|---|
+| MiniMax-M3 | 200 3.3s | 200 5.1s | 200 3.6s | 200 14s |
+| MiniMax-M2.7 | 200 2.7s | 200 4.3s | 200 14s | 400 |
+| MiniMax-M2.7-highspeed | 200 2.6s | 200 2.6s | 200 4.4s | 400 |
+
+Cross-model safe cap: 2048. M3 alone supports >= 8192.
+
+### Changes
+
+| File | Change |
+|---|---|
+| src/bridge/provider-spec/contract.ts | ProviderRuntimeConfig gains optional max_tools field. |
+| src/providers/anthropic/hooks.ts | ANTHROPIC_MAX_TOOLS bumped 32 -> 2048 with probe comment. |
+| src/providers/anthropic/spec.ts | AnthropicSpecOverrides interface + applyAnthropicCapabilityOverrides helper + createAnthropicSpec(overrides?). |
+| src/providers/minimax-anthropic/spec.ts | Mirror same shape (AnthropicSpecOverrides + factory override). |
+| src/providers/anthropic/client.ts | Pass config.max_tools into createAnthropicSpec. |
+| src/providers/minimax-anthropic/client.ts | Pass config.max_tools into createMiniMaxAnthropicSpec. |
+| src/config/sections/providers.ts | Parse providers.*.max_tools as positive integer. |
+| bin/godex2-claude.yaml | Adds max_tools: 4096 under providers.minnimax.chat. |
+| src/providers/anthropic/spec.test.ts | New test: default=2048, zero-arg=2048, override lowers/raises, no leak. |
+| src/providers/minimax-anthropic/spec.test.ts | Two new tests: raise to 4096 with no leak; zero-arg = default. |
+
+### Verified behavior
+
+- bun run check (typecheck + lint + test): clean.
+- 969 unit tests pass, 0 fail.
+- 65 e2e pass / 9 skip / 0 fail (matches pre-change baseline 65/9/301).
+- godex config check --config bin/godex2-claude.yaml accepts max_tools.
+- godex config print shows max_tools: 4096 parsed correctly.
+- Live smoke: built bin/godex-fclass-step2.exe, booted port 5682 (not 5678 keepalive),
+  POSTed /v1/responses with 34 generated function tools -> HTTP 200, output_text=Hi,
+  no unsupported_parameter thrown.
+- Keepalive godex2 PID 26456 on port 5678 NOT touched.
+
+### Out of scope
+
+- Other Chat-protocol providers (deepseek, zhipu, xiaomi) still use their own static
+  *_MAX_TOOLS constants. Override plumbing only added for anthropic + minimax-anthropic
+  (it was the only failure). Other providers can adopt the same hook when needed.
+- 2048 default reflects probe-time reality; yaml override can tighten if upstream narrows.
+
+### Handoff for next round
+
+- bin/godex-fclass-step2.exe (built, smoke-tested, NOT yet promoted as user keepalive).
+- Logs in bin/_check-fclass-step2.log, _test-fclass-step2.log, _e2e-fclass-step2.log,
+  _tc-fclass-step2.log, _lint-fix.log, _build-fclass-step2.log, _smoke-step2-claude.out.log.
+- Patch scripts in bin/_patch*.py are the canonical patches if replaying on a new clone.
+
+### User constraints kept
+
+- DID NOT kill any keepalive process.
+- DID NOT touch base bin/godex.exe or bin/godex2.exe (pre-existing modification state).
+- Promoted only source files; new binary at a fresh path.

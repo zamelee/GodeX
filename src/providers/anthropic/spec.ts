@@ -41,11 +41,40 @@ export const ANTHROPIC_DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 export const ANTHROPIC_PROVIDER_NAME = "anthropic";
 
 /**
+ * Per-instance overrides applied on top of ANTHROPIC_SPEC_CAPABILITIES.
+ * Only maxTools is honored today, keeping the factories source-compatible with zero-arg callers.
+ * with their previous zero-arg call sites.
+ */
+export interface AnthropicSpecOverrides {
+	readonly maxTools?: number;
+}
+
+/**
+ * Returns a shallow-cloned ProviderCapabilities with the provided overrides
+ * applied. Mutating the original ANTHROPIC_SPEC_CAPABILITIES is forbidden
+ * (callers share it by reference), so we explicitly rebuild the tools
+ * object before reassigning.
+ */
+export function applyAnthropicCapabilityOverrides(
+	base: typeof ANTHROPIC_SPEC_CAPABILITIES,
+	overrides: AnthropicSpecOverrides | undefined,
+): typeof ANTHROPIC_SPEC_CAPABILITIES {
+	if (overrides?.maxTools === undefined) return base;
+	if (overrides.maxTools === base.tools.maxTools) return base;
+	return {
+		...base,
+		tools: { ...base.tools, maxTools: overrides.maxTools },
+	};
+}
+
+/**
  * Construct a fresh Anthropic ProviderSpec. Each call returns a new spec
  * with its own AnthropicToolNameCodec instance so concurrent ProviderEdge
  * instances do not share tool-name mapping state.
  */
-export function createAnthropicSpec(): ProviderSpec<
+export function createAnthropicSpec(
+	overrides?: AnthropicSpecOverrides,
+): ProviderSpec<
 	AnthropicMessagesRequest,
 	AnthropicMessagesResponse,
 	AnthropicStreamEvent
@@ -53,7 +82,10 @@ export function createAnthropicSpec(): ProviderSpec<
 	return {
 		name: ANTHROPIC_PROVIDER_NAME,
 		protocol: MESSAGES_PROTOCOL,
-		capabilities: ANTHROPIC_SPEC_CAPABILITIES,
+		capabilities: applyAnthropicCapabilityOverrides(
+			ANTHROPIC_SPEC_CAPABILITIES,
+			overrides,
+		),
 		endpoint: {
 			defaultBaseURL: ANTHROPIC_DEFAULT_BASE_URL,
 		},
